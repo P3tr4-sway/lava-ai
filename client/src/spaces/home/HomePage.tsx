@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BookOpen,
@@ -10,11 +10,9 @@ import {
   Guitar,
   Radio,
   Zap,
+  ArrowUp,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
-import { ChatMessage } from '@/components/agent/ChatMessage'
-import { ChatInput } from '@/components/agent/ChatInput'
-import { useAgentStore } from '@/stores/agentStore'
 import { useAgent } from '@/hooks/useAgent'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -58,56 +56,54 @@ const PEDALS = [
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function HomePage() {
-  const messages = useAgentStore((s) => s.messages)
-  const isStreaming = useAgentStore((s) => s.isStreaming)
-  const streamingContent = useAgentStore((s) => s.streamingContent)
+  const [query, setQuery] = useState('')
   const { sendMessage } = useAgent()
-  const bottomRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent])
+  const handleSend = () => {
+    const trimmed = query.trim()
+    if (!trimmed) return
+    sendMessage(trimmed)
+    setQuery('')
+    navigate('/learn')
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col gap-8 pb-12">
 
-        {/* ── AI Chat ─────────────────────────────────────────── */}
-        <section>
-          <h1 className="text-xl font-semibold text-text-primary mb-4">LAVA AI</h1>
-          <div className="flex flex-col bg-surface-0 border border-border rounded-xl overflow-hidden"
-               style={{ height: 'clamp(300px, 48vh, 520px)' }}>
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 min-h-0">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
-                  <Radio size={28} className="text-text-muted" />
-                  <p className="text-sm text-text-secondary font-medium">What do you want to make?</p>
-                  <p className="text-xs text-text-muted max-w-sm">
-                    Ask me to help you learn a song, start a jam, compose ideas, or find the right
-                    tools — I'll navigate you there.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {messages.map((msg) => (
-                    <ChatMessage key={msg.id} message={msg} />
-                  ))}
-                  {isStreaming && streamingContent && (
-                    <ChatMessage
-                      message={{ id: 'streaming', role: 'assistant', content: streamingContent, createdAt: Date.now() }}
-                      isStreaming
-                    />
-                  )}
-                  <div ref={bottomRef} />
-                </>
+        {/* ── Hero prompt ──────────────────────────────────────── */}
+        <section className="pt-4">
+          <h1 className="text-2xl font-semibold text-text-primary mb-6">What do you want to make?</h1>
+          <div className="flex items-center gap-2 bg-surface-0 border border-border rounded-full px-5 py-3 focus-within:border-border-hover transition-colors shadow-sm">
+            <textarea
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask LAVA AI — learn a song, start a jam, compose something new…"
+              rows={1}
+              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none resize-none leading-relaxed"
+              style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!query.trim()}
+              className={cn(
+                'shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors',
+                query.trim()
+                  ? 'bg-text-primary text-surface-0 hover:opacity-80'
+                  : 'bg-surface-3 text-text-muted cursor-default',
               )}
-            </div>
-            {/* Input */}
-            <div className="border-t border-border p-3 shrink-0">
-              <ChatInput onSend={sendMessage} disabled={isStreaming} />
-            </div>
+            >
+              <ArrowUp size={15} />
+            </button>
           </div>
         </section>
 
@@ -135,7 +131,7 @@ export function HomePage() {
         <div className="grid grid-cols-3 gap-4" style={{ height: '360px' }}>
 
           {/* Music Score Chart */}
-          <ChartCard icon={<TrendingUp size={14} />} title="Sheet Music Chart">
+          <ChartCard icon={<TrendingUp size={14} />} title="Top Sheet Music">
             {SCORE_CHART.map((item) => (
               <div
                 key={item.rank}
@@ -164,7 +160,7 @@ export function HomePage() {
           </ChartCard>
 
           {/* Song Chart */}
-          <ChartCard icon={<Radio size={14} />} title="Song Chart">
+          <ChartCard icon={<Radio size={14} />} title="Top Songs">
             {SONG_CHART.map((item) => (
               <div
                 key={item.rank}
@@ -190,7 +186,7 @@ export function HomePage() {
           </ChartCard>
 
           {/* Guitar Pedal Effects */}
-          <ChartCard icon={<Guitar size={14} />} title="Pedal Effects">
+          <ChartCard icon={<Guitar size={14} />} title="Top Pedal Effects">
             {PEDALS.map((pedal, i) => (
               <div
                 key={pedal.name}
@@ -258,7 +254,7 @@ function ChartCard({
     <div className="flex flex-col bg-surface-0 border border-border rounded-xl overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
         <span className="text-text-muted">{icon}</span>
-        <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">{title}</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
       </div>
       <div className="flex-1 overflow-y-auto py-1 min-h-0">
         {children}

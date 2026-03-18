@@ -140,16 +140,11 @@ export function Sidebar() {
 
 function LavaLogo() {
   return (
-    <svg viewBox="0 0 32 32" fill="none" className="w-6 h-6 shrink-0">
-      <rect width="32" height="32" rx="6" fill="var(--text-primary)" />
+    <svg width="20" height="27" viewBox="0 0 31 42" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
       <path
-        d="M8 16 L14 8 L20 20 L24 14"
-        stroke="var(--surface-0)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M14.5726 23.8173C18.8644 25.9846 25.2216 19.5846 22.6794 11.8396C27.6257 14.4311 30.9967 19.6109 31 25.58C31 34.1374 24.0574 41.0767 15.5 41.0767C6.93932 41.0767 0 34.1374 0 25.58C0 22.7846 0.739974 20.1634 2.02918 17.9008C2.74276 16.6505 3.86922 15.2356 5.08071 13.714C8.39752 9.5481 12.3516 4.58173 10.2149 0C22.35 6.9623 18.1413 12.9563 15.016 17.4073C14.4712 18.1832 13.9594 18.9122 13.5728 19.5912C13.3195 20.0451 13.1025 20.6469 13.1025 21.183C13.1025 22.2979 13.6912 23.2713 14.5726 23.8173Z"
+        fill="var(--text-primary)"
       />
-      <circle cx="24" cy="14" r="2" fill="var(--surface-0)" />
     </svg>
   )
 }

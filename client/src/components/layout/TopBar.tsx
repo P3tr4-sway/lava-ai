@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/components/ui/utils'
 
 const SPACE_LABELS: Record<string, string> = {
+  '': 'Home',
   learn: 'Learn',
   jam: 'Jam',
   create: 'Create',
@@ -37,22 +38,26 @@ export function TopBar() {
         )}
       </div>
 
-      {/* Transport info */}
-      <div className="flex items-center gap-3 text-xs text-text-muted font-mono">
-        <span>{bpm} BPM</span>
-        <span>{key}</span>
-      </div>
+      {/* Transport info — hidden on home page */}
+      {space && (
+        <div className="flex items-center gap-3 text-xs text-text-muted font-mono">
+          <span>{bpm} BPM</span>
+          <span>{key}</span>
+        </div>
+      )}
 
-      {/* Agent toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleAgentPanel}
-        className={cn(agentPanelOpen && 'text-text-primary bg-surface-3')}
-        title="Toggle AI Agent"
-      >
-        <Bot size={16} />
-      </Button>
+      {/* Agent toggle — hidden on home page (chat is inline there) */}
+      {space && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleAgentPanel}
+          className={cn(agentPanelOpen && 'text-text-primary bg-surface-3')}
+          title="Toggle AI Agent"
+        >
+          <Bot size={16} />
+        </Button>
+      )}
     </header>
   )
 }

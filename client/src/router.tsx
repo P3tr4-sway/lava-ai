@@ -1,5 +1,6 @@
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
+import { HomePage } from '@/spaces/home/HomePage'
 import { LearnPage } from '@/spaces/learn/LearnPage'
 import { JamPage } from '@/spaces/jam/JamPage'
 import { CreatePage } from '@/spaces/create/CreatePage'
@@ -11,7 +12,7 @@ const routes: RouteObject[] = [
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/learn" replace /> },
+      { index: true, element: <HomePage /> },
       { path: 'learn', element: <LearnPage /> },
       { path: 'learn/:id', element: <LearnPage /> },
       { path: 'jam', element: <JamPage /> },

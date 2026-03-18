@@ -3,9 +3,13 @@ import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { AgentPanel } from '@/components/agent/AgentPanel'
 import { useUIStore } from '@/stores/uiStore'
+import { useTheme } from '@/hooks/useTheme'
 import { cn } from '@/components/ui/utils'
 
 export function AppShell() {
+  // Apply theme to <html> element on every render / theme change
+  useTheme()
+
   const agentPanelOpen = useUIStore((s) => s.agentPanelOpen)
 
   return (

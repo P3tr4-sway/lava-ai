@@ -1,5 +1,7 @@
-:root {
-  --accent: #ffffff;
+/* ── Dark theme ─────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --accent: #e5e5e5;
   --accent-dim: #a0a0a0;
 
   --surface-0: #000000;
@@ -19,11 +21,31 @@
   --success: #22c55e;
   --warning: #f59e0b;
 
-  --sidebar-width: 56px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 56px;
   --topbar-height: 48px;
   --agent-panel-width: 360px;
 
   --radius: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+}
+
+/* ── Light theme ────────────────────────────────────────── */
+[data-theme="light"] {
+  --accent: #0d0d0d;
+  --accent-dim: #444444;
+
+  --surface-0: #ffffff;
+  --surface-1: #f7f7f7;
+  --surface-2: #efefef;
+  --surface-3: #e5e5e5;
+  --surface-4: #d9d9d9;
+
+  --border: #e5e5e5;
+  --border-hover: #cccccc;
+
+  --text-primary: #0d0d0d;
+  --text-secondary: #555555;
+  --text-muted: #ababab;
 }

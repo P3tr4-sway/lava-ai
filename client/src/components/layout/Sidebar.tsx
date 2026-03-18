@@ -41,27 +41,28 @@ export function Sidebar() {
         collapsed ? 'w-14' : 'w-60',
       )}
     >
-      {/* Logo + collapse */}
-      <div className="flex items-center h-12 px-3 shrink-0 border-b border-border">
-        {!collapsed && (
-          <Link to="/" className="flex items-center gap-2 flex-1 min-w-0 group">
-            <LavaLogo />
-            <span className="text-sm font-semibold tracking-wide text-text-primary group-hover:opacity-80 transition-opacity">
+      {/* Logo */}
+      <div className="flex items-center h-14 px-4 shrink-0">
+        <Link
+          to="/"
+          className={cn(
+            'flex items-center gap-2.5 flex-1 min-w-0 group',
+            collapsed && 'justify-center',
+          )}
+        >
+          <LavaLogo />
+          {!collapsed && (
+            <span className="text-base font-semibold tracking-wide text-text-primary group-hover:opacity-80 transition-opacity">
               LAVA
             </span>
-          </Link>
-        )}
-        {collapsed && (
-          <Link to="/" className="flex items-center justify-center flex-1">
-            <LavaLogo />
-          </Link>
-        )}
+          )}
+        </Link>
         <button
           onClick={toggleSidebar}
           className="p-1.5 rounded text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors shrink-0"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
         </button>
       </div>
 
@@ -76,7 +77,7 @@ export function Sidebar() {
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
-                  collapsed ? 'justify-center' : '',
+                  collapsed && 'justify-center',
                   isActive
                     ? 'text-text-primary bg-surface-3'
                     : 'text-text-secondary hover:text-text-primary hover:bg-surface-2',
@@ -90,10 +91,10 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Theme toggle */}
-      <div className="shrink-0 border-t border-border py-3 px-2">
+      {/* Bottom: theme picker */}
+      <div className="shrink-0 border-t border-border py-3 px-2 flex flex-col gap-2">
+        {/* Theme */}
         {collapsed ? (
-          /* Cycle through themes when collapsed */
           <button
             onClick={() => {
               const idx = THEME_OPTIONS.findIndex((o) => o.value === theme)
@@ -102,13 +103,7 @@ export function Sidebar() {
             className="w-full flex justify-center p-2 rounded-md text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
             title={`Theme: ${theme}`}
           >
-            {theme === 'light' ? (
-              <Sun size={16} />
-            ) : theme === 'dark' ? (
-              <Moon size={16} />
-            ) : (
-              <Monitor size={16} />
-            )}
+            {theme === 'light' ? <Sun size={15} /> : theme === 'dark' ? <Moon size={15} /> : <Monitor size={15} />}
           </button>
         ) : (
           <div>

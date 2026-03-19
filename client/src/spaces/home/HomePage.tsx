@@ -1,70 +1,58 @@
-import { useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUp, ChevronRight, FilePlus } from 'lucide-react'
-import { cn } from '@/components/ui/utils'
+import { ChevronRight } from 'lucide-react'
 import { useAgent } from '@/hooks/useAgent'
+import { ChatInput } from '@/components/agent/ChatInput'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const RECOMMENDATIONS = [
-  { label: 'Learn Autumn Leaves', to: '/learn' },
-  { label: 'Practice Hotel California', to: '/learn' },
-  { label: 'Write a lo-fi beat', to: '/create' },
-  { label: 'Jam in D minor', to: '/jam' },
-  { label: 'Tune my guitar', to: '/tools' },
-  { label: 'Open last session', to: '/projects' },
+const HOT_CHORD_CHARTS = [
+  {
+    title: 'Autumn Leaves',
+    style: 'Jazz Standard',
+    key: 'Gm',
+  },
+  {
+    title: '12 Bar Blues',
+    style: 'Blues',
+    key: 'A',
+  },
+  {
+    title: 'ii-V-I Progressions',
+    style: 'Jazz',
+    key: 'C',
+  },
 ]
 
-const MY_PROJECTS = [
-  { label: 'Lo-fi Sunday Beat', to: '/projects' },
-  { label: 'Hotel California Cover', to: '/projects' },
-  { label: 'Jazz Improv Session', to: '/projects' },
-]
-
-const SCORE_CHART = [
-  { title: 'Clair de Lune', sub: 'Debussy · Piano' },
-  { title: 'Bohemian Rhapsody', sub: 'Queen · Piano' },
-  { title: 'Fly Me to the Moon', sub: 'Sinatra' },
-  { title: 'River Flows in You', sub: 'Yiruma · Piano' },
-  { title: 'Hotel California', sub: 'Eagles · Guitar' },
-]
-
-const SONG_CHART = [
-  { title: 'Blinding Lights', sub: 'The Weeknd' },
-  { title: 'As It Was', sub: 'Harry Styles' },
-  { title: 'Anti-Hero', sub: 'Taylor Swift' },
-  { title: 'Levitating', sub: 'Dua Lipa' },
-  { title: 'Shape of You', sub: 'Ed Sheeran' },
-]
-
-const PEDAL_CHART = [
-  { title: 'Tube Screamer', sub: 'Overdrive · Ibanez' },
-  { title: 'Big Muff', sub: 'Fuzz · Electro-Harmonix' },
-  { title: 'Holy Grail', sub: 'Reverb · Electro-Harmonix' },
-  { title: 'DD-8', sub: 'Delay · Boss' },
-  { title: 'CE-2W', sub: 'Chorus · Boss' },
+const HOT_BACKING_TRACKS = [
+  {
+    title: 'Midnight Blues Groove',
+    style: 'Blues',
+    bpm: 85,
+    gradient: 'from-indigo-600 to-purple-800',
+  },
+  {
+    title: 'Funk City Jam',
+    style: 'Funk',
+    bpm: 110,
+    gradient: 'from-orange-500 to-pink-600',
+  },
+  {
+    title: 'Smooth Jazz Vibes',
+    style: 'Jazz',
+    bpm: 72,
+    gradient: 'from-teal-500 to-blue-700',
+  },
 ]
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function HomePage() {
-  const [query, setQuery] = useState('')
   const { sendMessage } = useAgent()
   const navigate = useNavigate()
 
-  const handleSend = () => {
-    const trimmed = query.trim()
-    if (!trimmed) return
-    sendMessage(trimmed)
-    setQuery('')
+  const handleSend = (message: string) => {
+    sendMessage(message)
     navigate('/learn')
-  }
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
   }
 
   return (
@@ -74,132 +62,88 @@ export function HomePage() {
         {/* ── Hero prompt ──────────────────────────────────────── */}
         <section className="pb-4">
           <h1 className="text-3xl font-semibold text-text-primary mb-8 text-center">Play the music you love</h1>
-          <div className="w-full flex items-center gap-2 bg-surface-0 border border-border rounded-full px-5 py-3 focus-within:border-border-hover transition-colors shadow-sm">
-            <button
-              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
-              title="Add file"
-            >
-              <FilePlus size={16} />
-            </button>
-            <textarea
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="What do you want to make?"
-              rows={1}
-              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none resize-none leading-relaxed"
-              style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!query.trim()}
-              className={cn(
-                'shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors',
-                query.trim()
-                  ? 'bg-text-primary text-surface-0 hover:opacity-80'
-                  : 'bg-surface-3 text-text-muted cursor-default',
-              )}
-            >
-              <ArrowUp size={15} />
-            </button>
-          </div>
+          <ChatInput onSend={handleSend} placeholder="What do you want to play?" />
         </section>
 
-        {/* ── Recommendations ─────────────────────────────────── */}
+        {/* ── Hot ChordChart ──────────────────────────────────── */}
         <section>
-          <SectionHeader title="Recommended for you" />
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {RECOMMENDATIONS.map(({ label, to }) => (
-              <button
-                key={label}
-                onClick={() => navigate(to)}
-                className="flex items-center px-4 py-2 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-full shrink-0 transition-colors"
-              >
-                <span className="text-xs font-medium text-text-primary whitespace-nowrap">{label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── My Projects ────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-text-secondary">My Projects</h2>
+          <div className="mb-2">
             <button
-              onClick={() => navigate('/projects')}
-              className="flex items-center gap-0.5 text-xs text-text-muted hover:text-text-primary transition-colors"
+              onClick={() => navigate('/chord-charts')}
+              className="flex items-center gap-1 group"
             >
-              <span>View all</span>
-              <ChevronRight size={14} />
+              <h2 className="text-2xl font-semibold text-text-primary">Hot ChordChart</h2>
+              <ChevronRight size={20} className="text-text-muted group-hover:text-text-primary transition-colors mt-0.5" />
             </button>
+            <p className="text-sm text-text-muted mt-1">Popular chord progressions to learn</p>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-            {MY_PROJECTS.map(({ label, to }) => (
-              <button
-                key={label}
-                onClick={() => navigate(to)}
-                className="flex flex-col gap-1 p-4 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-xl shrink-0 w-44 text-left transition-colors"
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            {HOT_CHORD_CHARTS.map((chart) => (
+              <div
+                key={chart.title}
+                onClick={() => navigate('/learn')}
+                className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
               >
-                <p className="text-xs font-medium text-text-primary">{label}</p>
-                <p className="text-2xs text-text-muted">Last edited recently</p>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Three Charts Side by Side ────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { title: 'Top Sheet Music', items: SCORE_CHART },
-            { title: 'Top Songs', items: SONG_CHART },
-            { title: 'Top Pedal Effects', items: PEDAL_CHART },
-          ].map(({ title, items }) => (
-            <ChartCard key={title} title={title}>
-              {items.map((item, i) => (
-                <div
-                  key={item.title}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2 transition-colors cursor-pointer rounded-lg"
-                >
-                  <span className="text-xs font-mono w-4 shrink-0 text-right text-text-muted">{i + 1}</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-text-primary truncate">{item.title}</p>
-                    <p className="text-2xs text-text-muted truncate">{item.sub}</p>
+                {/* Album Art — black mockup */}
+                <div className="aspect-square w-full bg-black flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-white/60 text-xs font-mono tracking-widest uppercase mb-2">{chart.style}</p>
+                    <p className="text-white text-2xl font-bold">{chart.key}</p>
                   </div>
                 </div>
-              ))}
-            </ChartCard>
-          ))}
-        </div>
+                {/* Info */}
+                <div className="flex flex-col gap-2 p-6">
+                  <p className="text-base font-semibold text-text-primary leading-tight">{chart.title}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-text-muted">{chart.style}</span>
+                    <span className="text-text-muted">·</span>
+                    <span className="text-sm text-text-muted">Key of {chart.key}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-      </div>
-    </div>
-  )
-}
+        {/* ── Hot Backing Track ─────────────────────────────────── */}
+        <section>
+          <div className="mb-2">
+            <button
+              onClick={() => navigate('/backing-tracks')}
+              className="flex items-center gap-1 group"
+            >
+              <h2 className="text-2xl font-semibold text-text-primary">Hot Backing Track</h2>
+              <ChevronRight size={20} className="text-text-muted group-hover:text-text-primary transition-colors mt-0.5" />
+            </button>
+            <p className="text-sm text-text-muted mt-1">Trending tracks to jam with</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            {HOT_BACKING_TRACKS.map((track) => (
+              <div
+                key={track.title}
+                onClick={() => navigate('/jam')}
+                className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
+              >
+                {/* Album Art */}
+                <div className={`aspect-square w-full bg-gradient-to-br ${track.gradient} flex items-center justify-center`}>
+                  <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-6 h-6 rounded-full bg-white/20" />
+                  </div>
+                </div>
+                {/* Info */}
+                <div className="flex flex-col gap-2 p-6">
+                  <p className="text-base font-semibold text-text-primary leading-tight">{track.title}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-text-muted">{track.style}</span>
+                    <span className="text-text-muted">·</span>
+                    <span className="text-sm text-text-muted">{track.bpm} BPM</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-sm font-semibold text-text-secondary">{title}</h2>
-    </div>
-  )
-}
-
-function ChartCard({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col bg-surface-0 border border-border rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-border shrink-0">
-        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-      </div>
-      <div className="flex-1 overflow-y-auto py-1 min-h-0">
-        {children}
       </div>
     </div>
   )

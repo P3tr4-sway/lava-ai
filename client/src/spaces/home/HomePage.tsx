@@ -1,56 +1,48 @@
 import { useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  BookOpen,
-  Music,
-  Layers,
-  Wrench,
-  FolderOpen,
-  TrendingUp,
-  Guitar,
-  Radio,
-  Zap,
-  ArrowUp,
-} from 'lucide-react'
+import { ArrowUp, ChevronRight, FilePlus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useAgent } from '@/hooks/useAgent'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
 const RECOMMENDATIONS = [
-  { icon: BookOpen, label: 'Learn Autumn Leaves', sub: 'Jazz standard — All levels', to: '/learn' },
-  { icon: Guitar, label: 'Practice Hotel California', sub: 'Classic rock guitar', to: '/learn' },
-  { icon: Layers, label: 'Write a lo-fi beat', sub: 'Chilled production', to: '/create' },
-  { icon: Music, label: 'Jam in D minor', sub: 'Free-form session', to: '/jam' },
-  { icon: Wrench, label: 'Tune my guitar', sub: 'Chromatic tuner', to: '/tools' },
-  { icon: FolderOpen, label: 'Open last session', sub: 'Resume where you left off', to: '/projects' },
+  { label: 'Learn Autumn Leaves', to: '/learn' },
+  { label: 'Practice Hotel California', to: '/learn' },
+  { label: 'Write a lo-fi beat', to: '/create' },
+  { label: 'Jam in D minor', to: '/jam' },
+  { label: 'Tune my guitar', to: '/tools' },
+  { label: 'Open last session', to: '/projects' },
+]
+
+const MY_PROJECTS = [
+  { label: 'Lo-fi Sunday Beat', to: '/projects' },
+  { label: 'Hotel California Cover', to: '/projects' },
+  { label: 'Jazz Improv Session', to: '/projects' },
 ]
 
 const SCORE_CHART = [
-  { rank: 1, title: 'Clair de Lune', composer: 'Debussy', instrument: 'Piano', difficulty: 'Advanced', plays: 98 },
-  { rank: 2, title: 'Bohemian Rhapsody', composer: 'Queen', instrument: 'Piano', difficulty: 'Intermediate', plays: 91 },
-  { rank: 3, title: 'Fly Me to the Moon', composer: 'Sinatra', instrument: 'Any', difficulty: 'Beginner', plays: 87 },
-  { rank: 4, title: 'River Flows in You', composer: 'Yiruma', instrument: 'Piano', difficulty: 'Beginner', plays: 83 },
-  { rank: 5, title: 'Hotel California', composer: 'Eagles', instrument: 'Guitar', difficulty: 'Intermediate', plays: 79 },
-  { rank: 6, title: 'Für Elise', composer: 'Beethoven', instrument: 'Piano', difficulty: 'Beginner', plays: 74 },
+  { title: 'Clair de Lune', sub: 'Debussy · Piano' },
+  { title: 'Bohemian Rhapsody', sub: 'Queen · Piano' },
+  { title: 'Fly Me to the Moon', sub: 'Sinatra' },
+  { title: 'River Flows in You', sub: 'Yiruma · Piano' },
+  { title: 'Hotel California', sub: 'Eagles · Guitar' },
 ]
 
 const SONG_CHART = [
-  { rank: 1, title: 'Blinding Lights', artist: 'The Weeknd', bpm: 171, key: 'F min', change: 'up' },
-  { rank: 2, title: 'As It Was', artist: 'Harry Styles', bpm: 174, key: 'G maj', change: 'same' },
-  { rank: 3, title: 'Anti-Hero', artist: 'Taylor Swift', bpm: 96, key: 'C maj', change: 'up' },
-  { rank: 4, title: 'Levitating', artist: 'Dua Lipa', bpm: 103, key: 'B min', change: 'down' },
-  { rank: 5, title: 'Shape of You', artist: 'Ed Sheeran', bpm: 96, key: 'C# min', change: 'same' },
-  { rank: 6, title: 'Stay', artist: 'The Kid LAROI', bpm: 170, key: 'D maj', change: 'up' },
+  { title: 'Blinding Lights', sub: 'The Weeknd' },
+  { title: 'As It Was', sub: 'Harry Styles' },
+  { title: 'Anti-Hero', sub: 'Taylor Swift' },
+  { title: 'Levitating', sub: 'Dua Lipa' },
+  { title: 'Shape of You', sub: 'Ed Sheeran' },
 ]
 
-const PEDALS = [
-  { name: 'Tube Screamer', type: 'Overdrive', brand: 'Ibanez', color: '#22c55e', popularity: 95, genre: 'Blues · Rock' },
-  { name: 'Big Muff', type: 'Fuzz', brand: 'Electro-Harmonix', color: '#ef4444', popularity: 88, genre: 'Rock · Grunge' },
-  { name: 'Holy Grail', type: 'Reverb', brand: 'Electro-Harmonix', color: '#3b82f6', popularity: 84, genre: 'Ambient · Shoegaze' },
-  { name: 'DD-8', type: 'Delay', brand: 'Boss', color: '#f59e0b', popularity: 80, genre: 'All styles' },
-  { name: 'CE-2W', type: 'Chorus', brand: 'Boss', color: '#8b5cf6', popularity: 76, genre: 'Funk · Jazz' },
-  { name: 'Crybaby', type: 'Wah', brand: 'Dunlop', color: '#ec4899', popularity: 72, genre: 'Funk · Rock' },
+const PEDAL_CHART = [
+  { title: 'Tube Screamer', sub: 'Overdrive · Ibanez' },
+  { title: 'Big Muff', sub: 'Fuzz · Electro-Harmonix' },
+  { title: 'Holy Grail', sub: 'Reverb · Electro-Harmonix' },
+  { title: 'DD-8', sub: 'Delay · Boss' },
+  { title: 'CE-2W', sub: 'Chorus · Boss' },
 ]
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -77,17 +69,23 @@ export function HomePage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 pt-[20vh] md:px-6 flex flex-col gap-8 pb-12">
+      <div className="max-w-4xl mx-auto px-6 pt-[28vh] flex flex-col gap-10 pb-12">
 
         {/* ── Hero prompt ──────────────────────────────────────── */}
-        <section className="pt-4">
-          <h1 className="text-2xl font-semibold text-text-primary mb-6">What do you want to make?</h1>
-          <div className="flex items-center gap-2 bg-surface-0 border border-border rounded-full px-5 py-3 focus-within:border-border-hover transition-colors shadow-sm">
+        <section className="pb-4">
+          <h1 className="text-3xl font-semibold text-text-primary mb-8 text-center">Play the music you love</h1>
+          <div className="w-full flex items-center gap-2 bg-surface-0 border border-border rounded-full px-5 py-3 focus-within:border-border-hover transition-colors shadow-sm">
+            <button
+              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
+              title="Add file"
+            >
+              <FilePlus size={16} />
+            </button>
             <textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask LAVA AI — learn a song, start a jam, compose something new…"
+              placeholder="What do you want to make?"
               rows={1}
               className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none resize-none leading-relaxed"
               style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
@@ -109,114 +107,68 @@ export function HomePage() {
 
         {/* ── Recommendations ─────────────────────────────────── */}
         <section>
-          <SectionHeader icon={<Zap size={15} />} title="Recommended for you" />
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-            {RECOMMENDATIONS.map(({ icon: Icon, label, sub, to }) => (
+          <SectionHeader title="Recommended for you" />
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {RECOMMENDATIONS.map(({ label, to }) => (
               <button
                 key={label}
                 onClick={() => navigate(to)}
-                className="flex flex-col gap-2 p-4 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-xl text-left shrink-0 w-44 transition-colors group"
+                className="flex items-center px-4 py-2 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-full shrink-0 transition-colors"
               >
-                <Icon size={17} className="text-text-muted group-hover:text-text-secondary" />
-                <div>
-                  <p className="text-xs font-medium text-text-primary leading-snug">{label}</p>
-                  <p className="text-2xs text-text-muted mt-0.5">{sub}</p>
-                </div>
+                <span className="text-xs font-medium text-text-primary whitespace-nowrap">{label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* ── My Projects ────────────────────────────────────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-text-secondary">My Projects</h2>
+            <button
+              onClick={() => navigate('/projects')}
+              className="flex items-center gap-0.5 text-xs text-text-muted hover:text-text-primary transition-colors"
+            >
+              <span>View all</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+            {MY_PROJECTS.map(({ label, to }) => (
+              <button
+                key={label}
+                onClick={() => navigate(to)}
+                className="flex flex-col gap-1 p-4 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-xl shrink-0 w-44 text-left transition-colors"
+              >
+                <p className="text-xs font-medium text-text-primary">{label}</p>
+                <p className="text-2xs text-text-muted">Last edited recently</p>
               </button>
             ))}
           </div>
         </section>
 
         {/* ── Three Charts Side by Side ────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:h-[360px]">
-
-          {/* Music Score Chart */}
-          <ChartCard icon={<TrendingUp size={14} />} title="Top Sheet Music">
-            {SCORE_CHART.map((item) => (
-              <div
-                key={item.rank}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-surface-2 transition-colors cursor-pointer rounded-lg group"
-              >
-                <span className={cn(
-                  'text-xs font-mono w-4 shrink-0 text-right',
-                  item.rank <= 3 ? 'text-text-primary font-semibold' : 'text-text-muted',
-                )}>
-                  {item.rank}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{item.title}</p>
-                  <p className="text-2xs text-text-muted truncate">{item.composer} · {item.instrument}</p>
-                </div>
-                <span className={cn(
-                  'text-2xs px-1.5 py-0.5 rounded-full border shrink-0',
-                  item.difficulty === 'Beginner' && 'border-success text-success',
-                  item.difficulty === 'Intermediate' && 'border-warning text-warning',
-                  item.difficulty === 'Advanced' && 'border-error text-error',
-                )}>
-                  {item.difficulty[0]}
-                </span>
-              </div>
-            ))}
-          </ChartCard>
-
-          {/* Song Chart */}
-          <ChartCard icon={<Radio size={14} />} title="Top Songs">
-            {SONG_CHART.map((item) => (
-              <div
-                key={item.rank}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-surface-2 transition-colors cursor-pointer rounded-lg"
-              >
-                <span className={cn(
-                  'text-xs font-mono w-4 shrink-0 text-right',
-                  item.rank <= 3 ? 'text-text-primary font-semibold' : 'text-text-muted',
-                )}>
-                  {item.rank}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{item.title}</p>
-                  <p className="text-2xs text-text-muted truncate">{item.artist}</p>
-                </div>
-                <div className="text-2xs font-mono text-text-muted shrink-0 text-right">
-                  <p>{item.bpm} BPM</p>
-                  <p>{item.key}</p>
-                </div>
-                <ChangeIndicator change={item.change} />
-              </div>
-            ))}
-          </ChartCard>
-
-          {/* Guitar Pedal Effects */}
-          <ChartCard icon={<Guitar size={14} />} title="Top Pedal Effects">
-            {PEDALS.map((pedal, i) => (
-              <div
-                key={pedal.name}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-surface-2 transition-colors cursor-pointer rounded-lg group"
-              >
-                <span className="text-xs font-mono w-4 shrink-0 text-right text-text-muted">
-                  {i + 1}
-                </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { title: 'Top Sheet Music', items: SCORE_CHART },
+            { title: 'Top Songs', items: SONG_CHART },
+            { title: 'Top Pedal Effects', items: PEDAL_CHART },
+          ].map(({ title, items }) => (
+            <ChartCard key={title} title={title}>
+              {items.map((item, i) => (
                 <div
-                  className="w-6 h-6 rounded flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: pedal.color + '22' }}
+                  key={item.title}
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2 transition-colors cursor-pointer rounded-lg"
                 >
-                  <Guitar size={12} style={{ color: pedal.color }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{pedal.name}</p>
-                  <p className="text-2xs text-text-muted truncate">{pedal.type} · {pedal.brand}</p>
-                </div>
-                <div className="w-12 shrink-0">
-                  <div className="h-1 bg-surface-3 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${pedal.popularity}%`, backgroundColor: pedal.color }}
-                    />
+                  <span className="text-xs font-mono w-4 shrink-0 text-right text-text-muted">{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-text-primary truncate">{item.title}</p>
+                    <p className="text-2xs text-text-muted truncate">{item.sub}</p>
                   </div>
                 </div>
-              </div>
-            ))}
-          </ChartCard>
-
+              ))}
+            </ChartCard>
+          ))}
         </div>
 
       </div>
@@ -226,34 +178,24 @@ export function HomePage() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="text-text-muted">{icon}</span>
+    <div className="mb-3">
       <h2 className="text-sm font-semibold text-text-secondary">{title}</h2>
     </div>
   )
 }
 
-function ChangeIndicator({ change }: { change: string }) {
-  if (change === 'up') return <span className="text-success text-xs">▲</span>
-  if (change === 'down') return <span className="text-error text-xs">▼</span>
-  return <span className="text-text-muted text-xs">—</span>
-}
-
 function ChartCard({
-  icon,
   title,
   children,
 }: {
-  icon: React.ReactNode
   title: string
   children: React.ReactNode
 }) {
   return (
     <div className="flex flex-col bg-surface-0 border border-border rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
-        <span className="text-text-muted">{icon}</span>
+      <div className="px-4 py-3 border-b border-border shrink-0">
         <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
       </div>
       <div className="flex-1 overflow-y-auto py-1 min-h-0">

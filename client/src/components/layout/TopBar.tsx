@@ -10,7 +10,6 @@ const SPACE_LABELS: Record<string, string> = {
   learn: 'Learn',
   jam: 'Jam',
   create: 'Create',
-  tools: 'Tools',
   projects: 'My Projects',
 }
 

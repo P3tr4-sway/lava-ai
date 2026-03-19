@@ -7,6 +7,7 @@ import { X, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAgent } from '@/hooks/useAgent'
 import { useEffect, useRef } from 'react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 export function AgentPanel() {
   const open = useUIStore((s) => s.agentPanelOpen)
@@ -16,16 +17,28 @@ export function AgentPanel() {
   const streamingContent = useAgentStore((s) => s.streamingContent)
   const { sendMessage } = useAgent()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, streamingContent])
 
+  // Lock body scroll on mobile when panel is open
+  useEffect(() => {
+    if (isMobile && open) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [isMobile, open])
+
   return (
     <aside
       className={cn(
-        'fixed right-0 top-0 h-full w-[360px] bg-surface-0 border-l border-border flex flex-col',
-        'transition-transform duration-200 z-20',
+        'fixed right-0 top-0 h-full bg-surface-0 border-l border-border flex flex-col',
+        'transition-transform duration-200',
+        isMobile
+          ? 'w-full z-50'
+          : 'w-[360px] z-20',
         open ? 'translate-x-0' : 'translate-x-full',
       )}
     >
@@ -70,7 +83,7 @@ export function AgentPanel() {
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-border shrink-0">
+      <div className={cn('p-3 border-t border-border shrink-0', isMobile && 'pb-safe')}>
         <ChatInput onSend={sendMessage} disabled={isStreaming} />
       </div>
     </aside>

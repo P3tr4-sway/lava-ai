@@ -25,8 +25,8 @@ export function MyProjectsPage() {
   }, [id, setSpaceContext])
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <FolderOpen size={20} className="text-text-secondary" />

@@ -77,7 +77,7 @@ export function HomePage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col gap-8 pb-12">
+      <div className="max-w-5xl mx-auto px-4 pt-[20vh] md:px-6 flex flex-col gap-8 pb-12">
 
         {/* ── Hero prompt ──────────────────────────────────────── */}
         <section className="pt-4">
@@ -128,7 +128,7 @@ export function HomePage() {
         </section>
 
         {/* ── Three Charts Side by Side ────────────────────────── */}
-        <div className="grid grid-cols-3 gap-4" style={{ height: '360px' }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:h-[360px]">
 
           {/* Music Score Chart */}
           <ChartCard icon={<TrendingUp size={14} />} title="Top Sheet Music">

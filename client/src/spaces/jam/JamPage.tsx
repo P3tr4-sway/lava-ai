@@ -25,7 +25,7 @@ export function JamPage() {
   const isPlaying = playbackState === 'playing'
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
           <Music size={20} className="text-text-secondary" />

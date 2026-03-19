@@ -34,10 +34,13 @@ export function CreatePage() {
         </div>
         <span className="text-xs font-mono text-text-muted">{bpm} BPM</span>
         <div className="flex-1" />
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="hidden sm:inline-flex">
           <Plus size={12} /> Add Track
         </Button>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="icon-sm" className="sm:hidden">
+          <Plus size={14} />
+        </Button>
+        <Button variant="outline" size="sm" className="hidden sm:inline-flex">
           Export
         </Button>
       </div>
@@ -45,7 +48,7 @@ export function CreatePage() {
       {/* Timeline area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Track headers */}
-        <div className="w-48 shrink-0 border-r border-border bg-surface-0 flex flex-col">
+        <div className="w-48 shrink-0 border-r border-border bg-surface-0 hidden md:flex flex-col">
           <div className="h-8 border-b border-border flex items-center px-3">
             <span className="text-xs text-text-muted">Tracks</span>
           </div>

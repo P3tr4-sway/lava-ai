@@ -3,6 +3,7 @@ import { useAgentStore } from '@/stores/agentStore'
 import { cn } from '@/components/ui/utils'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
+import { QuickActions } from './QuickActions'
 import { X, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAgent } from '@/hooks/useAgent'
@@ -82,8 +83,9 @@ export function AgentPanel() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className={cn('p-3 border-t border-border shrink-0', isMobile && 'pb-safe')}>
+      {/* Quick actions + Input */}
+      <div className={cn('px-3 pt-2 pb-3 border-t border-border shrink-0 flex flex-col gap-2', isMobile && 'pb-safe')}>
+        <QuickActions onSend={sendMessage} disabled={isStreaming} />
         <ChatInput onSend={sendMessage} disabled={isStreaming} />
       </div>
     </aside>

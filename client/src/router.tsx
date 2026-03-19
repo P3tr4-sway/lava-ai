@@ -1,11 +1,11 @@
-import { createBrowserRouter, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { HomePage } from '@/spaces/home/HomePage'
 import { LearnPage } from '@/spaces/learn/LearnPage'
 import { JamPage } from '@/spaces/jam/JamPage'
 import { CreatePage } from '@/spaces/create/CreatePage'
-import { ToolsPage } from '@/spaces/tools/ToolsPage'
 import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
+import { LibraryPage } from '@/spaces/library/LibraryPage'
 
 const routes: RouteObject[] = [
   {
@@ -19,10 +19,10 @@ const routes: RouteObject[] = [
       { path: 'jam/:id', element: <JamPage /> },
       { path: 'create', element: <CreatePage /> },
       { path: 'create/:id', element: <CreatePage /> },
-      { path: 'tools', element: <ToolsPage /> },
-      { path: 'tools/:id', element: <ToolsPage /> },
+      { path: 'library', element: <LibraryPage /> },
       { path: 'projects', element: <MyProjectsPage /> },
       { path: 'projects/:id', element: <MyProjectsPage /> },
+      { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
 ]

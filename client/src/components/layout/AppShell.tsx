@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar'
 import { MobileHeader } from './MobileHeader'
 import { BottomNav } from './BottomNav'
 import { AgentPanel } from '@/components/agent/AgentPanel'
+import { LibraryModal } from '@/components/library/LibraryModal'
 import { useUIStore } from '@/stores/uiStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -44,6 +45,8 @@ export function AppShell() {
 
         {/* Agent panel — only on space pages */}
         {!isHome && <AgentPanel />}
+
+        <LibraryModal />
       </div>
     )
   }
@@ -80,6 +83,8 @@ export function AppShell() {
 
       {/* Agent panel — only on space pages */}
       {!isHome && <AgentPanel />}
+
+      <LibraryModal />
     </div>
   )
 }

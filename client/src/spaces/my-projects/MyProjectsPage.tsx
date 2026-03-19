@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
-import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench } from 'lucide-react'
+import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import type { SpaceType } from '@lava/shared'
@@ -12,6 +12,7 @@ const SPACE_ICONS: Record<SpaceType, React.ElementType> = {
   jam: Music,
   create: Layers,
   tools: Wrench,
+  library: Library,
   projects: FolderOpen,
 }
 

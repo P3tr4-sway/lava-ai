@@ -1,34 +1,26 @@
 import { create } from 'zustand'
-import type { JamSession, Loop } from '@lava/shared'
+import type { JamSession, BackingTrack } from '@lava/shared'
 
 interface JamStore {
   session: JamSession | null
-  availableLoops: Loop[]
+  availableTracks: BackingTrack[]
+  selectedTrackId: string | null
   isRecording: boolean
 
   setSession: (session: JamSession | null) => void
-  setAvailableLoops: (loops: Loop[]) => void
-  toggleLoop: (loopId: string) => void
+  setAvailableTracks: (tracks: BackingTrack[]) => void
+  selectTrack: (trackId: string) => void
   setRecording: (recording: boolean) => void
 }
 
 export const useJamStore = create<JamStore>((set) => ({
   session: null,
-  availableLoops: [],
+  availableTracks: [],
+  selectedTrackId: null,
   isRecording: false,
 
   setSession: (session) => set({ session }),
-  setAvailableLoops: (loops) => set({ availableLoops: loops }),
-
-  toggleLoop: (loopId) =>
-    set((state) => {
-      if (!state.session) return {}
-      const active = state.session.activeLoops
-      const next = active.includes(loopId)
-        ? active.filter((id) => id !== loopId)
-        : [...active, loopId]
-      return { session: { ...state.session, activeLoops: next } }
-    }),
-
+  setAvailableTracks: (tracks) => set({ availableTracks: tracks }),
+  selectTrack: (trackId) => set({ selectedTrackId: trackId }),
   setRecording: (recording) => set({ isRecording: recording }),
 }))

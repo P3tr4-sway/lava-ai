@@ -3,10 +3,12 @@ import { useAgentStore } from '@/stores/agentStore'
 import { cn } from '@/components/ui/utils'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
+import { QuickActions } from './QuickActions'
 import { X, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAgent } from '@/hooks/useAgent'
 import { useEffect, useRef } from 'react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 export function AgentPanel() {
   const open = useUIStore((s) => s.agentPanelOpen)
@@ -16,16 +18,28 @@ export function AgentPanel() {
   const streamingContent = useAgentStore((s) => s.streamingContent)
   const { sendMessage } = useAgent()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, streamingContent])
 
+  // Lock body scroll on mobile when panel is open
+  useEffect(() => {
+    if (isMobile && open) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [isMobile, open])
+
   return (
     <aside
       className={cn(
-        'fixed right-0 top-0 h-full w-[360px] bg-surface-0 border-l border-border flex flex-col',
-        'transition-transform duration-200 z-20',
+        'fixed right-0 top-0 h-full bg-surface-0 border-l border-border flex flex-col',
+        'transition-transform duration-200',
+        isMobile
+          ? 'w-full z-50'
+          : 'w-[360px] z-20',
         open ? 'translate-x-0' : 'translate-x-full',
       )}
     >
@@ -69,8 +83,9 @@ export function AgentPanel() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-3 border-t border-border shrink-0">
+      {/* Quick actions + Input */}
+      <div className={cn('px-3 pt-2 pb-3 border-t border-border shrink-0 flex flex-col gap-2', isMobile && 'pb-safe')}>
+        <QuickActions onSend={sendMessage} disabled={isStreaming} />
         <ChatInput onSend={sendMessage} disabled={isStreaming} />
       </div>
     </aside>

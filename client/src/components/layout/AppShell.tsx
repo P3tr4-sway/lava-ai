@@ -1,18 +1,55 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { MobileHeader } from './MobileHeader'
+import { BottomNav } from './BottomNav'
 import { AgentPanel } from '@/components/agent/AgentPanel'
+import { LibraryModal } from '@/components/library/LibraryModal'
 import { useUIStore } from '@/stores/uiStore'
 import { useTheme } from '@/hooks/useTheme'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/components/ui/utils'
 import { Bot } from 'lucide-react'
 
 export function AppShell() {
   useTheme()
 
+  const isMobile = useIsMobile()
   const location = useLocation()
   const isHome = location.pathname === '/'
   const agentPanelOpen = useUIStore((s) => s.agentPanelOpen)
   const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
+  const sidebarOpen = useUIStore((s) => s.sidebarOpen)
+  const setSidebarOpen = useUIStore((s) => s.setSidebarOpen)
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-1">
+        <MobileHeader />
+        <Sidebar />
+
+        {/* Backdrop for sidebar drawer */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-30"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <main className="flex-1 overflow-hidden min-w-0">
+          <div className="h-full overflow-y-auto pb-14">
+            <Outlet />
+          </div>
+        </main>
+
+        <BottomNav />
+
+        {/* Agent panel — only on space pages */}
+        {!isHome && <AgentPanel />}
+
+        <LibraryModal />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface-1">
@@ -46,6 +83,8 @@ export function AppShell() {
 
       {/* Agent panel — only on space pages */}
       {!isHome && <AgentPanel />}
+
+      <LibraryModal />
     </div>
   )
 }

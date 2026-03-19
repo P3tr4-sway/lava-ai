@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
-import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench } from 'lucide-react'
+import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import type { SpaceType } from '@lava/shared'
@@ -12,6 +12,7 @@ const SPACE_ICONS: Record<SpaceType, React.ElementType> = {
   jam: Music,
   create: Layers,
   tools: Wrench,
+  library: Library,
   projects: FolderOpen,
 }
 
@@ -25,8 +26,8 @@ export function MyProjectsPage() {
   }, [id, setSpaceContext])
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <FolderOpen size={20} className="text-text-secondary" />

@@ -21,7 +21,7 @@ export interface ToolResult {
   isError?: boolean
 }
 
-export type SpaceType = 'learn' | 'jam' | 'create' | 'tools' | 'projects'
+export type SpaceType = 'learn' | 'jam' | 'create' | 'tools' | 'library' | 'projects'
 
 export interface SpaceContext {
   currentSpace: SpaceType

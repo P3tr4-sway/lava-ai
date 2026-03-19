@@ -13,12 +13,14 @@ function readTheme(): Theme {
 interface UIStore {
   agentPanelOpen: boolean
   sidebarCollapsed: boolean
+  sidebarOpen: boolean
   activeModal: string | null
   theme: Theme
 
   toggleAgentPanel: () => void
   setAgentPanelOpen: (open: boolean) => void
   toggleSidebar: () => void
+  setSidebarOpen: (open: boolean) => void
   openModal: (id: string) => void
   closeModal: () => void
   setTheme: (theme: Theme) => void
@@ -27,12 +29,14 @@ interface UIStore {
 export const useUIStore = create<UIStore>((set) => ({
   agentPanelOpen: false,
   sidebarCollapsed: false,
+  sidebarOpen: false,
   activeModal: null,
   theme: readTheme(),
 
   toggleAgentPanel: () => set((state) => ({ agentPanelOpen: !state.agentPanelOpen })),
   setAgentPanelOpen: (open) => set({ agentPanelOpen: open }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
   openModal: (id) => set({ activeModal: id }),
   closeModal: () => set({ activeModal: null }),
   setTheme: (theme) => {

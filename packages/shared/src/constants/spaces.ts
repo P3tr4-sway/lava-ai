@@ -38,6 +38,13 @@ export const SPACES: SpaceConfig[] = [
     icon: 'Wrench',
   },
   {
+    id: 'library',
+    label: 'Library',
+    route: '/library',
+    description: 'Browse drum grooves, melodic loops, backing tracks, and AI generations',
+    icon: 'Library',
+  },
+  {
     id: 'projects',
     label: 'Projects',
     route: '/projects',
@@ -51,5 +58,6 @@ export const SPACE_ROUTES: Record<SpaceType, string> = {
   jam: '/jam',
   create: '/create',
   tools: '/tools',
+  library: '/library',
   projects: '/projects',
 }

@@ -48,10 +48,11 @@ export function Sidebar() {
         {/* Nav items */}
         <div className="flex-1 flex flex-col py-2 overflow-y-auto">
           <div className="flex flex-col gap-0.5 px-2">
-            {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+            {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
               <NavLink
                 key={to}
                 to={to}
+                end={'end' in rest}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   cn(
@@ -115,10 +116,11 @@ export function Sidebar() {
       {/* Nav items */}
       <div className="flex-1 flex flex-col py-2 overflow-y-auto">
         <div className="flex flex-col gap-0.5 px-2">
-          {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
             <NavLink
               key={to}
               to={to}
+              end={'end' in rest}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',

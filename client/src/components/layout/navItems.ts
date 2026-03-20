@@ -1,6 +1,7 @@
-import { BookOpen, Music, Layers, FolderOpen, Library } from 'lucide-react'
+import { Home, BookOpen, Music, Layers, FolderOpen, Library } from 'lucide-react'
 
 export const NAV_ITEMS = [
+  { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/learn', icon: BookOpen, label: 'Learn' },
   { to: '/jam', icon: Music, label: 'Play' },
   { to: '/create', icon: Layers, label: 'Create' },

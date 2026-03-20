@@ -1,6 +1,10 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useState, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
 import { ArrowUp, Image, Mic } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
+
+export interface ChatInputRef {
+  setValue: (v: string) => void
+}
 
 interface ChatInputProps {
   onSend: (message: string) => void
@@ -10,9 +14,11 @@ interface ChatInputProps {
   placeholder?: string
 }
 
-export function ChatInput({ onSend, disabled, compact, placeholder = 'What would you like to know?' }: ChatInputProps) {
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'What would you like to know?' }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
+
+  useImperativeHandle(ref, () => ({ setValue }), [])
 
   const hasContent = value.trim().length > 0
   const isActive = focused || hasContent
@@ -84,7 +90,7 @@ export function ChatInput({ onSend, disabled, compact, placeholder = 'What would
       </div>
     </div>
   )
-}
+})
 
 function IconButton({ icon: Icon, label }: { icon: typeof Image; label: string }) {
   return (

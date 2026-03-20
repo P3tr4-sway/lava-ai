@@ -21,4 +21,7 @@ export const CHORD_CHARTS: ChordChart[] = [
   { id: '8', title: 'Pop Punk Essentials', style: 'Pop Punk', key: 'G', tempo: 170, timeSignature: '4/4' },
   { id: '9', title: 'Soul Progressions', style: 'Soul', key: 'F', tempo: 85, timeSignature: '4/4' },
   { id: 'anjo-de-mim', title: 'Anjo De Mim', artist: 'O Rappa', style: 'Brazilian Rock', key: 'Em', tempo: 92, timeSignature: '4/4', tuning: 'Standard', pdfUrl: '/scores/anjo-de-mim.pdf' },
+  { id: 'wonderwall', title: 'Wonderwall', artist: 'Oasis', style: 'Pop', key: 'G', tempo: 87, timeSignature: '4/4' },
+  { id: 'wish-you-were-here', title: 'Wish You Were Here', artist: 'Pink Floyd', style: 'Rock', key: 'G', tempo: 60, timeSignature: '4/4' },
+  { id: 'let-her-go', title: 'Let Her Go', artist: 'Passenger', style: 'Pop', key: 'C', tempo: 75, timeSignature: '4/4' },
 ]

@@ -8,7 +8,7 @@ import { cn } from '@/components/ui/utils'
 import { useUIStore } from '@/stores/uiStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { NAV_ITEMS } from './navItems'
+import { NAV_ITEMS, NEW_SHEET_ITEM } from './navItems'
 import { LavaLogo } from './LavaLogo'
 
 const THEME_OPTIONS = [
@@ -16,6 +16,56 @@ const THEME_OPTIONS = [
   { value: 'light' as const, icon: Sun, label: 'Light' },
   { value: 'dark' as const, icon: Moon, label: 'Dark' },
 ]
+
+function NavItems({ onClose }: { onClose?: () => void }) {
+  const NewSheetIcon = NEW_SHEET_ITEM.icon
+  return (
+    <>
+      {/* Main nav */}
+      <div className="flex flex-col gap-0.5 px-2">
+        {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={'end' in rest}
+            onClick={onClose}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
+                isActive
+                  ? 'text-text-primary bg-surface-3'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-2',
+              )
+            }
+          >
+            <Icon size={17} className="shrink-0" />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </div>
+
+      {/* Divider + New Sheet action */}
+      <div className="px-2 mt-2">
+        <div className="h-px bg-border mb-2" />
+        <NavLink
+          to={NEW_SHEET_ITEM.to}
+          onClick={onClose}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
+              isActive
+                ? 'text-text-primary bg-surface-3'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-2',
+            )
+          }
+        >
+          <NewSheetIcon size={17} className="shrink-0" />
+          <span>{NEW_SHEET_ITEM.label}</span>
+        </NavLink>
+      </div>
+    </>
+  )
+}
 
 export function Sidebar() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -47,27 +97,7 @@ export function Sidebar() {
 
         {/* Nav items */}
         <div className="flex-1 flex flex-col py-2 overflow-y-auto">
-          <div className="flex flex-col gap-0.5 px-2">
-            {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={'end' in rest}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
-                    isActive
-                      ? 'text-text-primary bg-surface-3'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-surface-2',
-                  )
-                }
-              >
-                <Icon size={17} className="shrink-0" />
-                <span>{label}</span>
-              </NavLink>
-            ))}
-          </div>
+          <NavItems onClose={() => setSidebarOpen(false)} />
         </div>
 
         {/* Theme picker */}
@@ -115,26 +145,7 @@ export function Sidebar() {
 
       {/* Nav items */}
       <div className="flex-1 flex flex-col py-2 overflow-y-auto">
-        <div className="flex flex-col gap-0.5 px-2">
-          {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={'end' in rest}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
-                  isActive
-                    ? 'text-text-primary bg-surface-3'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-2',
-                )
-              }
-            >
-              <Icon size={17} className="shrink-0" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </div>
+        <NavItems />
       </div>
 
       {/* Bottom: theme picker */}

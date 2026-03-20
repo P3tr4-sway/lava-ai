@@ -6,6 +6,7 @@ import { JamPage } from '@/spaces/jam/JamPage'
 import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
 import { LibraryPage } from '@/spaces/library/LibraryPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
+import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
 
 const routes: RouteObject[] = [
   {
@@ -20,6 +21,9 @@ const routes: RouteObject[] = [
       // Jam / free play
       { path: 'jam', element: <PlayHubPage /> },
       { path: 'jam/:id', element: <JamPage /> },
+      // Lead Sheet editor — blank project
+      { path: 'editor', element: <LeadSheetPage /> },
+      { path: 'editor/:id', element: <LeadSheetPage /> },
       // Library (merged library + projects)
       { path: 'library', element: <LibraryPage /> },
       // Search

@@ -4,6 +4,7 @@ import { useAgentStore } from '@/stores/agentStore'
 import { ArrowRight, ChevronRight, Music } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
+import { ModuleDrawer } from '@/components/ModuleDrawer'
 import { CHORD_CHARTS } from '@/data/chordCharts'
 
 // Continue where you left off — only shown if user has activity
@@ -67,9 +68,12 @@ export function LearnPage() {
       <div className="max-w-5xl mx-auto px-6 pt-8 md:pt-12 flex flex-col gap-6 pb-12">
 
         {/* ── Space header ─────────────────────────────────────── */}
-        <section>
-          <h1 className="text-xl font-semibold text-text-primary">Learn</h1>
-          <p className="text-sm text-text-muted mt-0.5">Master songs, techniques, and musical concepts</p>
+        <section className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary">Learn</h1>
+            <p className="text-sm text-text-muted mt-0.5">Master songs, techniques, and musical concepts</p>
+          </div>
+          <ModuleDrawer moduleSpace="learn" label="My Learn" />
         </section>
 
         {/* ── AI prompt bar ───────────────────────────────────── */}

@@ -4,6 +4,7 @@ import { useAgentStore } from '@/stores/agentStore'
 import { ArrowRight, ChevronRight, Sparkles, Headphones } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
+import { ModuleDrawer } from '@/components/ModuleDrawer'
 
 const FEATURED_TONES = [
   {
@@ -71,9 +72,12 @@ export function PlayHubPage() {
       <div className="max-w-5xl mx-auto px-6 pt-8 md:pt-12 flex flex-col gap-6 pb-12">
 
         {/* ── Space header ─────────────────────────────────────── */}
-        <section>
-          <h1 className="text-xl font-semibold text-text-primary">Play</h1>
-          <p className="text-sm text-text-muted mt-0.5">AI-powered tools for playing and jamming</p>
+        <section className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary">Play</h1>
+            <p className="text-sm text-text-muted mt-0.5">AI-powered tools for playing and jamming</p>
+          </div>
+          <ModuleDrawer moduleSpace="jam" label="My Play" />
         </section>
 
         {/* ── AI prompt bar ───────────────────────────────────── */}

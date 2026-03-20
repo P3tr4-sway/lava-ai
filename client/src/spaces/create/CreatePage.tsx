@@ -5,6 +5,7 @@ import { Layers, Plus, Play, Square } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { ModuleDrawer } from '@/components/ModuleDrawer'
 import { useAudioStore } from '@/stores/audioStore'
 
 export function CreatePage() {
@@ -44,6 +45,7 @@ export function CreatePage() {
         <Button variant="outline" size="sm" className="hidden sm:inline-flex">
           Export
         </Button>
+        <ModuleDrawer moduleSpace="create" label="My Create" />
       </div>
 
       {/* Timeline area */}

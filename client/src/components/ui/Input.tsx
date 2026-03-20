@@ -20,12 +20,12 @@ export function Input({ className, label, error, id, ...props }: InputProps) {
           'h-8 w-full rounded bg-surface-3 border border-border px-3 text-sm text-text-primary placeholder:text-text-muted',
           'focus:outline-none focus:border-border-hover focus:bg-surface-4',
           'transition-colors',
-          error && 'border-red-600',
+          error && 'border-error',
           className,
         )}
         {...props}
       />
-      {error && <span className="text-xs text-red-500">{error}</span>}
+      {error && <span className="text-xs text-error">{error}</span>}
     </div>
   )
 }

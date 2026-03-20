@@ -50,8 +50,8 @@ export function BackingTracksPage() {
             >
               {/* Album Art */}
               <div className={`aspect-square w-full bg-gradient-to-br ${track.gradient} flex items-center justify-center`}>
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <div className="w-6 h-6 rounded-full bg-white/20" />
+                <div className="w-16 h-16 rounded-full bg-text-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="w-6 h-6 rounded-full bg-text-primary/20" />
                 </div>
               </div>
               {/* Info */}

@@ -1,51 +1,38 @@
-import { AudioEngine } from './AudioEngine'
+import * as Tone from 'tone'
 
 interface LoopTrack {
   id: string
-  buffer: AudioBuffer
-  source: AudioBufferSourceNode | null
-  gainNode: GainNode
+  player: Tone.Player
+  channel: Tone.Channel
 }
 
 export class LoopEngine {
-  private engine: AudioEngine
   private tracks = new Map<string, LoopTrack>()
   private isPlaying = false
 
-  constructor() {
-    this.engine = AudioEngine.getInstance()
-  }
-
   async loadLoop(id: string, url: string): Promise<void> {
-    const ctx = this.engine.context
-    const res = await fetch(url)
-    const arrayBuffer = await res.arrayBuffer()
-    const buffer = await ctx.decodeAudioData(arrayBuffer)
+    const buffer = new Tone.ToneAudioBuffer()
+    await buffer.load(url)
 
-    const gainNode = ctx.createGain()
-    gainNode.connect(this.engine.masterGain)
+    const player = new Tone.Player(buffer)
+    player.loop = true
 
-    this.tracks.set(id, { id, buffer, source: null, gainNode })
+    const channel = new Tone.Channel(0, 0).toDestination()
+    player.connect(channel)
+
+    this.tracks.set(id, { id, player, channel })
   }
 
   activateLoop(id: string) {
     const track = this.tracks.get(id)
     if (!track || !this.isPlaying) return
-
-    const ctx = this.engine.context
-    const source = ctx.createBufferSource()
-    source.buffer = track.buffer
-    source.loop = true
-    source.connect(track.gainNode)
-    source.start(ctx.currentTime)
-    track.source = source
+    track.player.start()
   }
 
   deactivateLoop(id: string) {
     const track = this.tracks.get(id)
-    if (!track?.source) return
-    track.source.stop()
-    track.source = null
+    if (!track) return
+    track.player.stop()
   }
 
   start() {
@@ -65,7 +52,7 @@ export class LoopEngine {
   setLoopVolume(id: string, volume: number) {
     const track = this.tracks.get(id)
     if (track) {
-      track.gainNode.gain.setTargetAtTime(volume, this.engine.context.currentTime, 0.01)
+      track.channel.volume.value = Tone.gainToDb(volume)
     }
   }
 }

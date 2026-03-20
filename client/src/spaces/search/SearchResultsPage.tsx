@@ -327,7 +327,7 @@ function SongActionModal({
 
           <div className="flex items-start gap-4">
             <div className={cn('w-14 h-14 rounded-lg bg-gradient-to-br shrink-0 flex items-center justify-center', result.gradient)}>
-              <Music2 size={22} className="text-white/80" />
+              <Music2 size={22} className="text-surface-0/80" />
             </div>
             <div className="flex-1 min-w-0 pr-6">
               <p className="text-base font-semibold text-text-primary leading-snug line-clamp-2">{result.title}</p>
@@ -347,24 +347,24 @@ function SongActionModal({
             disabled={generating}
             className="w-full flex items-start gap-4 p-4 bg-text-primary rounded-xl transition-opacity text-left disabled:opacity-60 hover:opacity-90"
           >
-            <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="w-10 h-10 rounded-full bg-surface-0/15 flex items-center justify-center shrink-0 mt-0.5">
               {generating
-                ? <Loader2 size={18} className="text-white animate-spin" />
-                : <Sparkles size={18} className="text-white" />
+                ? <Loader2 size={18} className="text-surface-0 animate-spin" />
+                : <Sparkles size={18} className="text-surface-0" />
               }
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-surface-0">
                 {generating ? 'Generating...' : 'AI 生成乐谱 + 伴奏'}
               </p>
-              <p className="text-xs text-white/60 mt-0.5 leading-relaxed">
+              <p className="text-xs text-surface-0/60 mt-0.5 leading-relaxed">
                 {generating
                   ? 'Analyzing audio, extracting chords and melody...'
                   : 'Auto-detect key & tempo · Generate guitar tabs · Matched backing track'
                 }
               </p>
             </div>
-            {!generating && <ArrowRight size={16} className="text-white/50 shrink-0 mt-1" />}
+            {!generating && <ArrowRight size={16} className="text-surface-0/50 shrink-0 mt-1" />}
           </button>
 
           {/* Option B: Backing track only */}

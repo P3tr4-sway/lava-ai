@@ -1,6 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import {
-  Play, Pause, SkipBack, Square, Volume2, ChevronDown, ChevronUp, Plus,
+  Play, SkipBack, Square, Volume2, ChevronDown, ChevronUp, Plus,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Slider } from '@/components/ui/Slider'
@@ -11,8 +11,7 @@ import { TrackControls } from './TrackControls'
 import { TrackLaneView } from './TrackLaneView'
 import type { TrackLane } from '@/stores/dawPanelStore'
 import { BAR_WIDTH_PX } from '@/audio/constants'
-import { AudioEngine } from '@/audio/AudioEngine'
-import { generatePeakData } from '@/audio/waveform'
+import { ToneEngine } from '@/audio/ToneEngine'
 import { Recorder } from '@/audio/Recorder'
 import { audioService } from '@/services/audioService'
 import type { Clip } from '@/audio/types'
@@ -94,7 +93,14 @@ export function DawPanel({
 
   // ── Recorder ───────────────────────────────────────────────────────────────
   const recorderRef = useRef<Recorder>(new Recorder())
-  const recordStartBarRef = useRef<number>(0)
+  // Per-track record start bar — Map so multiple tracks can arm independently
+  const recordStartBarRef = useRef<Map<string, number>>(new Map())
+  // Which track is currently capturing audio (single MediaRecorder at a time)
+  const [recordingTrackId, setRecordingTrackId] = useState<string | null>(null)
+
+  // ── Logic Pro transport ────────────────────────────────────────────────────
+  // Remember where Play was pressed so Stop can return there (Logic Pro behavior)
+  const playStartBarRef = useRef<number>(0)
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useDawKeyboardShortcuts()
@@ -109,15 +115,11 @@ export function DawPanel({
       const audioFile = await audioService.upload(file)
 
       // 2. Load and decode AudioBuffer via engine (uses the returned file id)
-      const engine = AudioEngine.getInstance()
+      const engine = ToneEngine.getInstance()
       const audioBuffer = await engine.loadBuffer(audioFile.id)
 
-      // 3. Generate peak data for waveform display
+      // 3. Build Clip object
       const clipWidthInBars = audioBuffer.duration * (bpm / 60) / beatsPerBar
-      const targetSamples = Math.round(clipWidthInBars * BAR_WIDTH_PX)
-      const peakData = generatePeakData(audioBuffer, Math.max(targetSamples, 1))
-
-      // 4. Build Clip object
       const clip: Clip = {
         id: crypto.randomUUID(),
         trackId,
@@ -127,7 +129,6 @@ export function DawPanel({
         trimEnd: 0,
         audioFileId: audioFile.id,
         audioBuffer,
-        peakData,
         name: file.name.replace(/\.[^.]+$/, ''),
         color: track.color.accent,
       }
@@ -147,24 +148,41 @@ export function DawPanel({
       console.warn('Microphone permission denied')
       return
     }
-    const currentBar = useAudioStore.getState().currentBar
-    recordStartBarRef.current = currentBar
-    await recorder.start(trackId, currentBar)
+
+    // Read current bar directly from ToneEngine for timing accuracy.
+    // If transport is already playing we capture the live engine position;
+    // otherwise we read from the store (playhead cursor position).
+    const engine = ToneEngine.getInstance()
+    const startBar = engine.getIsPlaying()
+      ? engine.getCurrentBar()
+      : useAudioStore.getState().currentBar
+
+    recordStartBarRef.current.set(trackId, startBar)
+    setRecordingTrackId(trackId)
+
+    // Logic Pro: pressing Record starts the transport if it isn't already running
+    if (!engine.getIsPlaying()) {
+      playStartBarRef.current = startBar
+      setPlaybackState('playing')
+    }
+
+    await recorder.start(trackId, startBar)
   }
 
   const handleRecordStop = async (trackId: string) => {
     const recorder = recorderRef.current
     if (!recorder.isRecording) return
 
+    setRecordingTrackId(null)
+
     try {
       const { audioBuffer } = await recorder.stop()
       const { bpm: currentBpm } = useAudioStore.getState()
 
       const clipLengthInBars = audioBuffer.duration * (currentBpm / 60) / beatsPerBar
-      const targetSamples = Math.round(clipLengthInBars * BAR_WIDTH_PX)
-      const peakData = generatePeakData(audioBuffer, Math.max(targetSamples, 1))
-
-      const startBar = recordStartBarRef.current
+      // Retrieve per-track start bar from the Map
+      const startBar = recordStartBarRef.current.get(trackId) ?? 0
+      recordStartBarRef.current.delete(trackId)
       const track = tracks.find((t) => t.id === trackId)
 
       const clip: Clip = {
@@ -175,7 +193,6 @@ export function DawPanel({
         trimStart: 0,
         trimEnd: 0,
         audioBuffer,
-        peakData,
         name: `Recording ${new Date().toLocaleTimeString()}`,
         color: track?.color.accent ?? '#60a5fa',
       }
@@ -190,6 +207,37 @@ export function DawPanel({
 
   // Playhead position based on bar (px), not percentage
   const playheadLeft = currentBar * BAR_WIDTH_PX
+
+  // ── Logic Pro–style transport handlers ────────────────────────────────────
+  // Play/Stop toggle: stop returns the playhead to where Play was pressed,
+  // matching Logic Pro's default "Return to Origin" stop behavior.
+  const handlePlayStop = () => {
+    if (isPlaying) {
+      // Stop → return to the bar where playback started
+      const returnBar = playStartBarRef.current
+      setCurrentBar(returnBar)
+      setCurrentTime(returnBar * beatsPerBar * (60 / bpm))
+      setPlaybackState('stopped')
+    } else {
+      // Play → remember this position so Stop can return here
+      playStartBarRef.current = currentBar
+      setPlaybackState('playing')
+    }
+  }
+
+  // Return to beginning — always goes to bar 0 (like the |◄ button in Logic Pro)
+  const handleReturnToStart = () => {
+    const wasPlaying = isPlaying
+    setCurrentBar(0)
+    setCurrentTime(0)
+    setPlaybackState('stopped')
+    // If transport was playing, restart from bar 0 after a tick
+    // (stop resets Tone.js position, then play picks up from store's currentBar=0)
+    if (wasPlaying) {
+      playStartBarRef.current = 0
+      setTimeout(() => setPlaybackState('playing'), 0)
+    }
+  }
 
   // Handle bar click on ruler
   const handleBarClick = (barIndex: number) => {
@@ -215,25 +263,23 @@ export function DawPanel({
 
       {/* ── Transport bar ────────────────────────────────────────── */}
       {showTransportBar && <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border">
-        {/* Playback controls */}
+        {/* Playback controls — Logic Pro style: |◄ and ▶/■ */}
         <div className="flex items-center gap-0.5">
+          {/* Return to beginning (|◄) */}
           <button
-            onClick={() => { setCurrentTime(0); setCurrentBar(0); setPlaybackState('stopped') }}
+            onClick={handleReturnToStart}
             className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+            title="Return to beginning"
           >
             <SkipBack size={13} />
           </button>
+          {/* Play / Stop toggle (▶ → ■) — stop returns to play-start position */}
           <button
-            onClick={() => setPlaybackState(isPlaying ? 'paused' : 'playing')}
+            onClick={handlePlayStop}
             className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
+            title={isPlaying ? 'Stop (return to play start)' : 'Play'}
           >
-            {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-          </button>
-          <button
-            onClick={() => setPlaybackState('stopped')}
-            className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-          >
-            <Square size={13} />
+            {isPlaying ? <Square size={13} /> : <Play size={14} className="ml-0.5" />}
           </button>
         </div>
 
@@ -247,7 +293,7 @@ export function DawPanel({
               const v = parseInt(e.target.value)
               if (v >= 40 && v <= 240) setBpm(v)
             }}
-            className="w-12 bg-transparent text-center text-xs text-white/80 border-b border-white/20 focus:outline-none focus:border-white/60"
+            className="w-12 bg-transparent text-center text-xs text-text-primary/80 border-b border-border focus:outline-none focus:border-border-hover"
             min={40}
             max={240}
           />
@@ -257,7 +303,7 @@ export function DawPanel({
         <button
           onClick={toggleLoop}
           className={`p-1.5 rounded text-xs transition-colors ${
-            loop.enabled ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
+            loop.enabled ? 'bg-text-primary/20 text-text-primary' : 'text-text-muted hover:text-text-secondary'
           }`}
           title="Loop"
         >
@@ -268,7 +314,7 @@ export function DawPanel({
         <button
           onClick={toggleMetronome}
           className={`p-1.5 rounded text-xs transition-colors ${
-            metronomeEnabled ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
+            metronomeEnabled ? 'bg-text-primary/20 text-text-primary' : 'text-text-muted hover:text-text-secondary'
           }`}
           title="Metronome"
         >
@@ -279,7 +325,7 @@ export function DawPanel({
         <button
           onClick={toggleSnap}
           className={`p-1.5 rounded text-xs transition-colors ${
-            snapEnabled ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/60'
+            snapEnabled ? 'bg-text-primary/20 text-text-primary' : 'text-text-muted hover:text-text-secondary'
           }`}
           title="Snap to beat"
         >
@@ -380,19 +426,19 @@ export function DawPanel({
               <div style={{ minWidth: `${totalBars * BAR_WIDTH_PX}px` }} className="relative">
 
                 {/* Timeline ruler */}
-                <div className="flex h-7 border-b border-white/[0.05] sticky top-0 z-10 bg-surface-1">
+                <div className="flex h-7 border-b border-border sticky top-0 z-10 bg-surface-1">
                   {Array.from({ length: totalBars }, (_, i) => (
                     <div
                       key={i}
-                      className="relative flex-1 min-w-[48px] border-r border-white/[0.18] cursor-pointer hover:bg-white/[0.06] transition-colors"
+                      className="relative flex-1 min-w-[48px] border-r border-border cursor-pointer hover:bg-text-primary/[0.06] transition-colors"
                       onClick={() => handleBarClick(i)}
                       title={`Jump to bar ${i + 1}`}
                     >
                       {i < LOOP_BARS && (
-                        <div className="absolute inset-0 bg-white/[0.06]" />
+                        <div className="absolute inset-0 bg-text-primary/[0.06]" />
                       )}
                       <span className={`absolute left-1 top-1 text-[10px] tabular-nums ${
-                        i < LOOP_BARS ? 'text-text-primary' : 'text-white/30'
+                        i < LOOP_BARS ? 'text-text-primary' : 'text-text-muted'
                       }`}>
                         {i + 1}
                       </span>
@@ -462,6 +508,7 @@ export function DawPanel({
                     onClipResizeRight={(clipId, newLengthInBars) => updateClip(track.id, clipId, { lengthInBars: newLengthInBars })}
                     onClipResizeLeft={(clipId, newTrimStart, newStartBar) => updateClip(track.id, clipId, { trimStart: newTrimStart, startBar: newStartBar })}
                     onDropAudioFile={(file, atBar) => handleDropAudioFile(track.id, file, atBar)}
+                    recorder={track.id === recordingTrackId ? recorderRef.current : undefined}
                   />
                 ))}
 

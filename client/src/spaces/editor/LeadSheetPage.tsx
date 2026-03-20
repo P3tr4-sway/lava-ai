@@ -176,7 +176,7 @@ function SectionBlock({ section, activeCellId, onCellActivate, onCellTabTo, star
           </button>
           <button
             onClick={() => removeSection(section.id)}
-            className="p-1 rounded text-text-muted hover:text-red-400 hover:bg-surface-2 transition-colors"
+            className="p-1 rounded text-text-muted hover:text-error hover:bg-surface-2 transition-colors"
             title="Remove section"
           >
             <Trash2 size={12} />

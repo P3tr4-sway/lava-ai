@@ -167,7 +167,7 @@ export function JamPage() {
                     onClick={() => setKey(k)}
                     className={`px-2 py-1 text-xs rounded transition-colors ${
                       key === k
-                        ? 'bg-white text-black'
+                        ? 'bg-accent text-surface-0'
                         : 'bg-surface-3 text-text-secondary hover:bg-surface-4'
                     }`}
                   >
@@ -206,7 +206,7 @@ export function JamPage() {
                     onClick={() => setSelectedStyle(s)}
                     className={`px-2 py-1 text-xs rounded transition-colors ${
                       selectedStyle === s
-                        ? 'bg-white text-black'
+                        ? 'bg-accent text-surface-0'
                         : 'bg-surface-3 text-text-secondary hover:bg-surface-4'
                     }`}
                   >
@@ -251,7 +251,7 @@ export function JamPage() {
                 </span>
                 <div className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-white/60 rounded-full transition-[width] duration-200"
+                    className="h-full bg-text-primary/60 rounded-full transition-[width] duration-200"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>

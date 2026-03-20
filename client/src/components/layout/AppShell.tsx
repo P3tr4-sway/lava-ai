@@ -15,7 +15,7 @@ import { AudioController } from '@/audio/AudioController'
 export function AppShell() {
   useTheme()
 
-  // Initialize AudioController once on mount — bridges Zustand stores → AudioEngine
+  // Initialize AudioController once on mount — bridges Zustand stores → ToneEngine
   useEffect(() => {
     const controller = AudioController.getInstance()
     controller.init()

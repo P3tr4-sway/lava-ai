@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import type { Clip } from '@/audio/types'
-import { renderWaveformToCanvas } from '@/audio/waveform'
+import WaveSurfer from 'wavesurfer.js'
 
 interface ClipViewProps {
   clip: Clip
@@ -25,22 +25,46 @@ export function ClipView({
   onResizeRight,
   onResizeLeft,
 }: ClipViewProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const waveformRef = useRef<HTMLDivElement>(null)
+  const wsRef = useRef<WaveSurfer | null>(null)
 
-  // Render static waveform into canvas whenever peakData or color changes
+  // ── Derived layout values ────────────────────────────────────────────────
+  const visibleBars = clip.lengthInBars - clip.trimStart - clip.trimEnd
+  const leftPx = clip.startBar * barWidthPx
+  const widthPx = Math.max(visibleBars * barWidthPx, 8) // minimum 8px so handles remain reachable
+  const heightPx = trackHeight - 4
+
+  // Render waveform via wavesurfer.js whenever audioBuffer or sizing changes
   useEffect(() => {
-    if (!canvasRef.current || !clip.peakData || clip.peakData.length === 0) return
-    const canvas = canvasRef.current
-    const dpr = window.devicePixelRatio || 1
-    const cssWidth = canvas.offsetWidth
-    const cssHeight = canvas.offsetHeight
-    if (cssWidth === 0 || cssHeight === 0) return
-    canvas.width = cssWidth * dpr
-    canvas.height = cssHeight * dpr
-    const ctx = canvas.getContext('2d')!
-    ctx.scale(dpr, dpr)
-    renderWaveformToCanvas(canvas, clip.peakData, clip.color)
-  }, [clip.peakData, clip.color])
+    if (!waveformRef.current || !clip.audioBuffer) return
+
+    // Destroy any previous instance
+    wsRef.current?.destroy()
+
+    const ws = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: clip.color,
+      progressColor: clip.color,
+      height: heightPx - 18, // leave room for name label
+      barWidth: widthPx < 60 ? 1 : 2,
+      barGap: widthPx < 60 ? 0 : 1,
+      barRadius: 1,
+      cursorWidth: 0,
+      interact: false,
+      normalize: true,
+      hideScrollbar: true,
+    })
+
+    const channelData = clip.audioBuffer.getChannelData(0)
+    ws.load('', [channelData], clip.audioBuffer.duration)
+
+    wsRef.current = ws
+
+    return () => {
+      ws.destroy()
+      wsRef.current = null
+    }
+  }, [clip.audioBuffer, clip.color, heightPx, widthPx])
 
   // ── Snap helper ──────────────────────────────────────────────────────────
   const snapValue = useCallback(
@@ -154,12 +178,6 @@ export function ClipView({
     ]
   )
 
-  // ── Derived layout values ────────────────────────────────────────────────
-  const visibleBars = clip.lengthInBars - clip.trimStart - clip.trimEnd
-  const leftPx = clip.startBar * barWidthPx
-  const widthPx = Math.max(visibleBars * barWidthPx, 8) // minimum 8px so handles remain reachable
-  const heightPx = trackHeight - 4
-
   // Background: clip color at 20% opacity for the body
   const bgColor = clip.color + '33'
 
@@ -201,10 +219,10 @@ export function ClipView({
           {clip.name}
         </div>
 
-        {/* Waveform canvas */}
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full pointer-events-none"
+        {/* Waveform (wavesurfer.js) */}
+        <div
+          ref={waveformRef}
+          className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden"
         />
       </div>
 

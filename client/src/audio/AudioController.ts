@@ -1,5 +1,6 @@
-import { AudioEngine } from './AudioEngine'
-import { MetronomeScheduler } from './MetronomeScheduler'
+import { ToneEngine } from './ToneEngine'
+import { ToneMetronome } from './ToneMetronome'
+import * as Tone from 'tone'
 import { useAudioStore } from '../stores/audioStore'
 import { useDawPanelStore } from '../stores/dawPanelStore'
 import type { Clip } from './types'
@@ -8,8 +9,8 @@ import type { TrackLane } from '../stores/dawPanelStore'
 export class AudioController {
   private static instance: AudioController | null = null
 
-  private engine: AudioEngine
-  private metronome: MetronomeScheduler
+  private engine: ToneEngine
+  private metronome: ToneMetronome
   private rafId: number | null = null
   private unsubscribers: Array<() => void> = []
 
@@ -18,8 +19,8 @@ export class AudioController {
   private prevTrackProps: Map<string, { volume: number; pan: number; muted: boolean; solo: boolean }> = new Map()
 
   private constructor() {
-    this.engine = AudioEngine.getInstance()
-    this.metronome = new MetronomeScheduler()
+    this.engine = ToneEngine.getInstance()
+    this.metronome = new ToneMetronome()
   }
 
   static getInstance(): AudioController {
@@ -63,10 +64,10 @@ export class AudioController {
           this.engine.pause()
           this.metronome.stop()
         } else {
-          // 'stopped'
+          // 'stopped' — engine resets Tone.js transport to 0 internally;
+          // DawPanel controls where the store's currentBar returns to (play-start or 0)
           this.engine.stop()
           this.metronome.stop()
-          useAudioStore.getState().setCurrentBar(0)
         }
       }
 
@@ -128,7 +129,7 @@ export class AudioController {
     // Detect removed tracks
     for (const id of this.prevTrackIds) {
       if (!currentIds.has(id)) {
-        this.engine.destroyTrackNodes(id)
+        this.engine.destroyTrack(id)
         this.prevTrackProps.delete(id)
       }
     }
@@ -138,11 +139,12 @@ export class AudioController {
       const prev = this.prevTrackProps.get(track.id)
 
       if (!prev) {
-        // New track — create nodes and set initial properties
-        this.engine.createTrackNodes(track.id)
+        // New track — create channel and set initial properties
+        this.engine.createTrack(track.id)
         // volume in TrackLane is 0-100, engine expects 0.0-1.0
         this.engine.setTrackVolume(track.id, track.volume / 100)
-        this.engine.setTrackPan(track.id, track.pan)
+        // pan in TrackLane is -100 to +100, engine expects -1.0 to 1.0
+        this.engine.setTrackPan(track.id, track.pan / 100)
         if (track.muted) {
           this.engine.muteTrack(track.id, true)
         }
@@ -157,7 +159,7 @@ export class AudioController {
           }
         }
         if (prev.pan !== track.pan) {
-          this.engine.setTrackPan(track.id, track.pan)
+          this.engine.setTrackPan(track.id, track.pan / 100)
         }
         if (prev.muted !== track.muted) {
           this.engine.muteTrack(track.id, track.muted)

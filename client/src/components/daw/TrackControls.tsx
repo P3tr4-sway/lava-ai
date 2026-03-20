@@ -33,7 +33,7 @@ export function TrackControls({
 
   return (
     <div
-      className="relative flex flex-col gap-1 p-2 pl-4 border-b border-white/[0.05]"
+      className="relative flex flex-col gap-1 p-2 pl-4 border-b border-border"
       style={{ height: 88, backgroundColor: track.color.bg }}
     >
       {/* Accent bar */}
@@ -48,8 +48,8 @@ export function TrackControls({
               onClick={() => updateTrack(track.id, { muted: !track.muted })}
               className={`px-1.5 py-0.5 text-[10px] font-medium rounded-l-md transition-colors ${
                 track.muted
-                  ? 'bg-white/25 text-white'
-                  : 'bg-white/10 text-white/50 hover:bg-white/15'
+                  ? 'bg-text-primary/25 text-text-primary'
+                  : 'bg-text-primary/10 text-text-primary/50 hover:bg-text-primary/15'
               }`}
             >
               M
@@ -58,8 +58,8 @@ export function TrackControls({
               onClick={() => updateTrack(track.id, { solo: !track.solo })}
               className={`px-1.5 py-0.5 text-[10px] font-medium rounded-r-md transition-colors ${
                 track.solo
-                  ? 'bg-white/25 text-white'
-                  : 'bg-white/10 text-white/50 hover:bg-white/15'
+                  ? 'bg-text-primary/25 text-text-primary'
+                  : 'bg-text-primary/10 text-text-primary/50 hover:bg-text-primary/15'
               }`}
             >
               S
@@ -71,15 +71,15 @@ export function TrackControls({
             onClick={() => armTrack(track.id, !track.armed)}
             className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
               track.armed
-                ? 'border-red-500 bg-red-500/20'
-                : 'border-white/20 hover:border-white/40'
+                ? 'border-error bg-error/20'
+                : 'border-border hover:border-border-hover'
             }`}
             title={track.armed ? 'Disarm track' : 'Arm for recording'}
           >
-            {track.armed && <div className="w-2 h-2 rounded-full bg-red-500" />}
+            {track.armed && <div className="w-2 h-2 rounded-full bg-error" />}
           </button>
 
-          <button className="p-0.5 text-white/40 hover:text-white/70 transition-colors">
+          <button className="p-0.5 text-text-muted hover:text-text-secondary transition-colors">
             <MoreVertical size={12} />
           </button>
         </div>
@@ -88,9 +88,9 @@ export function TrackControls({
       {/* Volume slider + Pan */}
       <div className="flex items-center gap-2">
         <div className="flex-1 relative h-4 flex items-center">
-          <div className="absolute w-full h-[3px] bg-white/15 rounded-full" />
+          <div className="absolute w-full h-[3px] bg-text-primary/15 rounded-full" />
           <div
-            className="absolute h-[3px] bg-white rounded-full"
+            className="absolute h-[3px] bg-text-primary rounded-full"
             style={{ width: `${track.volume}%` }}
           />
           <input
@@ -102,7 +102,7 @@ export function TrackControls({
             className="absolute w-full h-4 opacity-0 cursor-pointer"
           />
           <div
-            className="absolute w-2.5 h-2.5 bg-white rounded-full shadow-md pointer-events-none"
+            className="absolute w-2.5 h-2.5 bg-text-primary rounded-full shadow-md pointer-events-none"
             style={{ left: `calc(${track.volume}% - 5px)` }}
           />
         </div>
@@ -116,17 +116,17 @@ export function TrackControls({
           disabled={!track.armed && !track.isRecording}
           className={`flex items-center justify-center gap-1 w-full py-0.5 rounded text-[10px] font-medium transition-colors ${
             track.isRecording
-              ? 'bg-red-500 text-white'
+              ? 'bg-error text-surface-0'
               : track.armed
-                ? 'bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80'
-                : 'bg-white/5 text-white/30 cursor-not-allowed'
+                ? 'bg-text-primary/10 text-text-primary/60 hover:bg-text-primary/15 hover:text-text-primary/80'
+                : 'bg-text-primary/5 text-text-primary/30 cursor-not-allowed'
           }`}
           title={!track.armed && !track.isRecording ? 'Arm track first' : undefined}
         >
           {track.isRecording ? (
             <><Square size={8} /> Stop</>
           ) : (
-            <><Circle size={8} className="text-red-400" /> Record</>
+            <><Circle size={8} className="text-error" /> Record</>
           )}
         </button>
       )}

@@ -2,6 +2,8 @@ import { Mic } from 'lucide-react'
 import type { TrackLane } from '@/stores/dawPanelStore'
 import { BAR_WIDTH_PX, TRACK_HEIGHT_PX } from '@/audio/constants'
 import { ClipView } from './ClipView'
+import { LiveWaveformCanvas } from './LiveWaveformCanvas'
+import type { Recorder } from '@/audio/Recorder'
 
 interface TrackLaneViewProps {
   track: TrackLane
@@ -15,6 +17,8 @@ interface TrackLaneViewProps {
   onClipResizeRight: (clipId: string, newLengthInBars: number) => void
   onClipResizeLeft: (clipId: string, newTrimStart: number, newStartBar: number) => void
   onDropAudioFile?: (file: File, atBar: number) => void
+  /** Recorder instance — passed only for the track that is actively recording */
+  recorder?: Recorder
 }
 
 export function TrackLaneView({
@@ -29,8 +33,10 @@ export function TrackLaneView({
   onClipResizeRight,
   onClipResizeLeft,
   onDropAudioFile,
+  recorder,
 }: TrackLaneViewProps) {
-  const isRecording = track.clips.some((c) => c.isRecording)
+  // Use the track-level isRecording flag (set by TrackControls when user hits Record)
+  const isRecording = track.isRecording
 
   return (
     <div
@@ -62,23 +68,32 @@ export function TrackLaneView({
           </div>
         ))}
       </div>
-      <div className="absolute top-1/2 left-0 right-0 h-px bg-white/[0.06]" />
+      <div className="absolute top-1/2 left-0 right-0 h-px bg-text-primary/[0.06]" />
 
       {/* Empty state */}
       {track.clips.length === 0 && !isRecording && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="flex items-center gap-1.5 text-white/20">
+          <div className="flex items-center gap-1.5 text-text-muted/40">
             <Mic size={13} />
             <span className="text-[11px]">Empty track</span>
           </div>
         </div>
       )}
 
-      {/* Recording indicator overlay */}
+      {/* Live waveform oscilloscope — shows mic input during recording */}
+      {isRecording && recorder && (
+        <LiveWaveformCanvas
+          recorder={recorder}
+          color={track.color.accent}
+          className="absolute inset-0 w-full h-full opacity-50 pointer-events-none z-10"
+        />
+      )}
+
+      {/* Recording indicator badge */}
       {isRecording && (
         <div className="absolute top-1.5 right-2 flex items-center gap-1 z-20 pointer-events-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-[9px] text-red-400 font-medium">REC</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" />
+          <span className="text-[9px] text-error font-medium">REC</span>
         </div>
       )}
 

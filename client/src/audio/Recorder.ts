@@ -1,4 +1,4 @@
-import { AudioEngine } from './AudioEngine'
+import * as Tone from 'tone'
 
 export class Recorder {
   private mediaRecorder: MediaRecorder | null = null
@@ -31,7 +31,7 @@ export class Recorder {
 
     // Create liveAnalyser for oscilloscope visualisation
     // Note: deliberately NOT connected to masterGain to prevent monitoring echo
-    const ctx = AudioEngine.getInstance().context
+    const ctx = Tone.getContext().rawContext as AudioContext
     this.liveAnalyser = ctx.createAnalyser()
     this.liveAnalyser.fftSize = 2048
     const source = ctx.createMediaStreamSource(this.stream)
@@ -59,7 +59,7 @@ export class Recorder {
         try {
           const blob = new Blob(this.chunks, { type: this.mimeType || 'audio/webm' })
           const arrayBuffer = await blob.arrayBuffer()
-          const audioBuffer = await AudioEngine.getInstance().context.decodeAudioData(arrayBuffer)
+          const audioBuffer = await (Tone.getContext().rawContext as AudioContext).decodeAudioData(arrayBuffer)
           resolve({ blob, audioBuffer })
         } catch (err) {
           reject(err)

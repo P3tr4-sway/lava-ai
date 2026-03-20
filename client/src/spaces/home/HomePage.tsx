@@ -114,15 +114,15 @@ export function HomePage() {
                   className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
                 >
                   {/* Cover */}
-                  <div className="aspect-square w-full bg-black relative flex items-center justify-center">
+                  <div className="aspect-square w-full bg-surface-2 relative flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-white/40 text-[10px] font-mono tracking-widest uppercase mb-1">{chart.style}</p>
-                      <p className="text-white text-xl font-bold">{chart.key}</p>
+                      <p className="text-text-muted text-[10px] font-mono tracking-widest uppercase mb-1">{chart.style}</p>
+                      <p className="text-text-primary text-xl font-bold">{chart.key}</p>
                     </div>
                     {/* Play overlay */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm">
-                        <Play size={18} className="text-white ml-0.5" fill="white" />
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-surface-0/50 backdrop-blur-sm">
+                        <Play size={18} className="text-text-primary ml-0.5" fill="currentColor" />
                       </div>
                     </div>
                   </div>

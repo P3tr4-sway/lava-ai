@@ -18,9 +18,9 @@ export function Slider({ className, label, id, ...props }: SliderProps) {
         type="range"
         className={cn(
           'w-full h-1 appearance-none rounded cursor-pointer',
-          'bg-surface-4 accent-white',
+          'bg-surface-4 accent-accent',
           '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3',
-          '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white',
+          '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
           className,
         )}
         {...props}

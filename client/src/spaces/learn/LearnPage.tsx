@@ -4,6 +4,7 @@ import { useAgentStore } from '@/stores/agentStore'
 import { ArrowRight, BookOpen, ChevronRight, Music } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
+import { CHORD_CHARTS } from '@/data/chordCharts'
 
 // Continue where you left off — only shown if user has activity
 const CONTINUE_ITEM = {
@@ -16,29 +17,17 @@ const CONTINUE_ITEM = {
   route: '/learn/songs/autumn-leaves',
 }
 
-const RECOMMENDED = [
-  {
-    title: 'Blackbird',
-    artist: 'The Beatles',
-    difficulty: 'Intermediate',
-    style: 'Fingerpicking',
-    gradient: 'from-slate-700 to-slate-900',
-  },
-  {
-    title: 'Wish You Were Here',
-    artist: 'Pink Floyd',
-    difficulty: 'Beginner',
-    style: 'Strumming',
-    gradient: 'from-sky-700 to-indigo-900',
-  },
-  {
-    title: 'Dust in the Wind',
-    artist: 'Kansas',
-    difficulty: 'Intermediate',
-    style: 'Fingerpicking',
-    gradient: 'from-amber-600 to-rose-800',
-  },
+const RECOMMENDED_GRADIENTS = [
+  'from-slate-700 to-slate-900',
+  'from-sky-700 to-indigo-900',
+  'from-amber-600 to-rose-800',
 ]
+
+const RECOMMENDED_IDS = ['1', '7', '6'] // Autumn Leaves, Bossa Nova Basics, Minor Swing
+const RECOMMENDED = RECOMMENDED_IDS.map((id, i) => {
+  const chart = CHORD_CHARTS.find((c) => c.id === id)!
+  return { ...chart, gradient: RECOMMENDED_GRADIENTS[i] }
+})
 
 const DAILY_SKILL = {
   title: 'Fingerpicking Pattern #3',
@@ -50,7 +39,7 @@ const SUB_HUBS = [
     key: 'songs',
     label: 'Songs',
     description: 'Learn your favorite tracks',
-    route: '/learn/songs',
+    route: '/chord-charts',
   },
   {
     key: 'jam',
@@ -142,15 +131,16 @@ export function LearnPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {RECOMMENDED.map((item) => (
               <div
-                key={item.title}
+                key={item.id}
+                onClick={() => navigate(`/learn/songs/${item.id}`)}
                 className="bg-surface-2 border border-border rounded-lg overflow-hidden cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-all hover:-translate-y-0.5 group"
               >
                 <div className={`aspect-[16/9] bg-gradient-to-br ${item.gradient}`} />
                 <div className="p-4">
                   <p className="text-sm font-semibold text-text-primary">{item.title}</p>
-                  <p className="text-xs text-text-muted mt-0.5">{item.artist}</p>
+                  <p className="text-xs text-text-muted mt-0.5">{item.artist ?? item.style}</p>
                   <div className="flex gap-1.5 mt-2">
-                    <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.difficulty}</span>
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.key}</span>
                     <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.style}</span>
                   </div>
                 </div>

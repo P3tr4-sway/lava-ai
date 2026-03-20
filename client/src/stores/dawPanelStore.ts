@@ -17,11 +17,14 @@ export interface TrackLane {
   pan: number
   muted: boolean
   solo: boolean
-  isRecording: boolean
   hasRecording: boolean
   color: { bg: string; accent: string }
   clips: Clip[]
-  armed: boolean
+  recArm: boolean
+  inputMonitor: boolean
+  recordReady: boolean
+  recording: boolean
+  recordBlockedReason: string | null
 }
 
 export function makeTrack(name: string, index: number): TrackLane {
@@ -32,11 +35,14 @@ export function makeTrack(name: string, index: number): TrackLane {
     pan: 0,
     muted: false,
     solo: false,
-    isRecording: false,
     hasRecording: false,
     color: TRACK_COLORS[index % TRACK_COLORS.length],
     clips: [],
-    armed: false,
+    recArm: false,
+    inputMonitor: true,
+    recordReady: false,
+    recording: false,
+    recordBlockedReason: null,
   }
 }
 
@@ -138,7 +144,13 @@ export const useDawPanelStore = create<DawPanelStore>((set, get) => ({
 
   armTrack: (id, armed) =>
     set((state) => ({
-      tracks: state.tracks.map((t) => (t.id === id ? { ...t, armed } : t)),
+      tracks: state.tracks.map((t) => ({
+        ...t,
+        recArm: t.id === id ? armed : armed ? false : t.recArm,
+        recordReady: t.id === id ? false : armed ? false : t.recordReady,
+        recording: t.id === id ? false : armed ? false : t.recording,
+        recordBlockedReason: null,
+      })),
     })),
 
   selectClip: (clipId) => set({ selectedClipId: clipId }),

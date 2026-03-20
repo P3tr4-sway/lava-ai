@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Plus, ChevronDown, Trash2, Music2, Play, Pause, SkipBack,
+  ArrowLeft, Plus, ChevronDown, Trash2, Music2,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useAgentStore } from '@/stores/agentStore'
@@ -239,11 +239,8 @@ export function LeadSheetPage() {
   const setAudioTempo = useAudioStore((s) => s.setBpm)
   const setAudioKey = useAudioStore((s) => s.setKey)
   const setDuration = useAudioStore((s) => s.setDuration)
-  const playbackState = useAudioStore((s) => s.playbackState)
-  const setPlaybackState = useAudioStore((s) => s.setPlaybackState)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
-  const isPlaying = playbackState === 'playing'
 
   const [addSectionOpen, setAddSectionOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -477,33 +474,15 @@ export function LeadSheetPage() {
         )}
       </div>
 
-      {/* ── DAW Panel (no transport bar — workstation mode) ──────── */}
+      {/* ── DAW Panel ───────────────────────────────────────────── */}
       <DawPanel
         tracks={tracks}
         onUpdateTrack={updateTrack}
         onAddTrack={() => addTrack()}
-        showRecordButton={true}
-        showTransportBar={false}
+        showRecordButton={false}
         sections={dawSections}
         onBarClick={handleBarClick}
       />
-
-      {/* ── Minimal bottom transport ─────────────────────────────── */}
-      <div className="shrink-0 flex items-center justify-center gap-3 h-12 border-t border-border bg-surface-0">
-        <button
-          onClick={() => { setCurrentTime(0); setPlaybackState('stopped') }}
-          className="p-2 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-          title="Back to start"
-        >
-          <SkipBack size={16} />
-        </button>
-        <button
-          onClick={() => setPlaybackState(isPlaying ? 'paused' : 'playing')}
-          className="w-10 h-10 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
-        >
-          {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-        </button>
-      </div>
     </div>
   )
 }

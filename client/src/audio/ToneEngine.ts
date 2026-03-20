@@ -9,6 +9,7 @@
  */
 import * as Tone from 'tone'
 import type { Clip } from './types'
+import type { TransportRange } from '../stores/audioStore'
 
 interface TrackNodes {
   gainNode: GainNode
@@ -32,6 +33,7 @@ export class ToneEngine {
   private bpm = 120
   private beatsPerBar = 4
   private initialized = false
+  private activeLoop: TransportRange | null = null
 
   private constructor() {
     // Eagerly set up the raw Web Audio routing graph.
@@ -191,11 +193,12 @@ export class ToneEngine {
   // Transport / Playback
   // ---------------------------------------------------------------------------
 
-  async play(fromBar: number, clips: Clip[]): Promise<void> {
+  async play(fromBar: number, clips: Clip[], loopRange?: TransportRange | null): Promise<void> {
     await this.init()
 
     this.stopAllPlayers()
     Tone.getTransport().cancel()
+    this.setLoopRange(loopRange ?? null)
     Tone.getTransport().seconds = this.barToSeconds(fromBar)
 
     const playheadSec = this.barToSeconds(fromBar)
@@ -230,6 +233,19 @@ export class ToneEngine {
 
   getIsPlaying(): boolean {
     return Tone.getTransport().state === 'started'
+  }
+
+  setLoopRange(loopRange: TransportRange | null): void {
+    this.activeLoop = loopRange && loopRange.enabled ? loopRange : null
+    if (this.activeLoop) {
+      Tone.getTransport().setLoopPoints(
+        this.barToSeconds(this.activeLoop.start),
+        this.barToSeconds(this.activeLoop.end),
+      )
+      Tone.getTransport().loop = true
+    } else {
+      Tone.getTransport().loop = false
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -287,18 +303,26 @@ export class ToneEngine {
 
     if (offset >= clip.audioBuffer.duration) return
 
-    // Create a Tone.Player but connect via raw Web Audio to the track's gainNode
-    const player = new Tone.Player(clip.audioBuffer)
-    // Connect Tone.Player's output to the raw GainNode
-    Tone.connect(player, nodes.gainNode)
-
     Tone.getTransport().schedule((time) => {
+      const player = new Tone.Player(clip.audioBuffer)
+      Tone.connect(player, nodes.gainNode)
+      player.onstop = () => {
+        try {
+          player.dispose()
+        } catch {
+          // ignore already disposed players
+        }
+        const existing = this.activePlayers.get(clip.trackId) ?? []
+        this.activePlayers.set(
+          clip.trackId,
+          existing.filter((candidate) => candidate !== player),
+        )
+      }
       player.start(time, offset, duration)
+      const existing = this.activePlayers.get(clip.trackId) ?? []
+      existing.push(player)
+      this.activePlayers.set(clip.trackId, existing)
     }, transportTime)
-
-    const existing = this.activePlayers.get(clip.trackId) ?? []
-    existing.push(player)
-    this.activePlayers.set(clip.trackId, existing)
   }
 
   private stopAllPlayers(): void {

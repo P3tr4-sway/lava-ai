@@ -35,8 +35,8 @@ export function TrackLaneView({
   onDropAudioFile,
   recorder,
 }: TrackLaneViewProps) {
-  // Use the track-level isRecording flag (set by TrackControls when user hits Record)
-  const isRecording = track.isRecording
+  const isRecording = track.recording
+  const hasTempClip = track.clips.some((clip) => clip.status === 'temp')
 
   return (
     <div
@@ -71,11 +71,19 @@ export function TrackLaneView({
       <div className="absolute top-1/2 left-0 right-0 h-px bg-text-primary/[0.06]" />
 
       {/* Empty state */}
-      {track.clips.length === 0 && !isRecording && (
+      {track.clips.length === 0 && !isRecording && !track.recordReady && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-1.5 text-text-muted/40">
             <Mic size={13} />
             <span className="text-[11px]">Empty track</span>
+          </div>
+        </div>
+      )}
+
+      {track.recordReady && !isRecording && hasTempClip && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="px-2 py-0.5 rounded-full bg-warning/15 text-warning text-[10px] font-medium">
+            Waiting for punch/record start
           </div>
         </div>
       )}

@@ -1,10 +1,21 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  Play, SkipBack, Square, Volume2, ChevronDown, ChevronUp, Plus,
+  Play,
+  SkipBack,
+  Square,
+  Volume2,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Circle,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Slider } from '@/components/ui/Slider'
-import { useAudioStore } from '@/stores/audioStore'
+import {
+  useAudioStore,
+  type RecordMode,
+  type TransportState,
+} from '@/stores/audioStore'
 import { useDawPanelStore } from '@/stores/dawPanelStore'
 import { useDawResize } from './useDawResize'
 import { TrackControls } from './TrackControls'
@@ -19,7 +30,14 @@ import { useDawKeyboardShortcuts } from '@/hooks/useDawKeyboardShortcuts'
 
 const TOTAL_BARS = 16
 const BEATS_PER_BAR = 4
-const LOOP_BARS = 4
+
+const ACTIVE_RECORD_STATES: TransportState[] = [
+  'count_in',
+  'pre_roll',
+  'recording',
+  'auto_punch_wait_in',
+  'auto_punch_recording',
+]
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60)
@@ -27,11 +45,33 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function barsToSeconds(bar: number, bpm: number, beatsPerBar: number) {
+  return bar * beatsPerBar * (60 / bpm)
+}
+
+function isRunningState(state: TransportState) {
+  return state !== 'stopped' && state !== 'paused' && state !== 'locating'
+}
+
+function isCaptureState(state: TransportState) {
+  return state === 'recording' || state === 'auto_punch_recording'
+}
+
+interface RecordSession {
+  trackId: string
+  tempClipId: string
+  recordPassId: string
+  startBar: number
+  phase: 'queued' | 'recording'
+  fileName: string
+  recordMode: Clip['recordMode']
+}
+
 export interface DawSectionLabel {
   label: string
-  type: string  // 'intro' | 'verse' | 'chorus' | etc.
-  barStart: number   // 该段落从第几 bar 开始
-  barCount: number   // 该段落有几个 bar
+  type: string
+  barStart: number
+  barCount: number
 }
 
 export interface DawPanelProps {
@@ -42,12 +82,9 @@ export interface DawPanelProps {
   totalBars?: number
   beatsPerBar?: number
   showRecordButton?: boolean
-  /** Hide the transport bar row — used when the page provides its own transport */
   showTransportBar?: boolean
   className?: string
-  /** Optional Lead Sheet section labels displayed between ruler and track lanes */
   sections?: DawSectionLabel[]
-  /** Called when user clicks a bar on the ruler */
   onBarClick?: (bar: number) => void
 }
 
@@ -66,21 +103,34 @@ export function DawPanel({
   const { height, size, collapse, expand, resetDefault, handleProps } = useDawResize()
 
   const playbackState = useAudioStore((s) => s.playbackState)
-  const setPlaybackState = useAudioStore((s) => s.setPlaybackState)
+  const transportState = useAudioStore((s) => s.transportState)
+  const setTransportState = useAudioStore((s) => s.setTransportState)
+  const recordMode = useAudioStore((s) => s.recordMode)
+  const setRecordMode = useAudioStore((s) => s.setRecordMode)
   const currentTime = useAudioStore((s) => s.currentTime)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const duration = useAudioStore((s) => s.duration)
   const masterVolume = useAudioStore((s) => s.masterVolume)
   const setMasterVolume = useAudioStore((s) => s.setMasterVolume)
-
   const bpm = useAudioStore((s) => s.bpm)
   const setBpm = useAudioStore((s) => s.setBpm)
   const currentBar = useAudioStore((s) => s.currentBar)
   const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
   const loop = useAudioStore((s) => s.loop)
   const toggleLoop = useAudioStore((s) => s.toggleLoop)
-  const metronomeEnabled = useAudioStore((s) => s.metronomeEnabled)
-  const toggleMetronome = useAudioStore((s) => s.toggleMetronome)
+  const metronomeMode = useAudioStore((s) => s.metronomeMode)
+  const cycleMetronomeMode = useAudioStore((s) => s.cycleMetronomeMode)
+  const countInBars = useAudioStore((s) => s.countInBars)
+  const preRollBars = useAudioStore((s) => s.preRollBars)
+  const autoReturn = useAudioStore((s) => s.autoReturn)
+  const setAutoReturn = useAudioStore((s) => s.setAutoReturn)
+  const transportOriginBar = useAudioStore((s) => s.transportOriginBar)
+  const setTransportOriginBar = useAudioStore((s) => s.setTransportOriginBar)
+  const pendingRecordStartBar = useAudioStore((s) => s.pendingRecordStartBar)
+  const setPendingRecordStartBar = useAudioStore((s) => s.setPendingRecordStartBar)
+  const punchRange = useAudioStore((s) => s.punchRange)
+  const setPunchRange = useAudioStore((s) => s.setPunchRange)
+  const togglePunchRange = useAudioStore((s) => s.togglePunchRange)
 
   const snapEnabled = useDawPanelStore((s) => s.snapEnabled)
   const toggleSnap = useDawPanelStore((s) => s.toggleSnap)
@@ -88,37 +138,35 @@ export function DawPanel({
   const selectClip = useDawPanelStore((s) => s.selectClip)
   const updateClip = useDawPanelStore((s) => s.updateClip)
   const addClip = useDawPanelStore((s) => s.addClip)
+  const removeClip = useDawPanelStore((s) => s.removeClip)
 
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  // ── Recorder ───────────────────────────────────────────────────────────────
-  const recorderRef = useRef<Recorder>(new Recorder())
-  // Per-track record start bar — Map so multiple tracks can arm independently
-  const recordStartBarRef = useRef<Map<string, number>>(new Map())
-  // Which track is currently capturing audio (single MediaRecorder at a time)
+  const recorderRef = useRef(new Recorder())
+  const recordSessionRef = useRef<RecordSession | null>(null)
+  const prevTransportStateRef = useRef<TransportState>(transportState)
   const [recordingTrackId, setRecordingTrackId] = useState<string | null>(null)
 
-  // ── Logic Pro transport ────────────────────────────────────────────────────
-  // Remember where Play was pressed so Stop can return there (Logic Pro behavior)
-  const playStartBarRef = useRef<number>(0)
-
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useDawKeyboardShortcuts()
 
-  // ── Audio file drop handler ────────────────────────────────────────────────
+  const isPlaying = playbackState === 'playing'
+  const isCollapsed = size === 'collapsed'
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+  const playheadLeft = currentBar * BAR_WIDTH_PX
+  const countdownBeats =
+    pendingRecordStartBar !== null && ACTIVE_RECORD_STATES.includes(transportState)
+      ? Math.max(0, Math.ceil((pendingRecordStartBar - currentBar) * beatsPerBar))
+      : 0
+  const transportRecordIntent = tracks.some((track) => track.recordReady || track.recording || track.recArm)
+
   const handleDropAudioFile = async (trackId: string, file: File, atBar: number) => {
     try {
-      const track = tracks.find((t) => t.id === trackId)
+      const track = tracks.find((candidate) => candidate.id === trackId)
       if (!track) return
 
-      // 1. Upload file to server
       const audioFile = await audioService.upload(file)
-
-      // 2. Load and decode AudioBuffer via engine (uses the returned file id)
       const engine = ToneEngine.getInstance()
       const audioBuffer = await engine.loadBuffer(audioFile.id)
 
-      // 3. Build Clip object
       const clipWidthInBars = audioBuffer.duration * (bpm / 60) / beatsPerBar
       const clip: Clip = {
         id: crypto.randomUUID(),
@@ -128,123 +176,286 @@ export function DawPanel({
         trimStart: 0,
         trimEnd: 0,
         audioFileId: audioFile.id,
+        committedAudioFileId: audioFile.id,
         audioBuffer,
         name: file.name.replace(/\.[^.]+$/, ''),
         color: track.color.accent,
+        status: 'committed',
       }
 
-      // 5. Add to store
       addClip(trackId, clip)
     } catch (err) {
       console.error('Drop audio file failed:', err)
     }
   }
 
-  // ── Recording handlers ─────────────────────────────────────────────────────
-  const handleRecordStart = async (trackId: string) => {
+  const clearTrackRecordState = (trackId: string, hasRecording = false, error?: string | null) => {
+    onUpdateTrack(trackId, {
+      recordReady: false,
+      recording: false,
+      hasRecording: hasRecording || tracks.find((track) => track.id === trackId)?.hasRecording,
+      recordBlockedReason: error ?? null,
+    })
+  }
+
+  const finishRecordSession = async (reason: 'stopped' | 'cancelled') => {
+    const session = recordSessionRef.current
+    if (!session) return
+
+    recordSessionRef.current = null
+    setRecordingTrackId(null)
+    setPendingRecordStartBar(null)
+
     const recorder = recorderRef.current
-    const permission = await recorder.requestPermission()
-    if (permission === 'denied') {
-      console.warn('Microphone permission denied')
+
+    if (reason === 'cancelled' || session.phase === 'queued' || !recorder.isRecording) {
+      removeClip(session.trackId, session.tempClipId)
+      clearTrackRecordState(session.trackId, false)
       return
     }
 
-    // Read current bar directly from ToneEngine for timing accuracy.
-    // If transport is already playing we capture the live engine position;
-    // otherwise we read from the store (playhead cursor position).
-    const engine = ToneEngine.getInstance()
-    const startBar = engine.getIsPlaying()
-      ? engine.getCurrentBar()
-      : useAudioStore.getState().currentBar
-
-    recordStartBarRef.current.set(trackId, startBar)
-    setRecordingTrackId(trackId)
-
-    // Logic Pro: pressing Record starts the transport if it isn't already running
-    if (!engine.getIsPlaying()) {
-      playStartBarRef.current = startBar
-      setPlaybackState('playing')
-    }
-
-    await recorder.start(trackId, startBar)
-  }
-
-  const handleRecordStop = async (trackId: string) => {
-    const recorder = recorderRef.current
-    if (!recorder.isRecording) return
-
-    setRecordingTrackId(null)
-
     try {
-      const { audioBuffer } = await recorder.stop()
-      const { bpm: currentBpm } = useAudioStore.getState()
+      const { blob, audioBuffer } = await recorder.stop()
+      const file = new File([blob], `${session.fileName}.webm`, { type: blob.type || 'audio/webm' })
+      const uploaded = await audioService.upload(file)
+      const committedLengthInBars = audioBuffer.duration * (bpm / 60) / beatsPerBar
 
-      const clipLengthInBars = audioBuffer.duration * (currentBpm / 60) / beatsPerBar
-      // Retrieve per-track start bar from the Map
-      const startBar = recordStartBarRef.current.get(trackId) ?? 0
-      recordStartBarRef.current.delete(trackId)
-      const track = tracks.find((t) => t.id === trackId)
-
-      const clip: Clip = {
-        id: crypto.randomUUID(),
-        trackId,
-        startBar,
-        lengthInBars: clipLengthInBars,
-        trimStart: 0,
-        trimEnd: 0,
+      updateClip(session.trackId, session.tempClipId, {
         audioBuffer,
-        name: `Recording ${new Date().toLocaleTimeString()}`,
-        color: track?.color.accent ?? '#60a5fa',
-      }
-      addClip(trackId, clip)
+        audioFileId: uploaded.id,
+        committedAudioFileId: uploaded.id,
+        name: session.fileName,
+        lengthInBars: Math.max(0.25, committedLengthInBars),
+        status: 'committed',
+        errorMessage: undefined,
+      })
+      clearTrackRecordState(session.trackId, true)
     } catch (err) {
-      console.error('Recording failed:', err)
+      const message = err instanceof Error ? err.message : 'Upload failed'
+      updateClip(session.trackId, session.tempClipId, {
+        status: 'temp',
+        errorMessage: message,
+      })
+      clearTrackRecordState(session.trackId, false, message)
     }
   }
-  const isPlaying = playbackState === 'playing'
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
-  const isCollapsed = size === 'collapsed'
 
-  // Playhead position based on bar (px), not percentage
-  const playheadLeft = currentBar * BAR_WIDTH_PX
+  useEffect(() => {
+    const previous = prevTransportStateRef.current
+    const session = recordSessionRef.current
 
-  // ── Logic Pro–style transport handlers ────────────────────────────────────
-  // Play/Stop toggle: stop returns the playhead to where Play was pressed,
-  // matching Logic Pro's default "Return to Origin" stop behavior.
-  const handlePlayStop = () => {
-    if (isPlaying) {
-      // Stop → return to the bar where playback started
-      const returnBar = playStartBarRef.current
-      setCurrentBar(returnBar)
-      setCurrentTime(returnBar * beatsPerBar * (60 / bpm))
-      setPlaybackState('stopped')
+    if (
+      session &&
+      ACTIVE_RECORD_STATES.includes(previous) &&
+      !ACTIVE_RECORD_STATES.includes(transportState)
+    ) {
+      void finishRecordSession(isCaptureState(previous) ? 'stopped' : 'cancelled')
+    }
+
+    prevTransportStateRef.current = transportState
+  }, [transportState])
+
+  useEffect(() => {
+    let cancelled = false
+    const session = recordSessionRef.current
+
+    if (!session || session.phase === 'recording' || !isCaptureState(transportState)) {
+      return
+    }
+
+    const startRecording = async () => {
+      await recorderRef.current.start(session.trackId, session.startBar)
+      if (cancelled) return
+
+      session.phase = 'recording'
+      onUpdateTrack(session.trackId, {
+        recordReady: false,
+        recording: true,
+        recordBlockedReason: null,
+      })
+      updateClip(session.trackId, session.tempClipId, {
+        status: 'recording',
+      })
+    }
+
+    void startRecording()
+
+    return () => {
+      cancelled = true
+    }
+  }, [transportState, onUpdateTrack, updateClip])
+
+  useEffect(() => {
+    const session = recordSessionRef.current
+    if (!session || session.phase !== 'recording') return
+
+    const clipLength = Math.max(0.25, currentBar - session.startBar)
+    updateClip(session.trackId, session.tempClipId, {
+      lengthInBars: clipLength,
+      status: 'recording',
+    })
+  }, [currentBar, updateClip])
+
+  useEffect(() => {
+    return () => {
+      recorderRef.current.stopStream()
+    }
+  }, [])
+
+  const handleRecordStart = async (trackId: string) => {
+    if (recordingTrackId && recordingTrackId !== trackId) {
+      onUpdateTrack(trackId, { recordBlockedReason: 'Only one track can record at a time.' })
+      return
+    }
+
+    const track = tracks.find((candidate) => candidate.id === trackId)
+    if (!track) return
+
+    const permission = await recorderRef.current.requestPermission()
+    if (permission === 'denied') {
+      onUpdateTrack(trackId, { recordBlockedReason: 'Microphone permission denied.' })
+      return
+    }
+
+    const nowBar = currentBar
+    const startBar = punchRange.enabled ? Math.max(nowBar, punchRange.start) : nowBar
+    const recordPassId = crypto.randomUUID()
+    const tempClipId = `rec-${recordPassId}`
+    const fileName = `Recording ${new Date().toLocaleTimeString()}`
+    const clipRecordMode: Clip['recordMode'] =
+      punchRange.enabled && startBar > nowBar
+        ? 'punch_in'
+        : recordMode
+
+    recordSessionRef.current = {
+      trackId,
+      tempClipId,
+      recordPassId,
+      startBar,
+      phase: 'queued',
+      fileName,
+      recordMode: clipRecordMode,
+    }
+
+    setRecordingTrackId(trackId)
+    setPendingRecordStartBar(startBar)
+    addClip(trackId, {
+      id: tempClipId,
+      trackId,
+      startBar,
+      lengthInBars: 1,
+      trimStart: 0,
+      trimEnd: 0,
+      name: fileName,
+      color: track.color.accent,
+      status: 'temp',
+      recordPassId,
+      recordMode: clipRecordMode,
+    })
+
+    onUpdateTrack(trackId, {
+      recordReady: true,
+      recording: false,
+      recordBlockedReason: null,
+    })
+
+    let transportStartBar = nowBar
+    let nextTransportState: TransportState = 'recording'
+
+    if (recordMode === 'count_in' && countInBars > 0) {
+      transportStartBar = Math.max(0, startBar - countInBars)
+      nextTransportState = 'count_in'
+      setTransportOriginBar(startBar)
+    } else if (recordMode === 'pre_roll' && preRollBars > 0) {
+      transportStartBar = Math.max(0, startBar - preRollBars)
+      nextTransportState = 'pre_roll'
+      setTransportOriginBar(startBar)
+    } else if (punchRange.enabled && startBar > nowBar) {
+      nextTransportState = 'auto_punch_wait_in'
+      setTransportOriginBar(nowBar)
+    } else if (punchRange.enabled) {
+      nextTransportState = 'auto_punch_recording'
+      setTransportOriginBar(nowBar)
     } else {
-      // Play → remember this position so Stop can return here
-      playStartBarRef.current = currentBar
-      setPlaybackState('playing')
+      nextTransportState = 'recording'
+      setTransportOriginBar(nowBar)
+    }
+
+    if (transportStartBar !== nowBar) {
+      setCurrentBar(transportStartBar)
+      setCurrentTime(barsToSeconds(transportStartBar, bpm, beatsPerBar))
+    }
+
+    setTransportState(nextTransportState)
+  }
+
+  const handleRecordStop = () => {
+    if (autoReturn) {
+      setCurrentBar(transportOriginBar)
+      setCurrentTime(barsToSeconds(transportOriginBar, bpm, beatsPerBar))
+    }
+    setTransportState('stopped')
+  }
+
+  const locateToBar = (barIndex: number) => {
+    const nextTime = barsToSeconds(barIndex, bpm, beatsPerBar)
+    if (isRunningState(transportState)) {
+      const resumeState: TransportState =
+        isCaptureState(transportState) ? transportState : 'rolling'
+      setTransportState('locating')
+      setCurrentBar(barIndex)
+      setCurrentTime(nextTime)
+      requestAnimationFrame(() => setTransportState(resumeState))
+    } else {
+      setCurrentBar(barIndex)
+      setCurrentTime(nextTime)
     }
   }
 
-  // Return to beginning — always goes to bar 0 (like the |◄ button in Logic Pro)
+  const handlePlayStop = () => {
+    if (isRunningState(transportState)) {
+      if (autoReturn) {
+        setCurrentBar(transportOriginBar)
+        setCurrentTime(barsToSeconds(transportOriginBar, bpm, beatsPerBar))
+      }
+      setTransportState('stopped')
+      setPendingRecordStartBar(null)
+    } else {
+      setTransportOriginBar(currentBar)
+      setPendingRecordStartBar(null)
+      setTransportState('rolling')
+    }
+  }
+
   const handleReturnToStart = () => {
-    const wasPlaying = isPlaying
+    setTransportOriginBar(0)
+    setPendingRecordStartBar(null)
     setCurrentBar(0)
     setCurrentTime(0)
-    setPlaybackState('stopped')
-    // If transport was playing, restart from bar 0 after a tick
-    // (stop resets Tone.js position, then play picks up from store's currentBar=0)
-    if (wasPlaying) {
-      playStartBarRef.current = 0
-      setTimeout(() => setPlaybackState('playing'), 0)
-    }
+    setTransportState('stopped')
   }
 
-  // Handle bar click on ruler
   const handleBarClick = (barIndex: number) => {
-    const barDuration = beatsPerBar * (60 / bpm)
-    setCurrentTime(barIndex * barDuration)
-    setCurrentBar(barIndex)
+    locateToBar(barIndex)
     onBarClick?.(barIndex)
+  }
+
+  const toggleRecordMode = (mode: RecordMode) => {
+    setRecordMode(recordMode === mode ? 'immediate' : mode)
+  }
+
+  const handlePunchToggle = () => {
+    if (!punchRange.enabled) {
+      const start = Math.floor(currentBar)
+      setPunchRange({
+        start,
+        end: Math.min(totalBars, start + 4),
+        enabled: true,
+      })
+      return
+    }
+
+    togglePunchRange()
   }
 
   return (
@@ -252,7 +463,6 @@ export function DawPanel({
       className={cn('shrink-0 flex flex-col bg-surface-0 border-t border-border overflow-hidden', className)}
       style={{ height }}
     >
-      {/* ── Drag handle ──────────────────────────────────────────── */}
       <div
         {...handleProps}
         className="shrink-0 h-4 flex items-center justify-center cursor-ns-resize group select-none"
@@ -261,131 +471,194 @@ export function DawPanel({
         <div className="w-8 h-1 rounded-full bg-border group-hover:bg-text-muted transition-colors" />
       </div>
 
-      {/* ── Transport bar ────────────────────────────────────────── */}
-      {showTransportBar && <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border">
-        {/* Playback controls — Logic Pro style: |◄ and ▶/■ */}
-        <div className="flex items-center gap-0.5">
-          {/* Return to beginning (|◄) */}
-          <button
-            onClick={handleReturnToStart}
-            className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-            title="Return to beginning"
-          >
-            <SkipBack size={13} />
-          </button>
-          {/* Play / Stop toggle (▶ → ■) — stop returns to play-start position */}
-          <button
-            onClick={handlePlayStop}
-            className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
-            title={isPlaying ? 'Stop (return to play start)' : 'Play'}
-          >
-            {isPlaying ? <Square size={13} /> : <Play size={14} className="ml-0.5" />}
-          </button>
-        </div>
+      {showTransportBar && (
+        <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border">
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={handleReturnToStart}
+              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+              title="Return to beginning"
+            >
+              <SkipBack size={13} />
+            </button>
+            <button
+              onClick={handlePlayStop}
+              className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
+              title={isRunningState(transportState) ? 'Stop' : 'Play'}
+            >
+              {isRunningState(transportState) ? <Square size={13} /> : <Play size={14} className="ml-0.5" />}
+            </button>
+          </div>
 
-        {/* BPM editable input */}
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] text-text-muted">BPM</span>
-          <input
-            type="number"
-            value={bpm}
-            onChange={(e) => {
-              const v = parseInt(e.target.value)
-              if (v >= 40 && v <= 240) setBpm(v)
-            }}
-            className="w-12 bg-transparent text-center text-xs text-text-primary/80 border-b border-border focus:outline-none focus:border-border-hover"
-            min={40}
-            max={240}
-          />
-        </div>
-
-        {/* Loop toggle */}
-        <button
-          onClick={toggleLoop}
-          className={`p-1.5 rounded text-xs transition-colors ${
-            loop.enabled ? 'bg-text-primary/20 text-text-primary' : 'text-text-muted hover:text-text-secondary'
-          }`}
-          title="Loop"
-        >
-          ⟳
-        </button>
-
-        {/* Metronome toggle */}
-        <button
-          onClick={toggleMetronome}
-          className={`p-1.5 rounded text-xs transition-colors ${
-            metronomeEnabled ? 'bg-text-primary/20 text-text-primary' : 'text-text-muted hover:text-text-secondary'
-          }`}
-          title="Metronome"
-        >
-          ♩
-        </button>
-
-        {/* Snap toggle */}
-        <button
-          onClick={toggleSnap}
-          className={`p-1.5 rounded text-xs transition-colors ${
-            snapEnabled ? 'bg-text-primary/20 text-text-primary' : 'text-text-muted hover:text-text-secondary'
-          }`}
-          title="Snap to beat"
-        >
-          ⌶
-        </button>
-
-        {/* Progress bar + time */}
-        <div className="flex-1 flex items-center gap-2">
-          <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(currentTime)}</span>
           <div
-            className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden cursor-pointer group/prog relative"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect()
-              const pct = (e.clientX - rect.left) / rect.width
-              setCurrentTime(pct * duration)
-            }}
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium',
+              isCaptureState(transportState)
+                ? 'bg-error/20 text-error'
+                : ACTIVE_RECORD_STATES.includes(transportState)
+                  ? 'bg-warning/20 text-warning'
+                  : transportRecordIntent
+                    ? 'bg-surface-3 text-text-secondary'
+                    : 'bg-surface-2 text-text-muted',
+            )}
           >
-            <div
-              className="h-full bg-text-primary rounded-full transition-[width] duration-100"
-              style={{ width: `${progressPercent}%` }}
-            />
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-text-primary opacity-0 group-hover/prog:opacity-100 transition-opacity pointer-events-none"
-              style={{ left: `${progressPercent}%`, transform: `translateX(-50%) translateY(-50%)` }}
+            <Circle size={8} className={cn(isCaptureState(transportState) && 'animate-pulse')} />
+            <span>
+              {isCaptureState(transportState)
+                ? 'REC'
+                : ACTIVE_RECORD_STATES.includes(transportState)
+                  ? 'READY'
+                  : 'IDLE'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[10px] text-text-muted">BPM</span>
+            <input
+              type="number"
+              value={bpm}
+              onChange={(e) => {
+                const value = Number.parseInt(e.target.value, 10)
+                if (!Number.isNaN(value) && value >= 40 && value <= 240) {
+                  setBpm(value)
+                }
+              }}
+              className="w-12 bg-transparent text-center text-xs text-text-primary/80 border-b border-border focus:outline-none focus:border-border-hover"
+              min={40}
+              max={240}
             />
           </div>
-          <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(duration)}</span>
+
+          <button
+            onClick={() => toggleRecordMode('count_in')}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              recordMode === 'count_in'
+                ? 'bg-warning/20 text-warning'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title={`Count-in (${countInBars} bar)`}
+          >
+            Count-in
+          </button>
+          <button
+            onClick={() => toggleRecordMode('pre_roll')}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              recordMode === 'pre_roll'
+                ? 'bg-warning/20 text-warning'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title={`Pre-roll (${preRollBars} bar)`}
+          >
+            Pre-roll
+          </button>
+          <button
+            onClick={handlePunchToggle}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              punchRange.enabled
+                ? 'bg-warning/20 text-warning'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title="Punch range"
+          >
+            Punch
+          </button>
+          <button
+            onClick={toggleLoop}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              loop.enabled
+                ? 'bg-text-primary/20 text-text-primary'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title="Loop"
+          >
+            Loop
+          </button>
+          <button
+            onClick={cycleMetronomeMode}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              metronomeMode !== 'off'
+                ? 'bg-text-primary/20 text-text-primary'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title="Metronome mode"
+          >
+            {metronomeMode === 'off' ? 'Click Off' : metronomeMode === 'always' ? 'Click All' : 'Click Rec'}
+          </button>
+          <button
+            onClick={() => setAutoReturn(!autoReturn)}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              autoReturn
+                ? 'bg-text-primary/20 text-text-primary'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title="Auto return to record/play origin on stop"
+          >
+            Return
+          </button>
+          <button
+            onClick={toggleSnap}
+            className={cn(
+              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+              snapEnabled
+                ? 'bg-text-primary/20 text-text-primary'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+            )}
+            title="Snap to beat"
+          >
+            Snap
+          </button>
+
+          <div className="flex-1 flex items-center gap-2">
+            <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(currentTime)}</span>
+            <div
+              className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden cursor-pointer group/prog relative"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                const pct = (e.clientX - rect.left) / rect.width
+                locateToBar((pct * duration) / (beatsPerBar * (60 / bpm)))
+              }}
+            >
+              <div
+                className="h-full bg-text-primary rounded-full transition-[width] duration-100"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(duration)}</span>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-1.5 w-20">
+            <Volume2 size={13} className="text-text-muted shrink-0" />
+            <Slider
+              min={0}
+              max={100}
+              value={Math.round(masterVolume * 100)}
+              onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
+            />
+          </div>
+
+          <button
+            onClick={() => {
+              if (isCollapsed) resetDefault()
+              else collapse()
+            }}
+            className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
+            title={isCollapsed ? 'Expand DAW' : 'Collapse DAW'}
+          >
+            {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
         </div>
+      )}
 
-        {/* Volume */}
-        <div className="hidden sm:flex items-center gap-1.5 w-20">
-          <Volume2 size={13} className="text-text-muted shrink-0" />
-          <Slider
-            min={0}
-            max={100}
-            value={Math.round(masterVolume * 100)}
-            onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
-          />
-        </div>
-
-        {/* Collapse / expand toggle */}
-        <button
-          onClick={() => {
-            if (isCollapsed) resetDefault()
-            else collapse()
-          }}
-          className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
-          title={isCollapsed ? 'Expand DAW' : 'Collapse DAW'}
-        >
-          {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      </div>}
-
-      {/* ── Track area (hidden when collapsed) ───────────────────── */}
       {!isCollapsed && (
         <div className="flex-1 overflow-hidden flex flex-col bg-surface-2/30">
           <div className="flex flex-1 overflow-hidden">
-            {/* Left: track controls */}
             <div className="w-40 shrink-0 flex flex-col border-r border-border overflow-y-auto">
-              {/* Add track row */}
               <div className="h-7 flex items-center px-2 border-b border-white/[0.05] shrink-0">
                 <button
                   onClick={onAddTrack}
@@ -394,7 +667,6 @@ export function DawPanel({
                   <Plus size={11} />
                   Add track
                 </button>
-                {/* Expand fully button */}
                 <button
                   onClick={expand}
                   className="ml-auto p-0.5 text-text-muted hover:text-text-secondary transition-colors"
@@ -404,7 +676,6 @@ export function DawPanel({
                 </button>
               </div>
 
-              {/* Spacer for sections row if visible */}
               {sections && sections.length > 0 && (
                 <div className="shrink-0 border-b border-white/[0.05]" style={{ height: 20 }} />
               )}
@@ -421,64 +692,73 @@ export function DawPanel({
               ))}
             </div>
 
-            {/* Right: lanes + timeline */}
             <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto relative">
               <div style={{ minWidth: `${totalBars * BAR_WIDTH_PX}px` }} className="relative">
-
-                {/* Timeline ruler */}
                 <div className="flex h-7 border-b border-border sticky top-0 z-10 bg-surface-1">
-                  {Array.from({ length: totalBars }, (_, i) => (
+                  {Array.from({ length: totalBars }, (_, index) => (
                     <div
-                      key={i}
+                      key={index}
                       className="relative flex-1 min-w-[48px] border-r border-border cursor-pointer hover:bg-text-primary/[0.06] transition-colors"
-                      onClick={() => handleBarClick(i)}
-                      title={`Jump to bar ${i + 1}`}
+                      onClick={() => handleBarClick(index)}
+                      title={`Jump to bar ${index + 1}`}
                     >
-                      {i < LOOP_BARS && (
+                      {loop.enabled && index >= loop.start && index < loop.end && (
                         <div className="absolute inset-0 bg-text-primary/[0.06]" />
                       )}
-                      <span className={`absolute left-1 top-1 text-[10px] tabular-nums ${
-                        i < LOOP_BARS ? 'text-text-primary' : 'text-text-muted'
-                      }`}>
-                        {i + 1}
+                      {punchRange.enabled && index >= punchRange.start && index < punchRange.end && (
+                        <div className="absolute inset-0 bg-warning/12" />
+                      )}
+                      <span className="absolute left-1 top-1 text-[10px] tabular-nums text-text-muted">
+                        {index + 1}
                       </span>
                     </div>
                   ))}
 
-                  {/* Loop markers on ruler */}
                   {loop.enabled && (
                     <>
                       <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-yellow-400/60 pointer-events-none z-20"
+                        className="absolute top-0 bottom-0 w-0.5 bg-text-primary/70 pointer-events-none z-20"
                         style={{ left: loop.start * BAR_WIDTH_PX }}
                       />
                       <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-yellow-400/60 pointer-events-none z-20"
+                        className="absolute top-0 bottom-0 w-0.5 bg-text-primary/70 pointer-events-none z-20"
                         style={{ left: loop.end * BAR_WIDTH_PX }}
+                      />
+                    </>
+                  )}
+
+                  {punchRange.enabled && (
+                    <>
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-warning pointer-events-none z-20"
+                        style={{ left: punchRange.start * BAR_WIDTH_PX }}
+                      />
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-warning pointer-events-none z-20"
+                        style={{ left: punchRange.end * BAR_WIDTH_PX }}
                       />
                     </>
                   )}
                 </div>
 
-                {/* Lead Sheet segment labels row — only when sections prop has content */}
                 {sections && sections.length > 0 && (
                   <div
                     className="relative flex-shrink-0 border-b border-white/[0.05] bg-surface-1/30 overflow-hidden"
                     style={{ height: 20, minWidth: totalBars * BAR_WIDTH_PX }}
                   >
-                    {sections.map((section, i) => {
+                    {sections.map((section, index) => {
                       const sectionColors: Record<string, string> = {
                         intro: 'bg-blue-500/20 text-blue-300',
                         verse: 'bg-green-500/20 text-green-300',
-                        chorus: 'bg-purple-500/20 text-purple-300',
-                        bridge: 'bg-orange-500/20 text-orange-300',
+                        chorus: 'bg-orange-500/20 text-orange-300',
+                        bridge: 'bg-yellow-500/20 text-yellow-300',
                         outro: 'bg-red-500/20 text-red-300',
-                        custom: 'bg-gray-500/20 text-gray-300',
+                        custom: 'bg-surface-3 text-text-secondary',
                       }
                       const colorClass = sectionColors[section.type] ?? sectionColors.custom
                       return (
                         <div
-                          key={i}
+                          key={index}
                           className={`absolute inset-y-0 flex items-center px-1 text-[9px] font-medium overflow-hidden border-r border-white/10 ${colorClass}`}
                           style={{
                             left: section.barStart * BAR_WIDTH_PX,
@@ -493,7 +773,6 @@ export function DawPanel({
                   </div>
                 )}
 
-                {/* Track lanes */}
                 {tracks.map((track) => (
                   <TrackLaneView
                     key={track.id}
@@ -512,13 +791,36 @@ export function DawPanel({
                   />
                 ))}
 
-                {/* Playhead — bar-based px position */}
                 <div
                   className="absolute top-0 bottom-0 z-20 pointer-events-none"
                   style={{ left: `${playheadLeft}px` }}
                 >
-                  <div className="w-2 h-2 bg-red-500 mx-auto" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }} />
-                  <div className="w-px flex-1 bg-red-500/80 mx-auto h-full" />
+                  {countdownBeats > 0 && (
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-warning/20 text-warning text-[10px] font-semibold whitespace-nowrap">
+                      {`Count ${countdownBeats}`}
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      'w-2 h-2 mx-auto',
+                      isCaptureState(transportState)
+                        ? 'bg-error'
+                        : ACTIVE_RECORD_STATES.includes(transportState)
+                          ? 'bg-warning'
+                          : 'bg-red-500',
+                    )}
+                    style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }}
+                  />
+                  <div
+                    className={cn(
+                      'w-px flex-1 mx-auto h-full',
+                      isCaptureState(transportState)
+                        ? 'bg-error/80'
+                        : ACTIVE_RECORD_STATES.includes(transportState)
+                          ? 'bg-warning/80'
+                          : 'bg-red-500/80',
+                    )}
+                  />
                 </div>
               </div>
             </div>

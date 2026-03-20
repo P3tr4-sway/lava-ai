@@ -180,6 +180,9 @@ export function ClipView({
 
   // Background: clip color at 20% opacity for the body
   const bgColor = clip.color + '33'
+  const isTemp = clip.status === 'temp'
+  const isRecording = clip.status === 'recording'
+  const hasError = Boolean(clip.errorMessage)
 
   return (
     <div
@@ -192,8 +195,14 @@ export function ClipView({
       className={[
         'absolute top-[2px] rounded overflow-hidden select-none',
         'border',
-        selected ? 'border-white/40 ring-1 ring-white/50' : 'border-white/10',
-        clip.isRecording ? 'animate-pulse' : '',
+        hasError
+          ? 'border-error/60'
+          : selected
+            ? 'border-white/40 ring-1 ring-white/50'
+            : isTemp
+              ? 'border-warning/60 border-dashed'
+              : 'border-white/10',
+        isRecording ? 'animate-pulse' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -217,6 +226,9 @@ export function ClipView({
           className="text-[10px] px-1 py-0.5 truncate font-medium leading-tight pointer-events-none"
         >
           {clip.name}
+          {isTemp && ' · queued'}
+          {isRecording && ' · rec'}
+          {hasError && ' · failed'}
         </div>
 
         {/* Waveform (wavesurfer.js) */}
@@ -225,6 +237,12 @@ export function ClipView({
           className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden"
         />
       </div>
+
+      {hasError && (
+        <div className="absolute inset-x-0 bottom-0 px-1 py-0.5 text-[9px] bg-error/20 text-error truncate pointer-events-none">
+          {clip.errorMessage}
+        </div>
+      )}
 
       {/* ── Right resize handle ────────────────────────────────── */}
       <div

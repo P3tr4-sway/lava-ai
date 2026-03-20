@@ -21,12 +21,13 @@ export function TrackControls({
   const armTrack = useDawPanelStore((s) => s.armTrack)
 
   const handleRecordClick = () => {
-    if (track.isRecording) {
-      updateTrack(track.id, { isRecording: false })
+    if (track.recording || track.recordReady) {
       onRecordStop?.(track.id)
     } else {
-      if (!track.armed) return
-      updateTrack(track.id, { isRecording: true })
+      if (!track.recArm) {
+        updateTrack(track.id, { recordBlockedReason: 'Arm track first to record.' })
+        return
+      }
       onRecordStart?.(track.id)
     }
   }
@@ -64,25 +65,89 @@ export function TrackControls({
             >
               S
             </button>
+            <button
+              onClick={() => updateTrack(track.id, { inputMonitor: !track.inputMonitor })}
+              className={`px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                track.inputMonitor
+                  ? 'bg-text-primary/20 text-text-primary'
+                  : 'bg-text-primary/10 text-text-primary/50 hover:bg-text-primary/15'
+              }`}
+              title={track.inputMonitor ? 'Disable input monitoring' : 'Enable input monitoring'}
+            >
+              I
+            </button>
           </div>
 
           {/* Arm button */}
           <button
-            onClick={() => armTrack(track.id, !track.armed)}
+            onClick={() => armTrack(track.id, !track.recArm)}
             className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-              track.armed
-                ? 'border-error bg-error/20'
-                : 'border-border hover:border-border-hover'
+              track.recording
+                ? 'border-error bg-error'
+                : track.recordReady
+                  ? 'border-warning bg-warning/20'
+                  : track.recArm
+                    ? 'border-error bg-error/20'
+                    : 'border-border hover:border-border-hover'
             }`}
-            title={track.armed ? 'Disarm track' : 'Arm for recording'}
+            title={
+              track.recording
+                ? 'Recording'
+                : track.recordReady
+                  ? 'Record ready'
+                  : track.recArm
+                    ? 'Disarm track'
+                    : 'Arm for recording'
+            }
           >
-            {track.armed && <div className="w-2 h-2 rounded-full bg-error" />}
+            {(track.recArm || track.recordReady || track.recording) && (
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  track.recording
+                    ? 'bg-surface-0'
+                    : track.recordReady
+                      ? 'bg-warning'
+                      : 'bg-error'
+                }`}
+              />
+            )}
+          </button>
+
+          <button
+            onClick={handleRecordClick}
+            disabled={!showRecordButton}
+            className={`px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+              track.recording
+                ? 'bg-error text-surface-0'
+                : track.recordReady
+                  ? 'bg-warning/20 text-warning'
+                  : track.recArm
+                    ? 'bg-text-primary/15 text-text-primary'
+                    : 'bg-text-primary/10 text-text-primary/40'
+            }`}
+            title={track.recordBlockedReason ?? 'Record'}
+          >
+            R
           </button>
 
           <button className="p-0.5 text-text-muted hover:text-text-secondary transition-colors">
             <MoreVertical size={12} />
           </button>
         </div>
+      </div>
+
+      {/* Status row */}
+      <div className="flex items-center justify-between text-[10px] text-text-muted min-h-[12px]">
+        <span>
+          {track.recording
+            ? 'Recording...'
+            : track.recordReady
+              ? 'Ready to record'
+              : track.recArm
+                ? 'Armed'
+                : 'Idle'}
+        </span>
+        {track.recordBlockedReason && <span className="text-warning truncate">{track.recordBlockedReason}</span>}
       </div>
 
       {/* Volume slider + Pan */}
@@ -113,18 +178,22 @@ export function TrackControls({
       {showRecordButton && (
         <button
           onClick={handleRecordClick}
-          disabled={!track.armed && !track.isRecording}
+          disabled={!track.recArm && !track.recordReady && !track.recording}
           className={`flex items-center justify-center gap-1 w-full py-0.5 rounded text-[10px] font-medium transition-colors ${
-            track.isRecording
+            track.recording
               ? 'bg-error text-surface-0'
-              : track.armed
-                ? 'bg-text-primary/10 text-text-primary/60 hover:bg-text-primary/15 hover:text-text-primary/80'
+              : track.recordReady
+                ? 'bg-warning/20 text-warning'
+                : track.recArm
+                  ? 'bg-text-primary/10 text-text-primary/60 hover:bg-text-primary/15 hover:text-text-primary/80'
                 : 'bg-text-primary/5 text-text-primary/30 cursor-not-allowed'
           }`}
-          title={!track.armed && !track.isRecording ? 'Arm track first' : undefined}
+          title={track.recordBlockedReason ?? (!track.recArm && !track.recordReady && !track.recording ? 'Arm track first' : undefined)}
         >
-          {track.isRecording ? (
+          {track.recording ? (
             <><Square size={8} /> Stop</>
+          ) : track.recordReady ? (
+            <><Circle size={8} className="text-warning" /> Cancel</>
           ) : (
             <><Circle size={8} className="text-error" /> Record</>
           )}

@@ -1,10 +1,37 @@
 import { ToneEngine } from './ToneEngine'
 import { ToneMetronome } from './ToneMetronome'
-import * as Tone from 'tone'
-import { useAudioStore } from '../stores/audioStore'
+import { useAudioStore, type TransportState } from '../stores/audioStore'
 import { useDawPanelStore } from '../stores/dawPanelStore'
 import type { Clip } from './types'
 import type { TrackLane } from '../stores/dawPanelStore'
+
+function isRunningState(state: TransportState): boolean {
+  return (
+    state === 'rolling' ||
+    state === 'count_in' ||
+    state === 'pre_roll' ||
+    state === 'recording' ||
+    state === 'auto_punch_wait_in' ||
+    state === 'auto_punch_recording' ||
+    state === 'loop_wrap'
+  )
+}
+
+function shouldClick(state: TransportState, metronomeMode: 'off' | 'always' | 'record_only'): boolean {
+  if (metronomeMode === 'off') return false
+  if (metronomeMode === 'always') return isRunningState(state)
+  return (
+    state === 'count_in' ||
+    state === 'pre_roll' ||
+    state === 'recording' ||
+    state === 'auto_punch_wait_in' ||
+    state === 'auto_punch_recording'
+  )
+}
+
+function isCaptureState(state: TransportState): boolean {
+  return state === 'recording' || state === 'auto_punch_recording'
+}
 
 export class AudioController {
   private static instance: AudioController | null = null
@@ -14,7 +41,6 @@ export class AudioController {
   private rafId: number | null = null
   private unsubscribers: Array<() => void> = []
 
-  // Track diff state — used to detect added/removed tracks and property changes
   private prevTrackIds: Set<string> = new Set()
   private prevTrackProps: Map<string, { volume: number; pan: number; muted: boolean; solo: boolean }> = new Map()
 
@@ -35,98 +61,112 @@ export class AudioController {
     this.startRafLoop()
   }
 
-  // ---------------------------------------------------------------------------
-  // Store subscriptions
-  // ---------------------------------------------------------------------------
-
   private subscribeToStores(): void {
-    // Zustand v4 subscribe takes a single listener (state) => void.
-    // We do our own prev-value tracking to fire only on relevant changes.
-
-    // 1. audioStore — playbackState, masterVolume, bpm, metronomeEnabled
-    let prevPlaybackState = useAudioStore.getState().playbackState
+    let prevTransportState = useAudioStore.getState().transportState
     let prevMasterVolume = useAudioStore.getState().masterVolume
     let prevBpm = useAudioStore.getState().bpm
-    let prevMetronomeEnabled = useAudioStore.getState().metronomeEnabled
+    let prevMetronomeMode = useAudioStore.getState().metronomeMode
+    let prevLoop = useAudioStore.getState().loop
 
     const unsubAudio = useAudioStore.subscribe((state) => {
-      // playbackState
-      if (state.playbackState !== prevPlaybackState) {
-        prevPlaybackState = state.playbackState
-        if (state.playbackState === 'playing') {
-          const { currentBar } = useAudioStore.getState()
-          const clips = this.getAllClips()
-          void this.engine.play(currentBar, clips)
-          if (state.metronomeEnabled) {
-            this.metronome.start(currentBar)
-          }
-        } else if (state.playbackState === 'paused') {
-          this.engine.pause()
-          this.metronome.stop()
-        } else {
-          // 'stopped' — engine resets Tone.js transport to 0 internally;
-          // DawPanel controls where the store's currentBar returns to (play-start or 0)
-          this.engine.stop()
-          this.metronome.stop()
-        }
+      if (state.transportState !== prevTransportState) {
+        this.handleTransportStateChange(prevTransportState, state.transportState)
+        prevTransportState = state.transportState
       }
 
-      // masterVolume
       if (state.masterVolume !== prevMasterVolume) {
         prevMasterVolume = state.masterVolume
         this.engine.setMasterVolume(state.masterVolume)
       }
 
-      // bpm
       if (state.bpm !== prevBpm) {
         prevBpm = state.bpm
         this.engine.setBpm(state.bpm)
         this.metronome.setBpm(state.bpm)
       }
 
-      // metronomeEnabled
-      if (state.metronomeEnabled !== prevMetronomeEnabled) {
-        prevMetronomeEnabled = state.metronomeEnabled
-        this.metronome.setEnabled(state.metronomeEnabled)
-        if (state.playbackState === 'playing') {
-          if (state.metronomeEnabled) {
-            this.metronome.start(useAudioStore.getState().currentBar)
-          } else {
-            this.metronome.stop()
-          }
-        }
+      if (
+        state.metronomeMode !== prevMetronomeMode ||
+        state.loop !== prevLoop
+      ) {
+        prevMetronomeMode = state.metronomeMode
+        prevLoop = state.loop
+        this.engine.setLoopRange(state.loop)
+        this.syncMetronome(state.transportState)
       }
     })
     this.unsubscribers.push(unsubAudio)
 
-    // 2. dawPanelStore — tracks
     const unsubTracks = useDawPanelStore.subscribe((state) => {
       this.reconcileTracks(state.tracks)
     })
     this.unsubscribers.push(unsubTracks)
 
-    // Apply initial state from stores on first init
-    const { masterVolume, bpm, metronomeEnabled } = useAudioStore.getState()
+    const { masterVolume, bpm, loop } = useAudioStore.getState()
     this.engine.setMasterVolume(masterVolume)
     this.engine.setBpm(bpm)
+    this.engine.setLoopRange(loop)
     this.metronome.setBpm(bpm)
-    this.metronome.setEnabled(metronomeEnabled)
 
-    // Reconcile any tracks already present in the store at init time
     const { tracks } = useDawPanelStore.getState()
     if (tracks.length > 0) {
       this.reconcileTracks(tracks)
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Track reconciliation
-  // ---------------------------------------------------------------------------
+  private handleTransportStateChange(prevState: TransportState, nextState: TransportState): void {
+    const audio = useAudioStore.getState()
+    const clips = this.getAllClips()
+    const shouldRestartEngine =
+      !isRunningState(prevState) ||
+      nextState === 'count_in' ||
+      (prevState === 'count_in' && isCaptureState(nextState)) ||
+      (nextState === 'rolling' && prevState === 'count_in') ||
+      prevState === 'stopped'
+
+    if (nextState === 'stopped') {
+      this.engine.stop()
+      this.metronome.stop()
+      return
+    }
+
+    if (nextState === 'paused') {
+      this.engine.pause()
+      this.metronome.stop()
+      return
+    }
+
+    if (!isRunningState(nextState)) {
+      this.syncMetronome(nextState)
+      return
+    }
+
+    if (shouldRestartEngine) {
+      const shouldPlayClips = nextState !== 'count_in'
+      void this.engine.play(
+        audio.currentBar,
+        shouldPlayClips ? clips : [],
+        audio.loop,
+      )
+    }
+
+    this.syncMetronome(nextState)
+  }
+
+  private syncMetronome(state: TransportState): void {
+    const { metronomeMode, currentBar } = useAudioStore.getState()
+    const active = shouldClick(state, metronomeMode)
+    this.metronome.setEnabled(active)
+    if (active) {
+      this.metronome.start(currentBar)
+    } else {
+      this.metronome.stop()
+    }
+  }
 
   private reconcileTracks(tracks: TrackLane[]): void {
     const currentIds = new Set(tracks.map((t) => t.id))
 
-    // Detect removed tracks
     for (const id of this.prevTrackIds) {
       if (!currentIds.has(id)) {
         this.engine.destroyTrack(id)
@@ -134,29 +174,18 @@ export class AudioController {
       }
     }
 
-    // Detect added tracks and property changes
     for (const track of tracks) {
       const prev = this.prevTrackProps.get(track.id)
 
       if (!prev) {
-        // New track — create channel and set initial properties
         this.engine.createTrack(track.id)
-        // volume in TrackLane is 0-100, engine expects 0.0-1.0
         this.engine.setTrackVolume(track.id, track.volume / 100)
-        // pan in TrackLane is -100 to +100, engine expects -1.0 to 1.0
         this.engine.setTrackPan(track.id, track.pan / 100)
-        if (track.muted) {
-          this.engine.muteTrack(track.id, true)
-        }
-        if (track.solo) {
-          this.engine.soloTrack(track.id, true)
-        }
+        if (track.muted) this.engine.muteTrack(track.id, true)
+        if (track.solo) this.engine.soloTrack(track.id, true)
       } else {
-        // Existing track — diff properties and update only what changed
-        if (prev.volume !== track.volume) {
-          if (!track.muted) {
-            this.engine.setTrackVolume(track.id, track.volume / 100)
-          }
+        if (prev.volume !== track.volume && !track.muted) {
+          this.engine.setTrackVolume(track.id, track.volume / 100)
         }
         if (prev.pan !== track.pan) {
           this.engine.setTrackPan(track.id, track.pan / 100)
@@ -169,7 +198,6 @@ export class AudioController {
         }
       }
 
-      // Update cached props
       this.prevTrackProps.set(track.id, {
         volume: track.volume,
         pan: track.pan,
@@ -181,37 +209,53 @@ export class AudioController {
     this.prevTrackIds = currentIds
   }
 
-  // ---------------------------------------------------------------------------
-  // Clip collection
-  // ---------------------------------------------------------------------------
-
   private getAllClips(): Clip[] {
     const { tracks } = useDawPanelStore.getState()
-    return tracks.flatMap((t) => t.clips)
+    return tracks.flatMap((t) => t.clips).filter((clip) => clip.status !== 'temp')
   }
-
-  // ---------------------------------------------------------------------------
-  // rAF loop — updates currentBar and currentTime in the store
-  // ---------------------------------------------------------------------------
 
   private startRafLoop(): void {
     const tick = () => {
-      const { playbackState, loop } = useAudioStore.getState()
+      const audio = useAudioStore.getState()
 
-      if (playbackState === 'playing') {
+      if (isRunningState(audio.transportState)) {
         const currentBar = this.engine.getCurrentBar()
         const currentTime = this.engine.getCurrentTimeSec()
 
-        useAudioStore.getState().setCurrentBar(currentBar)
-        useAudioStore.getState().setCurrentTime(currentTime)
+        audio.setCurrentBar(currentBar)
+        audio.setCurrentTime(currentTime)
 
-        // Loop handling
-        if (loop.enabled && currentBar >= loop.end) {
-          useAudioStore.getState().setCurrentBar(loop.start)
-          void this.engine.play(loop.start, this.getAllClips())
-          if (useAudioStore.getState().metronomeEnabled) {
-            this.metronome.start(loop.start)
-          }
+        if (
+          audio.transportState === 'count_in' &&
+          audio.pendingRecordStartBar !== null &&
+          currentBar >= audio.pendingRecordStartBar
+        ) {
+          audio.setTransportState('recording')
+        }
+
+        if (
+          audio.transportState === 'pre_roll' &&
+          audio.pendingRecordStartBar !== null &&
+          currentBar >= audio.pendingRecordStartBar
+        ) {
+          audio.setTransportState('recording')
+        }
+
+        if (
+          audio.transportState === 'auto_punch_wait_in' &&
+          audio.pendingRecordStartBar !== null &&
+          currentBar >= audio.pendingRecordStartBar
+        ) {
+          audio.setTransportState('auto_punch_recording')
+        }
+
+        if (
+          (audio.transportState === 'recording' || audio.transportState === 'auto_punch_recording') &&
+          audio.punchRange.enabled &&
+          currentBar >= audio.punchRange.end
+        ) {
+          audio.setPendingRecordStartBar(null)
+          audio.setTransportState('rolling')
         }
       }
 
@@ -220,10 +264,6 @@ export class AudioController {
 
     this.rafId = requestAnimationFrame(tick)
   }
-
-  // ---------------------------------------------------------------------------
-  // Cleanup
-  // ---------------------------------------------------------------------------
 
   destroy(): void {
     this.unsubscribers.forEach((fn) => fn())

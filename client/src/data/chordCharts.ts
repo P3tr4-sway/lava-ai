@@ -24,4 +24,5 @@ export const CHORD_CHARTS: ChordChart[] = [
   { id: 'wonderwall', title: 'Wonderwall', artist: 'Oasis', style: 'Pop', key: 'G', tempo: 87, timeSignature: '4/4' },
   { id: 'wish-you-were-here', title: 'Wish You Were Here', artist: 'Pink Floyd', style: 'Rock', key: 'G', tempo: 60, timeSignature: '4/4' },
   { id: 'let-her-go', title: 'Let Her Go', artist: 'Passenger', style: 'Pop', key: 'C', tempo: 75, timeSignature: '4/4' },
+  { id: 'hotel-california', title: 'Hotel California', artist: 'Eagles', style: 'Rock', key: 'Bm', tempo: 74, timeSignature: '4/4' },
 ]

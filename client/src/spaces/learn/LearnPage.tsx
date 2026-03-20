@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { useUIStore } from '@/stores/uiStore'
-import { BookOpen, ChevronRight, Sparkles } from 'lucide-react'
+import { BookOpen, ChevronRight } from 'lucide-react'
+import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 
 const SUB_HUBS = [
   {
@@ -28,8 +28,6 @@ const SUB_HUBS = [
 export function LearnPage() {
   const navigate = useNavigate()
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
-  const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
-
   useEffect(() => {
     setSpaceContext({ currentSpace: 'learn' })
   }, [setSpaceContext])
@@ -49,14 +47,8 @@ export function LearnPage() {
           </div>
         </section>
 
-        {/* ── Compact AI prompt bar ────────────────────────────── */}
-        <div
-          onClick={toggleAgentPanel}
-          className="bg-surface-2 border border-border rounded-lg px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:border-border-hover transition-colors"
-        >
-          <Sparkles size={16} className="text-text-muted shrink-0" />
-          <span className="text-sm text-text-muted">Paste a link, describe a song, or ask anything...</span>
-        </div>
+        {/* ── AI prompt bar ───────────────────────────────────── */}
+        <SpaceAgentInput placeholder="Paste a link, describe a song, or ask anything..." />
 
         {/* ── Sub-hub entries ──────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

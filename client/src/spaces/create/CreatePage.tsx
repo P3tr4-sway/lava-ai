@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { Layers, Plus, Play, Square } from 'lucide-react'
+import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useAudioStore } from '@/stores/audioStore'
@@ -70,9 +71,10 @@ export function CreatePage() {
             <Card className="max-w-sm text-center">
               <Layers size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm font-medium mb-1">Start composing</p>
-              <p className="text-xs text-text-muted">
+              <p className="text-xs text-text-muted mb-4">
                 Add tracks or ask LAVA AI to generate musical ideas
               </p>
+              <SpaceAgentInput placeholder="Describe what you want to create, or ask anything..." />
             </Card>
           </div>
         </div>

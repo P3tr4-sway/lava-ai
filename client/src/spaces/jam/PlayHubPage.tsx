@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { ArrowRight, ChevronRight, Music, Sparkles, Headphones, Package } from 'lucide-react'
+import { ArrowRight, ChevronRight, Sparkles, Headphones } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
 
@@ -71,14 +71,9 @@ export function PlayHubPage() {
       <div className="max-w-5xl mx-auto px-6 pt-8 md:pt-12 flex flex-col gap-6 pb-12">
 
         {/* ── Space header ─────────────────────────────────────── */}
-        <section className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-surface-2 border-l-2 border-violet-500/40 flex items-center justify-center shrink-0 mt-0.5">
-            <Music size={20} className="text-text-secondary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-text-primary">Play</h1>
-            <p className="text-sm text-text-muted mt-0.5">AI-powered tools for playing and jamming</p>
-          </div>
+        <section>
+          <h1 className="text-xl font-semibold text-text-primary">Play</h1>
+          <p className="text-sm text-text-muted mt-0.5">AI-powered tools for playing and jamming</p>
         </section>
 
         {/* ── AI prompt bar ───────────────────────────────────── */}

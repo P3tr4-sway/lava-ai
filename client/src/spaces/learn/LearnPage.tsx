@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { ArrowRight, BookOpen, ChevronRight, Music } from 'lucide-react'
+import { ArrowRight, ChevronRight, Music } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
 import { CHORD_CHARTS } from '@/data/chordCharts'
@@ -67,14 +67,9 @@ export function LearnPage() {
       <div className="max-w-5xl mx-auto px-6 pt-8 md:pt-12 flex flex-col gap-6 pb-12">
 
         {/* ── Space header ─────────────────────────────────────── */}
-        <section className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-surface-2 border-l-2 border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
-            <BookOpen size={20} className="text-text-secondary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-text-primary">Learn</h1>
-            <p className="text-sm text-text-muted mt-0.5">Master songs, techniques, and musical concepts</p>
-          </div>
+        <section>
+          <h1 className="text-xl font-semibold text-text-primary">Learn</h1>
+          <p className="text-sm text-text-muted mt-0.5">Master songs, techniques, and musical concepts</p>
         </section>
 
         {/* ── AI prompt bar ───────────────────────────────────── */}

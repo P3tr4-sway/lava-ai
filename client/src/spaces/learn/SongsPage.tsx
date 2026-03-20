@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { Upload, Music, FileMusic, ChevronDown, Check, Play, Pause, RotateCcw, ArrowLeft } from 'lucide-react'
+import { useAudioStore } from '@/stores/audioStore'
+import {
+  Music, FileMusic, ChevronDown, Check, Play, Pause,
+  SkipBack, SkipForward, Volume2, Repeat, ArrowLeft,
+  Sparkles, Loader2,
+} from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { CHORD_CHARTS } from '@/data/chordCharts'
+import { Slider } from '@/components/ui/Slider'
 
 const PARTS = [
   { id: 'lead', label: 'Lead Guitar' },
@@ -20,21 +26,93 @@ const PROGRESS_SECTIONS = [
   { id: 6, label: 'Outro', status: 'locked' as const, accuracy: 0 },
 ]
 
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function SongsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isGenerateMode = searchParams.get('generate') === '1'
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
+
   const [selectedPart, setSelectedPart] = useState('lead')
   const [partsOpen, setPartsOpen] = useState(false)
-  const [playing, setPlaying] = useState(false)
+  const [looping, setLooping] = useState(false)
+  const [generating, setGenerating] = useState(isGenerateMode)
+
+  // Audio store
+  const playbackState = useAudioStore((s) => s.playbackState)
+  const setPlaybackState = useAudioStore((s) => s.setPlaybackState)
+  const currentTime = useAudioStore((s) => s.currentTime)
+  const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
+  const duration = useAudioStore((s) => s.duration)
+  const setDuration = useAudioStore((s) => s.setDuration)
+  const masterVolume = useAudioStore((s) => s.masterVolume)
+  const setMasterVolume = useAudioStore((s) => s.setMasterVolume)
+  const bpm = useAudioStore((s) => s.bpm)
 
   const chart = CHORD_CHARTS.find((c) => c.id === id)
+  const isPlaying = playbackState === 'playing'
+  const animRef = useRef<number>()
+  const playStartRef = useRef({ time: 0, position: 0 })
+
+  // Set song duration based on tempo
+  useEffect(() => {
+    if (chart?.tempo) {
+      const songDuration = (16 * 4 * 60) / chart.tempo // 16 bars
+      setDuration(songDuration)
+    } else {
+      setDuration(240) // 4 min default
+    }
+  }, [chart?.tempo, setDuration])
+
+  // Playback animation
+  useEffect(() => {
+    if (!isPlaying) {
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+      return
+    }
+    playStartRef.current = { time: performance.now(), position: currentTime }
+    const animate = () => {
+      const elapsed = (performance.now() - playStartRef.current.time) / 1000
+      const newTime = playStartRef.current.position + elapsed
+      if (newTime >= duration) {
+        if (looping) {
+          setCurrentTime(0)
+          playStartRef.current = { time: performance.now(), position: 0 }
+        } else {
+          setCurrentTime(0)
+          setPlaybackState('stopped')
+          return
+        }
+      } else {
+        setCurrentTime(newTime)
+      }
+      animRef.current = requestAnimationFrame(animate)
+    }
+    animRef.current = requestAnimationFrame(animate)
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, duration, looping, setCurrentTime, setPlaybackState])
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'learn', projectId: id })
   }, [id, setSpaceContext])
+
+  // Simulate AI generation
+  useEffect(() => {
+    if (!generating) return
+    const t = setTimeout(() => setGenerating(false), 2500)
+    return () => clearTimeout(t)
+  }, [generating])
+
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
   if (!chart) {
     return (
@@ -43,11 +121,11 @@ export function SongsPage() {
           <FileMusic size={40} className="text-text-muted" />
           <p className="text-sm font-medium text-text-primary">Song not found</p>
           <button
-            onClick={() => navigate('/chord-charts')}
+            onClick={() => navigate('/')}
             className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
           >
             <ArrowLeft size={14} />
-            Browse Chord Charts
+            Back to Home
           </button>
         </div>
       </div>
@@ -55,167 +133,265 @@ export function SongsPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-4 py-5 md:px-6 flex flex-col gap-5 pb-12">
+    <div className="h-full flex flex-col">
 
-        {/* ── Upload ──────────────────────────────────────────── */}
-        <div className="border border-dashed border-border hover:border-border-hover rounded-lg px-5 py-4 flex items-center gap-4 transition-colors cursor-pointer group">
-          <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center group-hover:bg-surface-4 transition-colors shrink-0">
-            <Upload size={16} className="text-text-secondary" />
+      {/* ── Header bar ──────────────────────────────────────────── */}
+      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-0/90 backdrop-blur-sm">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center justify-center size-8 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors shrink-0"
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold text-text-primary truncate">{chart.title}</h1>
+            {chart.artist && <span className="text-xs text-text-muted shrink-0">— {chart.artist}</span>}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary">Upload audio or sheet music</p>
-            <p className="text-2xs text-text-muted mt-0.5">MP3, WAV, MIDI, MusicXML, PDF</p>
+          <div className="flex items-center gap-2 text-2xs text-text-muted font-mono mt-0.5">
+            <span>{chart.tuning ?? 'Standard'}</span>
+            <span>·</span>
+            <span>Key: {chart.key}</span>
+            <span>·</span>
+            <span>{chart.timeSignature ?? '4/4'}</span>
+            <span>·</span>
+            <span>♩ = {chart.tempo ?? '—'}</span>
           </div>
-          <button className="shrink-0 text-xs font-medium text-text-muted border border-border rounded px-2.5 py-1 hover:bg-surface-3 hover:border-border-hover transition-colors">
-            Browse
-          </button>
         </div>
-
-        {/* ── Score + Part selector ───────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          {/* Score header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Music size={15} className="text-text-muted" />
-              <h2 className="text-sm font-semibold text-text-primary">{chart.title}</h2>
-              {chart.artist && <span className="text-2xs text-text-muted">{chart.artist}</span>}
+        {/* Part selector */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setPartsOpen(!partsOpen)}
+            className="flex items-center gap-1.5 text-xs font-medium text-text-secondary border border-border rounded-full px-3 py-1.5 hover:bg-surface-3 transition-colors"
+          >
+            {PARTS.find((p) => p.id === selectedPart)?.label}
+            <ChevronDown size={12} className={cn('transition-transform', partsOpen && 'rotate-180')} />
+          </button>
+          {partsOpen && (
+            <div className="absolute right-0 top-full mt-1 bg-surface-0 border border-border rounded-lg shadow-lg py-1 z-10 min-w-[180px]">
+              {PARTS.map((part) => (
+                <button
+                  key={part.id}
+                  onClick={() => { setSelectedPart(part.id); setPartsOpen(false) }}
+                  className={cn(
+                    'w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-surface-3 transition-colors',
+                    selectedPart === part.id ? 'text-text-primary font-medium' : 'text-text-secondary',
+                  )}
+                >
+                  {selectedPart === part.id && <Check size={11} />}
+                  <span className={selectedPart !== part.id ? 'ml-[19px]' : ''}>{part.label}</span>
+                </button>
+              ))}
             </div>
-            <div className="flex items-center gap-3 text-2xs text-text-muted font-mono">
-              <span>{chart.tuning ?? 'Standard'}</span>
-              <span>{chart.key}</span>
-              <span>{chart.timeSignature ?? '4/4'}</span>
-              <span>♩ = {chart.tempo ?? '—'}</span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Score area (main content, fills remaining space) ───── */}
+      <div className="flex-1 overflow-y-auto">
+        {generating ? (
+          /* AI Generation loading state */
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center flex flex-col items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-text-primary/10 flex items-center justify-center">
+                <Sparkles size={28} className="text-text-primary animate-pulse" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Generating score & backing track...</p>
+                <p className="text-xs text-text-muted mt-1">Analyzing audio, extracting chords and melody</p>
+              </div>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="w-2 h-2 rounded-full bg-text-primary/40 animate-bounce"
+                      style={{ animationDelay: `${i * 150}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
+        ) : chart.pdfUrl ? (
+          <div className="h-full overflow-y-auto">
+            <object
+              data={`${chart.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+              type="application/pdf"
+              className="w-full h-[1400px]"
+            >
+              <iframe
+                src={`${chart.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                className="w-full h-[1400px] border-0"
+                title="Score"
+              />
+            </object>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col">
+            {/* Mock chord chart display */}
+            <div className="flex-1 flex items-center justify-center p-6">
+              <div className="w-full max-w-3xl">
+                {/* Mock score notation */}
+                <div className="bg-surface-0 border border-border rounded-xl p-6 md:p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <Music size={18} className="text-text-muted" />
+                    <span className="text-sm font-semibold text-text-primary">{chart.title}</span>
+                    <span className="text-xs text-text-muted">{chart.style}</span>
+                  </div>
 
-          {/* Score display */}
-          <div className="bg-surface-0 border border-border rounded-xl overflow-hidden">
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-              <button
-                onClick={() => setPlaying(!playing)}
-                className="w-7 h-7 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
-              >
-                {playing ? <Pause size={12} /> : <Play size={12} className="ml-0.5" />}
-              </button>
-              <button className="w-7 h-7 rounded flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-3 transition-colors">
-                <RotateCcw size={13} />
-              </button>
-
-              <div className="flex-1" />
-
-              {/* Part selector */}
-              <div className="relative">
-                <button
-                  onClick={() => setPartsOpen(!partsOpen)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-text-secondary border border-border rounded px-2.5 py-1 hover:bg-surface-3 transition-colors"
-                >
-                  {PARTS.find((p) => p.id === selectedPart)?.label}
-                  <ChevronDown size={12} className={cn('transition-transform', partsOpen && 'rotate-180')} />
-                </button>
-                {partsOpen && (
-                  <div className="absolute right-0 top-full mt-1 bg-surface-0 border border-border rounded-lg shadow-lg py-1 z-10 min-w-[180px]">
-                    {PARTS.map((part) => (
-                      <button
-                        key={part.id}
-                        onClick={() => { setSelectedPart(part.id); setPartsOpen(false) }}
-                        className={cn(
-                          'w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-surface-3 transition-colors',
-                          selectedPart === part.id ? 'text-text-primary font-medium' : 'text-text-secondary',
-                        )}
-                      >
-                        {selectedPart === part.id && <Check size={11} />}
-                        <span className={selectedPart !== part.id ? 'ml-[19px]' : ''}>{part.label}</span>
-                      </button>
+                  {/* Mock staff lines with chord symbols */}
+                  <div className="flex flex-col gap-8">
+                    {PROGRESS_SECTIONS.map((section) => (
+                      <div key={section.id} className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className={cn(
+                            'text-xs font-medium px-2 py-0.5 rounded',
+                            section.status === 'current'
+                              ? 'bg-text-primary/10 text-text-primary'
+                              : section.status === 'done'
+                                ? 'text-text-secondary'
+                                : 'text-text-muted',
+                          )}>
+                            {section.label}
+                          </span>
+                          {section.status !== 'locked' && (
+                            <span className={cn(
+                              'text-2xs font-mono',
+                              section.accuracy >= 90 ? 'text-success' : section.accuracy >= 80 ? 'text-warning' : 'text-text-muted',
+                            )}>
+                              {section.accuracy}%
+                            </span>
+                          )}
+                        </div>
+                        {/* Staff lines */}
+                        <div className="relative h-16 border border-border rounded-lg overflow-hidden">
+                          {[0, 1, 2, 3, 4].map((line) => (
+                            <div
+                              key={line}
+                              className="absolute left-0 right-0 h-px bg-border"
+                              style={{ top: `${20 + line * 12}%` }}
+                            />
+                          ))}
+                          {/* Playhead highlight for current section */}
+                          {section.status === 'current' && isPlaying && (
+                            <div
+                              className="absolute top-0 bottom-0 w-0.5 bg-text-primary/60 transition-all"
+                              style={{ left: `${progressPercent}%` }}
+                            />
+                          )}
+                          {section.status === 'locked' && (
+                            <div className="absolute inset-0 bg-surface-1/60 flex items-center justify-center">
+                              <span className="text-2xs text-text-muted">Complete previous sections first</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
             </div>
-
-            {/* Score content */}
-            {chart.pdfUrl ? (
-              <div className="h-[480px] overflow-y-auto">
-                <object
-                  data={`${chart.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                  type="application/pdf"
-                  className="w-full h-[1400px]"
-                >
-                  <iframe
-                    src={`${chart.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                    className="w-full h-[1400px] border-0"
-                    title="Score"
-                  />
-                </object>
-              </div>
-            ) : (
-              <div className="h-[480px] flex items-center justify-center">
-                <div className="text-center">
-                  <FileMusic size={40} className="text-text-muted mx-auto mb-3" />
-                  <p className="text-sm font-medium text-text-primary">Sheet music not available yet</p>
-                  <p className="text-2xs text-text-muted mt-1">
-                    We&apos;re working on adding the score for &ldquo;{chart.title}&rdquo;. Check back soon!
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
+        )}
+      </div>
+
+      {/* ── Transport bar (fixed bottom) ────────────────────────── */}
+      <div className="shrink-0 border-t border-border bg-surface-0">
+        {/* Progress track — clickable */}
+        <div
+          className="h-1.5 bg-surface-3 cursor-pointer group relative"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const pct = (e.clientX - rect.left) / rect.width
+            setCurrentTime(pct * duration)
+          }}
+        >
+          <div
+            className="h-full bg-text-primary rounded-r-full transition-[width] duration-100"
+            style={{ width: `${progressPercent}%` }}
+          />
+          {/* Hover dot */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-text-primary opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            style={{ left: `${progressPercent}%`, transform: `translateX(-50%) translateY(-50%)` }}
+          />
         </div>
 
-        {/* ── Practice progress ────────────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text-primary">Practice Progress</h2>
-            <span className="text-2xs text-text-muted font-mono">
-              {PROGRESS_SECTIONS.filter((s) => s.status === 'done').length}/{PROGRESS_SECTIONS.length} sections
-            </span>
+        <div className="flex items-center gap-2 px-4 py-2.5">
+          {/* Transport controls */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setCurrentTime(0); setPlaybackState('stopped') }}
+              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+            >
+              <SkipBack size={14} />
+            </button>
+            <button
+              onClick={() => setPlaybackState(isPlaying ? 'paused' : 'playing')}
+              className="w-9 h-9 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
+            >
+              {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+            </button>
+            <button
+              onClick={() => {
+                const skipTo = Math.min(currentTime + 10, duration)
+                setCurrentTime(skipTo)
+              }}
+              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+            >
+              <SkipForward size={14} />
+            </button>
           </div>
 
-          {/* Overall bar */}
-          <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-text-primary rounded-full transition-all"
-              style={{ width: `${(PROGRESS_SECTIONS.filter((s) => s.status === 'done').length / PROGRESS_SECTIONS.length) * 100}%` }}
-            />
+          {/* Time display */}
+          <div className="flex items-center gap-1 text-xs text-text-muted tabular-nums">
+            <span>{formatTime(currentTime)}</span>
+            <span>/</span>
+            <span>{formatTime(duration)}</span>
           </div>
 
-          {/* Section grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {PROGRESS_SECTIONS.map((section) => (
-              <div
-                key={section.id}
-                className={cn(
-                  'flex items-center justify-between px-3 py-2.5 rounded-lg border transition-colors',
-                  section.status === 'done' && 'bg-surface-0 border-border',
-                  section.status === 'current' && 'bg-surface-0 border-text-primary',
-                  section.status === 'locked' && 'bg-surface-1 border-border opacity-50',
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  {section.status === 'done' && <Check size={12} className="text-success" />}
-                  {section.status === 'current' && <Play size={12} className="text-text-primary" />}
-                  {section.status === 'locked' && <span className="w-3 h-3" />}
-                  <span className={cn(
-                    'text-xs font-medium',
-                    section.status === 'locked' ? 'text-text-muted' : 'text-text-primary',
-                  )}>
-                    {section.label}
-                  </span>
-                </div>
-                {section.status !== 'locked' && (
-                  <span className={cn(
-                    'text-2xs font-mono',
-                    section.accuracy >= 90 ? 'text-success' : section.accuracy >= 80 ? 'text-warning' : 'text-text-muted',
-                  )}>
-                    {section.accuracy}%
-                  </span>
-                )}
-              </div>
-            ))}
+          <div className="flex-1" />
+
+          {/* Song info (center) */}
+          <div className="hidden md:flex items-center gap-2 text-xs text-text-muted">
+            <span className="text-text-secondary font-medium">{chart.key}</span>
+            <span>·</span>
+            <span>{chart.tempo ?? bpm} BPM</span>
+            <span>·</span>
+            <span className="text-text-secondary">{chart.style}</span>
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Right controls */}
+          <div className="flex items-center gap-2">
+            {/* Loop */}
+            <button
+              onClick={() => setLooping(!looping)}
+              className={cn(
+                'p-1.5 rounded transition-colors',
+                looping
+                  ? 'text-text-primary bg-surface-3'
+                  : 'text-text-muted hover:text-text-secondary',
+              )}
+              title="Loop"
+            >
+              <Repeat size={14} />
+            </button>
+
+            {/* Volume */}
+            <div className="hidden sm:flex items-center gap-1.5 w-24">
+              <Volume2 size={14} className="text-text-muted shrink-0" />
+              <Slider
+                min={0}
+                max={100}
+                value={Math.round(masterVolume * 100)}
+                onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
+              />
+            </div>
           </div>
         </div>
-
       </div>
     </div>
   )

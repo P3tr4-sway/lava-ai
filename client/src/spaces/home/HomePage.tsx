@@ -1,205 +1,240 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowUp, ChevronRight, FilePlus } from 'lucide-react'
-import { cn } from '@/components/ui/utils'
+import { ChevronRight, Play, ArrowRight } from 'lucide-react'
 import { useAgent } from '@/hooks/useAgent'
+import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
+import { CHORD_CHARTS } from '@/data/chordCharts'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const RECOMMENDATIONS = [
-  { label: 'Learn Autumn Leaves', to: '/learn' },
-  { label: 'Practice Hotel California', to: '/learn' },
-  { label: 'Write a lo-fi beat', to: '/create' },
-  { label: 'Jam in D minor', to: '/jam' },
-  { label: 'Tune my guitar', to: '/tools' },
-  { label: 'Open last session', to: '/projects' },
+const HOT_CHORD_CHARTS = CHORD_CHARTS.filter((c) =>
+  ['wonderwall', 'wish-you-were-here', 'let-her-go'].includes(c.id),
+)
+
+const HOT_BACKING_TRACKS = [
+  {
+    title: 'Indie Pop Groove',
+    style: 'Pop',
+    bpm: 95,
+    gradient: 'from-pink-500 to-orange-400',
+  },
+  {
+    title: 'Country Fingerpick',
+    style: 'Country',
+    bpm: 78,
+    gradient: 'from-amber-500 to-yellow-600',
+  },
+  {
+    title: 'Rock Anthem Drive',
+    style: 'Rock',
+    bpm: 120,
+    gradient: 'from-red-600 to-rose-800',
+  },
 ]
 
-const MY_PROJECTS = [
-  { label: 'Lo-fi Sunday Beat', to: '/projects' },
-  { label: 'Hotel California Cover', to: '/projects' },
-  { label: 'Jazz Improv Session', to: '/projects' },
+const SUGGESTIONS = [
+  'Wonderwall by Oasis',
+  'A simple blues in E',
+  'Something easy for beginners',
 ]
 
-const SCORE_CHART = [
-  { title: 'Clair de Lune', sub: 'Debussy · Piano' },
-  { title: 'Bohemian Rhapsody', sub: 'Queen · Piano' },
-  { title: 'Fly Me to the Moon', sub: 'Sinatra' },
-  { title: 'River Flows in You', sub: 'Yiruma · Piano' },
-  { title: 'Hotel California', sub: 'Eagles · Guitar' },
-]
-
-const SONG_CHART = [
-  { title: 'Blinding Lights', sub: 'The Weeknd' },
-  { title: 'As It Was', sub: 'Harry Styles' },
-  { title: 'Anti-Hero', sub: 'Taylor Swift' },
-  { title: 'Levitating', sub: 'Dua Lipa' },
-  { title: 'Shape of You', sub: 'Ed Sheeran' },
-]
-
-const PEDAL_CHART = [
-  { title: 'Tube Screamer', sub: 'Overdrive · Ibanez' },
-  { title: 'Big Muff', sub: 'Fuzz · Electro-Harmonix' },
-  { title: 'Holy Grail', sub: 'Reverb · Electro-Harmonix' },
-  { title: 'DD-8', sub: 'Delay · Boss' },
-  { title: 'CE-2W', sub: 'Chorus · Boss' },
-]
+// TODO: replace with real auth + activity data
+const IS_LOGGED_IN = false
+const PREVIOUS_ACTIVITY: {
+  title: string
+  thumbnail: string
+  progress: number
+  sublabel: string
+  href: string
+} | null = null
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function HomePage() {
-  const [query, setQuery] = useState('')
   const { sendMessage } = useAgent()
   const navigate = useNavigate()
+  const chatRef = useRef<ChatInputRef>(null)
 
-  const handleSend = () => {
-    const trimmed = query.trim()
-    if (!trimmed) return
-    sendMessage(trimmed)
-    setQuery('')
+  const handleSend = (message: string) => {
+    sendMessage(message)
     navigate('/learn')
   }
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
+  const showContinue = IS_LOGGED_IN && PREVIOUS_ACTIVITY
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-6 pt-[28vh] flex flex-col gap-10 pb-12">
+      <div className="max-w-5xl mx-auto px-6 pt-[28vh] flex flex-col gap-14 pb-12">
 
         {/* ── Hero prompt ──────────────────────────────────────── */}
         <section className="pb-4">
-          <h1 className="text-3xl font-semibold text-text-primary mb-8 text-center">Play the music you love</h1>
-          <div className="w-full flex items-center gap-2 bg-surface-0 border border-border rounded-full px-5 py-3 focus-within:border-border-hover transition-colors shadow-sm">
-            <button
-              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
-              title="Add file"
-            >
-              <FilePlus size={16} />
-            </button>
-            <textarea
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="What do you want to make?"
-              rows={1}
-              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none resize-none leading-relaxed"
-              style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!query.trim()}
-              className={cn(
-                'shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors',
-                query.trim()
-                  ? 'bg-text-primary text-surface-0 hover:opacity-80'
-                  : 'bg-surface-3 text-text-muted cursor-default',
-              )}
-            >
-              <ArrowUp size={15} />
-            </button>
-          </div>
-        </section>
+          <h1 className="text-4xl font-bold text-text-primary mb-2 text-center">Play the music you love</h1>
+          <p className="text-base text-text-secondary text-center mb-8">Your AI-powered music companion</p>
+          <ChatInput ref={chatRef} onSend={handleSend} placeholder="What do you want to play?" />
 
-        {/* ── Recommendations ─────────────────────────────────── */}
-        <section>
-          <SectionHeader title="Recommended for you" />
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {RECOMMENDATIONS.map(({ label, to }) => (
+          {/* Suggestion tags */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+            {SUGGESTIONS.map((s) => (
               <button
-                key={label}
-                onClick={() => navigate(to)}
-                className="flex items-center px-4 py-2 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-full shrink-0 transition-colors"
+                key={s}
+                onClick={() => chatRef.current?.setValue(s)}
+                className="px-3 py-1.5 text-xs text-text-secondary bg-surface-1 border border-border rounded-full hover:border-border-hover hover:text-text-primary transition-colors"
               >
-                <span className="text-xs font-medium text-text-primary whitespace-nowrap">{label}</span>
+                {s}
               </button>
             ))}
           </div>
+
+          {/* Free quota nudge */}
+          <p className="text-xs text-text-muted text-center mt-6">
+            3 free AI transcriptions every month. No credit card required.
+          </p>
+
+          <div className="w-24 h-px bg-gradient-to-r from-transparent via-text-muted/30 to-transparent mx-auto mt-8" />
         </section>
 
-        {/* ── My Projects ────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-text-secondary">My Projects</h2>
-            <button
-              onClick={() => navigate('/projects')}
-              className="flex items-center gap-0.5 text-xs text-text-muted hover:text-text-primary transition-colors"
+        {/* ── Continue Where You Left Off ──────────────────────── */}
+        {showContinue && (
+          <section>
+            <h2 className="text-2xl font-semibold text-text-primary mb-4">Continue Where You Left Off</h2>
+            <div
+              onClick={() => navigate(PREVIOUS_ACTIVITY.href)}
+              className="flex items-center gap-4 bg-surface-0 border border-border hover:border-border-hover rounded-lg p-4 cursor-pointer transition-colors"
             >
-              <span>View all</span>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-            {MY_PROJECTS.map(({ label, to }) => (
-              <button
-                key={label}
-                onClick={() => navigate(to)}
-                className="flex flex-col gap-1 p-4 bg-surface-0 border border-border hover:border-border-hover hover:bg-surface-2 rounded-xl shrink-0 w-44 text-left transition-colors"
-              >
-                <p className="text-xs font-medium text-text-primary">{label}</p>
-                <p className="text-2xs text-text-muted">Last edited recently</p>
-              </button>
-            ))}
-          </div>
-        </section>
+              {/* Thumbnail */}
+              <div className="w-14 h-14 rounded-lg bg-surface-2 shrink-0 overflow-hidden">
+                <img
+                  src={PREVIOUS_ACTIVITY.thumbnail}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
 
-        {/* ── Three Charts Side by Side ────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { title: 'Top Sheet Music', items: SCORE_CHART },
-            { title: 'Top Songs', items: SONG_CHART },
-            { title: 'Top Pedal Effects', items: PEDAL_CHART },
-          ].map(({ title, items }) => (
-            <ChartCard key={title} title={title}>
-              {items.map((item, i) => (
-                <div
-                  key={item.title}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-surface-2 transition-colors cursor-pointer rounded-lg"
-                >
-                  <span className="text-xs font-mono w-4 shrink-0 text-right text-text-muted">{i + 1}</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-text-primary truncate">{item.title}</p>
-                    <p className="text-2xs text-text-muted truncate">{item.sub}</p>
+              {/* Details */}
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-semibold text-text-primary leading-tight truncate">
+                  {PREVIOUS_ACTIVITY.title}
+                </p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-text-primary rounded-full"
+                      style={{ width: `${PREVIOUS_ACTIVITY.progress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-text-muted shrink-0">{PREVIOUS_ACTIVITY.progress}%</span>
+                </div>
+                <p className="text-xs text-text-muted mt-1">{PREVIOUS_ACTIVITY.sublabel}</p>
+              </div>
+
+              {/* Continue button */}
+              <button className="flex items-center gap-1.5 px-4 py-2 bg-text-primary text-surface-0 text-sm font-medium rounded-full shrink-0 hover:opacity-80 transition-opacity">
+                Continue
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Hot ChordChart ──────────────────────────────────── */}
+        <section>
+          <div className="mb-2">
+            <button
+              onClick={() => navigate('/chord-charts')}
+              className="flex items-center gap-1 group"
+            >
+              <h2 className="text-2xl font-semibold text-text-primary">Hot ChordChart</h2>
+              <ChevronRight size={20} className="text-text-muted group-hover:text-text-primary transition-colors mt-0.5" />
+            </button>
+            <p className="text-sm text-text-muted mt-1">Popular chord progressions to learn</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+            {HOT_CHORD_CHARTS.map((chart) => (
+              <div
+                key={chart.title}
+                onClick={() => navigate(`/learn/songs/${chart.id}`)}
+                className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
+              >
+                {/* Album Art — black mockup */}
+                <div className="aspect-[4/3] w-full bg-black flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-white/60 text-xs font-mono tracking-widest uppercase mb-2">{chart.style}</p>
+                    <p className="text-white text-2xl font-bold">{chart.key}</p>
                   </div>
                 </div>
-              ))}
-            </ChartCard>
-          ))}
-        </div>
+                {/* Info */}
+                <div className="flex flex-col gap-2 p-6">
+                  <p className="text-base font-semibold text-text-primary leading-tight">{chart.title}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-text-muted">{chart.style}</span>
+                    <span className="text-text-muted">·</span>
+                    <span className="text-sm text-text-muted">Key of {chart.key}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Hot Backing Track ─────────────────────────────────── */}
+        <section>
+          <div className="mb-2">
+            <button
+              onClick={() => navigate('/backing-tracks')}
+              className="flex items-center gap-1 group"
+            >
+              <h2 className="text-2xl font-semibold text-text-primary">Hot Backing Track</h2>
+              <ChevronRight size={20} className="text-text-muted group-hover:text-text-primary transition-colors mt-0.5" />
+            </button>
+            <p className="text-sm text-text-muted mt-1">Trending tracks to jam with</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+            {HOT_BACKING_TRACKS.map((track) => (
+              <BackingTrackCard key={track.title} track={track} onClick={() => navigate('/jam')} />
+            ))}
+          </div>
+        </section>
 
       </div>
     </div>
   )
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Backing Track Card with hover play ───────────────────────────────────────
 
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-sm font-semibold text-text-secondary">{title}</h2>
-    </div>
-  )
-}
-
-function ChartCard({
-  title,
-  children,
+function BackingTrackCard({
+  track,
+  onClick,
 }: {
-  title: string
-  children: React.ReactNode
+  track: (typeof HOT_BACKING_TRACKS)[number]
+  onClick: () => void
 }) {
   return (
-    <div className="flex flex-col bg-surface-0 border border-border rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-border shrink-0">
-        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+    <div
+      onClick={onClick}
+      className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
+    >
+      {/* Album Art */}
+      <div className={`aspect-[4/3] w-full bg-gradient-to-br ${track.gradient} relative flex items-center justify-center`}>
+        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <div className="w-6 h-6 rounded-full bg-white/20" />
+        </div>
+
+        {/* Play overlay on hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm">
+            <Play size={22} className="text-white ml-0.5" fill="white" />
+          </div>
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto py-1 min-h-0">
-        {children}
+      {/* Info */}
+      <div className="flex flex-col gap-2 p-6">
+        <p className="text-base font-semibold text-text-primary leading-tight">{track.title}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-muted">{track.style}</span>
+          <span className="text-text-muted">·</span>
+          <span className="text-sm text-text-muted">{track.bpm} BPM</span>
+        </div>
       </div>
     </div>
   )

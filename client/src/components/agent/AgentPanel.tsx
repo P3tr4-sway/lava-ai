@@ -32,6 +32,8 @@ export function AgentPanel() {
     }
   }, [isMobile, open])
 
+  const hasMessages = messages.length > 0 || (isStreaming && streamingContent)
+
   return (
     <aside
       className={cn(
@@ -52,42 +54,54 @@ export function AgentPanel() {
         </Button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-            <Bot size={32} className="text-text-muted" />
-            <p className="text-sm text-text-secondary">
-              Ask me anything about your music.
-            </p>
-            <p className="text-xs text-text-muted">
-              I can navigate you around, help transcribe audio, start a jam session, or compose
-              ideas.
-            </p>
+      {hasMessages ? (
+        <>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            {messages.map((msg) => (
+              <ChatMessage key={msg.id} message={msg} />
+            ))}
+            {isStreaming && streamingContent && (
+              <ChatMessage
+                message={{
+                  id: 'streaming',
+                  role: 'assistant',
+                  content: streamingContent,
+                  createdAt: Date.now(),
+                }}
+                isStreaming
+              />
+            )}
+            <div ref={bottomRef} />
           </div>
-        )}
-        {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
-        ))}
-        {isStreaming && streamingContent && (
-          <ChatMessage
-            message={{
-              id: 'streaming',
-              role: 'assistant',
-              content: streamingContent,
-              createdAt: Date.now(),
-            }}
-            isStreaming
-          />
-        )}
-        <div ref={bottomRef} />
-      </div>
 
-      {/* Quick actions + Input */}
-      <div className={cn('px-3 pt-2 pb-3 border-t border-border shrink-0 flex flex-col gap-2', isMobile && 'pb-safe')}>
-        <QuickActions onSend={sendMessage} disabled={isStreaming} />
-        <ChatInput onSend={sendMessage} disabled={isStreaming} />
-      </div>
+          {/* Quick actions + Compact Input */}
+          <div className={cn('px-3 pt-2 pb-3 border-t border-border shrink-0 flex flex-col gap-2', isMobile && 'pb-safe')}>
+            <QuickActions onSend={sendMessage} disabled={isStreaming} />
+            <ChatInput onSend={sendMessage} disabled={isStreaming} compact />
+          </div>
+        </>
+      ) : (
+        /* Entrance / Welcome state */
+        <div className="flex-1 flex flex-col items-center justify-center px-5 pb-8">
+          <div className="flex flex-col items-center gap-3 mb-8">
+            <div className="size-12 rounded-full bg-surface-2 flex items-center justify-center">
+              <Bot size={24} className="text-text-secondary" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-text-primary">How can I help?</p>
+              <p className="text-xs text-text-muted mt-1">
+                Ask me anything about your music.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full flex flex-col gap-3">
+            <ChatInput onSend={sendMessage} disabled={isStreaming} />
+            <QuickActions onSend={sendMessage} disabled={isStreaming} />
+          </div>
+        </div>
+      )}
     </aside>
   )
 }

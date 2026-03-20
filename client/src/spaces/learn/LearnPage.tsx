@@ -1,196 +1,169 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { Upload, Music, ChevronDown, Check, Play, Pause, RotateCcw } from 'lucide-react'
-import { cn } from '@/components/ui/utils'
+import { ArrowRight, ChevronRight, Music } from 'lucide-react'
+import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
+import { Button } from '@/components/ui/Button'
+import { ModuleDrawer } from '@/components/ModuleDrawer'
+import { CHORD_CHARTS } from '@/data/chordCharts'
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
-
-const MOCK_SCORE = {
-  title: 'Anjo De Mim',
-  artist: 'O Rappa',
-  key: 'E minor',
-  tempo: 92,
-  timeSignature: '4/4',
-  tuning: 'Standard',
-  pdfUrl: '/scores/anjo-de-mim.pdf',
+// Continue where you left off — only shown if user has activity
+const CONTINUE_ITEM = {
+  songTitle: 'Autumn Leaves',
+  artist: 'Joseph Kosma',
+  part: 'Rhythm Guitar',
+  section: 'Section 2',
+  progress: 42, // percent
+  coverGradient: 'from-amber-700 to-orange-900',
+  route: '/learn/songs/autumn-leaves',
 }
 
-const PARTS = [
-  { id: 'lead', label: 'Lead Guitar' },
-  { id: 'rhythm', label: 'Rhythm Guitar' },
-  { id: 'bass', label: 'Bass Line' },
+const RECOMMENDED_GRADIENTS = [
+  'from-slate-700 to-slate-900',
+  'from-sky-700 to-indigo-900',
+  'from-amber-600 to-rose-800',
 ]
 
-const PROGRESS_SECTIONS = [
-  { id: 1, label: 'Intro', status: 'done' as const, accuracy: 96 },
-  { id: 2, label: 'Verse 1', status: 'done' as const, accuracy: 88 },
-  { id: 3, label: 'Chorus', status: 'current' as const, accuracy: 71 },
-  { id: 4, label: 'Verse 2', status: 'locked' as const, accuracy: 0 },
-  { id: 5, label: 'Bridge', status: 'locked' as const, accuracy: 0 },
-  { id: 6, label: 'Outro', status: 'locked' as const, accuracy: 0 },
-]
+const RECOMMENDED_IDS = ['1', '7', '6'] // Autumn Leaves, Bossa Nova Basics, Minor Swing
+const RECOMMENDED = RECOMMENDED_IDS.map((id, i) => {
+  const chart = CHORD_CHARTS.find((c) => c.id === id)!
+  return { ...chart, gradient: RECOMMENDED_GRADIENTS[i] }
+})
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+const DAILY_SKILL = {
+  title: 'Fingerpicking Pattern #3',
+  description: 'A classic Travis picking pattern used in folk & country',
+}
+
+const SUB_HUBS = [
+  {
+    key: 'songs',
+    label: 'Songs',
+    description: 'Learn your favorite tracks',
+    route: '/chord-charts',
+  },
+  {
+    key: 'jam',
+    label: 'Jam',
+    description: 'Play along with backing tracks',
+    route: '/learn/jam',
+  },
+  {
+    key: 'techniques',
+    label: 'Techniques',
+    description: 'Master scales, chords & more',
+    route: '/learn/techniques',
+  },
+]
 
 export function LearnPage() {
-  const { id } = useParams()
+  const navigate = useNavigate()
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
-  const [selectedPart, setSelectedPart] = useState('lead')
-  const [partsOpen, setPartsOpen] = useState(false)
-  const [playing, setPlaying] = useState(false)
-
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'learn', projectId: id })
-  }, [id, setSpaceContext])
+    setSpaceContext({ currentSpace: 'learn' })
+  }, [setSpaceContext])
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-4 py-5 md:px-6 flex flex-col gap-5 pb-12">
+      <div className="max-w-5xl mx-auto px-6 pt-8 md:pt-12 flex flex-col gap-6 pb-12">
 
-        {/* ── Upload ──────────────────────────────────────────── */}
-        <div className="border border-dashed border-border hover:border-border-hover rounded-lg px-5 py-4 flex items-center gap-4 transition-colors cursor-pointer group">
-          <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center group-hover:bg-surface-4 transition-colors shrink-0">
-            <Upload size={16} className="text-text-secondary" />
+        {/* ── Space header ─────────────────────────────────────── */}
+        <section className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary">Learn</h1>
+            <p className="text-sm text-text-muted mt-0.5">Master songs, techniques, and musical concepts</p>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary">Upload audio or sheet music</p>
-            <p className="text-2xs text-text-muted mt-0.5">MP3, WAV, MIDI, MusicXML, PDF</p>
-          </div>
-          <button className="shrink-0 text-xs font-medium text-text-muted border border-border rounded px-2.5 py-1 hover:bg-surface-3 hover:border-border-hover transition-colors">
-            Browse
-          </button>
-        </div>
+          <ModuleDrawer moduleSpace="learn" label="My Learn" />
+        </section>
 
-        {/* ── Score + Part selector ───────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          {/* Score header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Music size={15} className="text-text-muted" />
-              <h2 className="text-sm font-semibold text-text-primary">{MOCK_SCORE.title}</h2>
-              <span className="text-2xs text-text-muted">{MOCK_SCORE.artist}</span>
-            </div>
-            <div className="flex items-center gap-3 text-2xs text-text-muted font-mono">
-              <span>{MOCK_SCORE.tuning}</span>
-              <span>{MOCK_SCORE.key}</span>
-              <span>{MOCK_SCORE.timeSignature}</span>
-              <span>♩ = {MOCK_SCORE.tempo}</span>
-            </div>
-          </div>
+        {/* ── AI prompt bar ───────────────────────────────────── */}
+        <SpaceAgentInput placeholder="Paste a link, describe a song, or ask anything..." />
 
-          {/* Score display */}
-          <div className="bg-surface-0 border border-border rounded-xl overflow-hidden">
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-              <button
-                onClick={() => setPlaying(!playing)}
-                className="w-7 h-7 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
-              >
-                {playing ? <Pause size={12} /> : <Play size={12} className="ml-0.5" />}
-              </button>
-              <button className="w-7 h-7 rounded flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-3 transition-colors">
-                <RotateCcw size={13} />
-              </button>
-
-              <div className="flex-1" />
-
-              {/* Part selector */}
-              <div className="relative">
-                <button
-                  onClick={() => setPartsOpen(!partsOpen)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-text-secondary border border-border rounded px-2.5 py-1 hover:bg-surface-3 transition-colors"
-                >
-                  {PARTS.find((p) => p.id === selectedPart)?.label}
-                  <ChevronDown size={12} className={cn('transition-transform', partsOpen && 'rotate-180')} />
-                </button>
-                {partsOpen && (
-                  <div className="absolute right-0 top-full mt-1 bg-surface-0 border border-border rounded-lg shadow-lg py-1 z-10 min-w-[180px]">
-                    {PARTS.map((part) => (
-                      <button
-                        key={part.id}
-                        onClick={() => { setSelectedPart(part.id); setPartsOpen(false) }}
-                        className={cn(
-                          'w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-surface-3 transition-colors',
-                          selectedPart === part.id ? 'text-text-primary font-medium' : 'text-text-secondary',
-                        )}
-                      >
-                        {selectedPart === part.id && <Check size={11} />}
-                        <span className={selectedPart !== part.id ? 'ml-[19px]' : ''}>{part.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Score PDF */}
-            <div className="h-[480px] overflow-y-auto">
-              <object
-                data={`${MOCK_SCORE.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                type="application/pdf"
-                className="w-full h-[1400px]"
-              >
-                <iframe
-                  src={`${MOCK_SCORE.pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                  className="w-full h-[1400px] border-0"
-                  title="Score"
-                />
-              </object>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Practice progress ────────────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text-primary">Practice Progress</h2>
-            <span className="text-2xs text-text-muted font-mono">
-              {PROGRESS_SECTIONS.filter((s) => s.status === 'done').length}/{PROGRESS_SECTIONS.length} sections
-            </span>
-          </div>
-
-          {/* Overall bar */}
-          <div className="h-1.5 bg-surface-3 rounded-full overflow-hidden">
+        {/* ── Sub-hub entries ──────────────────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {SUB_HUBS.map((hub) => (
             <div
-              className="h-full bg-text-primary rounded-full transition-all"
-              style={{ width: `${(PROGRESS_SECTIONS.filter((s) => s.status === 'done').length / PROGRESS_SECTIONS.length) * 100}%` }}
-            />
-          </div>
+              key={hub.key}
+              onClick={() => navigate(hub.route)}
+              className="bg-surface-2 border border-border rounded-lg p-5 cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-colors group flex flex-col gap-2"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-text-primary">{hub.label}</h2>
+                <ChevronRight size={16} className="text-text-muted group-hover:text-text-primary transition-colors" />
+              </div>
+              <p className="text-sm text-text-secondary">{hub.description}</p>
+            </div>
+          ))}
+        </div>
 
-          {/* Section grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {PROGRESS_SECTIONS.map((section) => (
-              <div
-                key={section.id}
-                className={cn(
-                  'flex items-center justify-between px-3 py-2.5 rounded-lg border transition-colors',
-                  section.status === 'done' && 'bg-surface-0 border-border',
-                  section.status === 'current' && 'bg-surface-0 border-text-primary',
-                  section.status === 'locked' && 'bg-surface-1 border-border opacity-50',
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  {section.status === 'done' && <Check size={12} className="text-success" />}
-                  {section.status === 'current' && <Play size={12} className="text-text-primary" />}
-                  {section.status === 'locked' && <span className="w-3 h-3" />}
-                  <span className={cn(
-                    'text-xs font-medium',
-                    section.status === 'locked' ? 'text-text-muted' : 'text-text-primary',
-                  )}>
-                    {section.label}
-                  </span>
+        {/* ── Continue where you left off ────────────────────── */}
+        {CONTINUE_ITEM && (
+          <div className="bg-surface-2 border border-border rounded-lg p-5">
+            <p className="text-xs text-text-muted mb-3">Continue where you left off</p>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CONTINUE_ITEM.coverGradient} shrink-0`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-text-primary truncate">{CONTINUE_ITEM.songTitle}</p>
+                <p className="text-xs text-text-muted">{CONTINUE_ITEM.artist}</p>
+                <div className="mt-1.5 h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-amber-500 rounded-full"
+                    style={{ width: `${CONTINUE_ITEM.progress}%` }}
+                  />
                 </div>
-                {section.status !== 'locked' && (
-                  <span className={cn(
-                    'text-2xs font-mono',
-                    section.accuracy >= 90 ? 'text-success' : section.accuracy >= 80 ? 'text-warning' : 'text-text-muted',
-                  )}>
-                    {section.accuracy}%
-                  </span>
-                )}
+                <p className="text-xs text-text-secondary mt-1">{CONTINUE_ITEM.part} · {CONTINUE_ITEM.section}</p>
+              </div>
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={() => navigate(CONTINUE_ITEM.route)}
+              >
+                Continue <ArrowRight size={14} className="ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Recommended for you ────────────────────────────── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-text-muted">Recommended for you</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {RECOMMENDED.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => navigate(`/learn/songs/${item.id}`)}
+                className="bg-surface-2 border border-border rounded-lg overflow-hidden cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-all hover:-translate-y-0.5 group"
+              >
+                <div className={`aspect-[16/9] bg-gradient-to-br ${item.gradient}`} />
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-text-primary">{item.title}</p>
+                  <p className="text-xs text-text-muted mt-0.5">{item.artist ?? item.style}</p>
+                  <div className="flex gap-1.5 mt-2">
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.key}</span>
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.style}</span>
+                  </div>
+                </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* ── Daily skill ────────────────────────────────────── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-text-muted">Daily skill</p>
+          <div className="bg-surface-2 border border-border rounded-lg p-5">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-surface-3 flex items-center justify-center shrink-0">
+                <Music size={20} className="text-text-secondary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-text-primary">{DAILY_SKILL.title}</p>
+                <p className="text-sm text-text-secondary">{DAILY_SKILL.description}</p>
+              </div>
+              <button className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-1 text-sm shrink-0">
+                Try it <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
 

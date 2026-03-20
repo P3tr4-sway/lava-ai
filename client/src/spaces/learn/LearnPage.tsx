@@ -1,8 +1,49 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { BookOpen, ChevronRight } from 'lucide-react'
+import { ArrowRight, BookOpen, ChevronRight, Music } from 'lucide-react'
 import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
+import { Button } from '@/components/ui/Button'
+
+// Continue where you left off — only shown if user has activity
+const CONTINUE_ITEM = {
+  songTitle: 'Autumn Leaves',
+  artist: 'Joseph Kosma',
+  part: 'Rhythm Guitar',
+  section: 'Section 2',
+  progress: 42, // percent
+  coverGradient: 'from-amber-700 to-orange-900',
+  route: '/learn/songs/autumn-leaves',
+}
+
+const RECOMMENDED = [
+  {
+    title: 'Blackbird',
+    artist: 'The Beatles',
+    difficulty: 'Intermediate',
+    style: 'Fingerpicking',
+    gradient: 'from-slate-700 to-slate-900',
+  },
+  {
+    title: 'Wish You Were Here',
+    artist: 'Pink Floyd',
+    difficulty: 'Beginner',
+    style: 'Strumming',
+    gradient: 'from-sky-700 to-indigo-900',
+  },
+  {
+    title: 'Dust in the Wind',
+    artist: 'Kansas',
+    difficulty: 'Intermediate',
+    style: 'Fingerpicking',
+    gradient: 'from-amber-600 to-rose-800',
+  },
+]
+
+const DAILY_SKILL = {
+  title: 'Fingerpicking Pattern #3',
+  description: 'A classic Travis picking pattern used in folk & country',
+}
 
 const SUB_HUBS = [
   {
@@ -65,6 +106,76 @@ export function LearnPage() {
               <p className="text-sm text-text-secondary">{hub.description}</p>
             </div>
           ))}
+        </div>
+
+        {/* ── Continue where you left off ────────────────────── */}
+        {CONTINUE_ITEM && (
+          <div className="bg-surface-2 border border-border rounded-lg p-5">
+            <p className="text-xs text-text-muted mb-3">Continue where you left off</p>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CONTINUE_ITEM.coverGradient} shrink-0`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-text-primary truncate">{CONTINUE_ITEM.songTitle}</p>
+                <p className="text-xs text-text-muted">{CONTINUE_ITEM.artist}</p>
+                <div className="mt-1.5 h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-amber-500 rounded-full"
+                    style={{ width: `${CONTINUE_ITEM.progress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-text-secondary mt-1">{CONTINUE_ITEM.part} · {CONTINUE_ITEM.section}</p>
+              </div>
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={() => navigate(CONTINUE_ITEM.route)}
+              >
+                Continue <ArrowRight size={14} className="ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Recommended for you ────────────────────────────── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-text-muted">Recommended for you</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {RECOMMENDED.map((item) => (
+              <div
+                key={item.title}
+                className="bg-surface-2 border border-border rounded-lg overflow-hidden cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-all hover:-translate-y-0.5 group"
+              >
+                <div className={`aspect-[16/9] bg-gradient-to-br ${item.gradient}`} />
+                <div className="p-4">
+                  <p className="text-sm font-semibold text-text-primary">{item.title}</p>
+                  <p className="text-xs text-text-muted mt-0.5">{item.artist}</p>
+                  <div className="flex gap-1.5 mt-2">
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.difficulty}</span>
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{item.style}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Daily skill ────────────────────────────────────── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-text-muted">Daily skill</p>
+          <div className="bg-surface-2 border border-border rounded-lg p-5">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-surface-3 flex items-center justify-center shrink-0">
+                <Music size={20} className="text-text-secondary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-text-primary">{DAILY_SKILL.title}</p>
+                <p className="text-sm text-text-secondary">{DAILY_SKILL.description}</p>
+              </div>
+              <button className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-1 text-sm shrink-0">
+                Try it <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>

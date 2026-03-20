@@ -1,20 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileMusic } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const CHORD_CHARTS = [
-  { id: '1', title: 'Autumn Leaves', style: 'Jazz Standard', key: 'Gm' },
-  { id: '2', title: '12 Bar Blues', style: 'Blues', key: 'A' },
-  { id: '3', title: 'ii-V-I Progressions', style: 'Jazz', key: 'C' },
-  { id: '4', title: 'Canon in D', style: 'Classical', key: 'D' },
-  { id: '5', title: 'Rhythm Changes', style: 'Jazz', key: 'Bb' },
-  { id: '6', title: 'Minor Swing', style: 'Gypsy Jazz', key: 'Am' },
-  { id: '7', title: 'Bossa Nova Basics', style: 'Bossa Nova', key: 'Dm' },
-  { id: '8', title: 'Pop Punk Essentials', style: 'Pop Punk', key: 'G' },
-  { id: '9', title: 'Soul Progressions', style: 'Soul', key: 'F' },
-]
+import { CHORD_CHARTS } from '@/data/chordCharts'
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -45,7 +32,7 @@ export function ChordChartsPage() {
           {CHORD_CHARTS.map((chart) => (
             <button
               key={chart.id}
-              onClick={() => navigate('/learn')}
+              onClick={() => navigate(`/learn/songs/${chart.id}`)}
               className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden text-left transition-colors group"
             >
               {/* Album Art — black mockup */}

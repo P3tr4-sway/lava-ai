@@ -2,26 +2,11 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { useAgent } from '@/hooks/useAgent'
 import { ChatInput } from '@/components/agent/ChatInput'
+import { CHORD_CHARTS } from '@/data/chordCharts'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const HOT_CHORD_CHARTS = [
-  {
-    title: 'Autumn Leaves',
-    style: 'Jazz Standard',
-    key: 'Gm',
-  },
-  {
-    title: '12 Bar Blues',
-    style: 'Blues',
-    key: 'A',
-  },
-  {
-    title: 'ii-V-I Progressions',
-    style: 'Jazz',
-    key: 'C',
-  },
-]
+const HOT_CHORD_CHARTS = CHORD_CHARTS.slice(0, 3)
 
 const HOT_BACKING_TRACKS = [
   {
@@ -57,12 +42,14 @@ export function HomePage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-6 pt-[28vh] flex flex-col gap-10 pb-12">
+      <div className="max-w-5xl mx-auto px-6 pt-[28vh] flex flex-col gap-14 pb-12">
 
         {/* ── Hero prompt ──────────────────────────────────────── */}
         <section className="pb-4">
-          <h1 className="text-3xl font-semibold text-text-primary mb-8 text-center">Play the music you love</h1>
+          <h1 className="text-4xl font-bold text-text-primary mb-2 text-center">Play the music you love</h1>
+          <p className="text-base text-text-secondary text-center mb-8">Your AI-powered music companion</p>
           <ChatInput onSend={handleSend} placeholder="What do you want to play?" />
+          <div className="w-24 h-px bg-gradient-to-r from-transparent via-text-muted/30 to-transparent mx-auto mt-8" />
         </section>
 
         {/* ── Hot ChordChart ──────────────────────────────────── */}
@@ -77,15 +64,15 @@ export function HomePage() {
             </button>
             <p className="text-sm text-text-muted mt-1">Popular chord progressions to learn</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
             {HOT_CHORD_CHARTS.map((chart) => (
               <div
                 key={chart.title}
-                onClick={() => navigate('/learn')}
+                onClick={() => navigate(`/learn/songs/${chart.id}`)}
                 className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
               >
                 {/* Album Art — black mockup */}
-                <div className="aspect-square w-full bg-black flex items-center justify-center">
+                <div className="aspect-[4/3] w-full bg-black flex items-center justify-center">
                   <div className="text-center">
                     <p className="text-white/60 text-xs font-mono tracking-widest uppercase mb-2">{chart.style}</p>
                     <p className="text-white text-2xl font-bold">{chart.key}</p>
@@ -117,7 +104,7 @@ export function HomePage() {
             </button>
             <p className="text-sm text-text-muted mt-1">Trending tracks to jam with</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
             {HOT_BACKING_TRACKS.map((track) => (
               <div
                 key={track.title}
@@ -125,7 +112,7 @@ export function HomePage() {
                 className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
               >
                 {/* Album Art */}
-                <div className={`aspect-square w-full bg-gradient-to-br ${track.gradient} flex items-center justify-center`}>
+                <div className={`aspect-[4/3] w-full bg-gradient-to-br ${track.gradient} flex items-center justify-center`}>
                   <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <div className="w-6 h-6 rounded-full bg-white/20" />
                   </div>

@@ -8,9 +8,15 @@ import { cn } from '@/components/ui/utils'
 const SPACE_LABELS: Record<string, string> = {
   '': 'Home',
   learn: 'Learn',
-  jam: 'Jam',
+  jam: 'Play',
   create: 'Create',
   projects: 'My Projects',
+}
+
+const SUB_LABELS: Record<string, string> = {
+  songs: 'Songs',
+  jam: 'Jam',
+  techniques: 'Techniques',
 }
 
 export function TopBar() {
@@ -32,7 +38,7 @@ export function TopBar() {
         {subId && (
           <>
             <ChevronRight size={14} className="text-text-muted" />
-            <span className="text-text-secondary truncate">{subId}</span>
+            <span className="text-text-secondary truncate">{SUB_LABELS[subId] ?? subId}</span>
           </>
         )}
       </div>

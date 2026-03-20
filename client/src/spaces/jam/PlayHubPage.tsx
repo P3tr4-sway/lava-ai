@@ -2,36 +2,36 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useUIStore } from '@/stores/uiStore'
-import { BookOpen, ChevronRight, Sparkles } from 'lucide-react'
+import { Music, ChevronRight, Sparkles } from 'lucide-react'
 
 const SUB_HUBS = [
   {
-    key: 'songs',
-    label: 'Songs',
-    description: 'Learn your favorite tracks',
-    route: '/learn/songs',
+    key: 'card-1',
+    label: 'AI Effect Pedals',
+    description: 'AI-powered audio effects at your fingertips',
+    route: '/jam',
   },
   {
-    key: 'jam',
-    label: 'Jam',
-    description: 'Play along with backing tracks',
-    route: '/learn/jam',
+    key: 'card-2',
+    label: 'AI Sheet Music',
+    description: 'Generate & transcribe sheet music with AI',
+    route: '/jam',
   },
   {
-    key: 'techniques',
-    label: 'Techniques',
-    description: 'Master scales, chords & more',
-    route: '/learn/techniques',
+    key: 'card-3',
+    label: 'More AI Tools',
+    description: 'Explore all other AI functions',
+    route: '/jam',
   },
 ]
 
-export function LearnPage() {
+export function PlayHubPage() {
   const navigate = useNavigate()
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
   const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
 
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'learn' })
+    setSpaceContext({ currentSpace: 'jam' })
   }, [setSpaceContext])
 
   return (
@@ -40,12 +40,12 @@ export function LearnPage() {
 
         {/* ── Space header ─────────────────────────────────────── */}
         <section className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-surface-2 border-l-2 border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
-            <BookOpen size={20} className="text-text-secondary" />
+          <div className="w-10 h-10 rounded-lg bg-surface-2 border-l-2 border-violet-500/40 flex items-center justify-center shrink-0 mt-0.5">
+            <Music size={20} className="text-text-secondary" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-text-primary">Learn</h1>
-            <p className="text-sm text-text-muted mt-0.5">Master songs, techniques, and musical concepts</p>
+            <h1 className="text-xl font-semibold text-text-primary">Play</h1>
+            <p className="text-sm text-text-muted mt-0.5">AI-powered tools for playing and jamming</p>
           </div>
         </section>
 
@@ -55,7 +55,7 @@ export function LearnPage() {
           className="bg-surface-2 border border-border rounded-lg px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:border-border-hover transition-colors"
         >
           <Sparkles size={16} className="text-text-muted shrink-0" />
-          <span className="text-sm text-text-muted">Paste a link, describe a song, or ask anything...</span>
+          <span className="text-sm text-text-muted">Describe an effect, generate sheet music, or ask anything...</span>
         </div>
 
         {/* ── Sub-hub entries ──────────────────────────────────── */}

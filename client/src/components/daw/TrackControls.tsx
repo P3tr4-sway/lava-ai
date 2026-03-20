@@ -1,18 +1,40 @@
 import { Square, Circle, MoreVertical } from 'lucide-react'
 import { PanKnob } from './PanKnob'
 import type { TrackLane } from '@/stores/dawPanelStore'
+import { useDawPanelStore } from '@/stores/dawPanelStore'
 
 interface TrackControlsProps {
   track: TrackLane
   updateTrack: (id: string, changes: Partial<TrackLane>) => void
   showRecordButton?: boolean
+  onRecordStart?: (trackId: string) => void
+  onRecordStop?: (trackId: string) => void
 }
 
-export function TrackControls({ track, updateTrack, showRecordButton = false }: TrackControlsProps) {
+export function TrackControls({
+  track,
+  updateTrack,
+  showRecordButton = false,
+  onRecordStart,
+  onRecordStop,
+}: TrackControlsProps) {
+  const armTrack = useDawPanelStore((s) => s.armTrack)
+
+  const handleRecordClick = () => {
+    if (track.isRecording) {
+      updateTrack(track.id, { isRecording: false })
+      onRecordStop?.(track.id)
+    } else {
+      if (!track.armed) return
+      updateTrack(track.id, { isRecording: true })
+      onRecordStart?.(track.id)
+    }
+  }
+
   return (
     <div
-      className="h-[88px] relative flex flex-col gap-1 p-2 pl-4 border-b border-white/[0.05]"
-      style={{ backgroundColor: track.color.bg }}
+      className="relative flex flex-col gap-1 p-2 pl-4 border-b border-white/[0.05]"
+      style={{ height: 88, backgroundColor: track.color.bg }}
     >
       {/* Accent bar */}
       <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: track.color.accent }} />
@@ -20,7 +42,7 @@ export function TrackControls({ track, updateTrack, showRecordButton = false }: 
       {/* Track name row */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-text-primary truncate">{track.name}</span>
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
           <div className="flex items-center gap-px">
             <button
               onClick={() => updateTrack(track.id, { muted: !track.muted })}
@@ -43,7 +65,21 @@ export function TrackControls({ track, updateTrack, showRecordButton = false }: 
               S
             </button>
           </div>
-          <button className="ml-1 p-0.5 text-white/40 hover:text-white/70 transition-colors">
+
+          {/* Arm button */}
+          <button
+            onClick={() => armTrack(track.id, !track.armed)}
+            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+              track.armed
+                ? 'border-red-500 bg-red-500/20'
+                : 'border-white/20 hover:border-white/40'
+            }`}
+            title={track.armed ? 'Disarm track' : 'Arm for recording'}
+          >
+            {track.armed && <div className="w-2 h-2 rounded-full bg-red-500" />}
+          </button>
+
+          <button className="p-0.5 text-white/40 hover:text-white/70 transition-colors">
             <MoreVertical size={12} />
           </button>
         </div>
@@ -73,15 +109,19 @@ export function TrackControls({ track, updateTrack, showRecordButton = false }: 
         <PanKnob value={track.pan} onChange={(v) => updateTrack(track.id, { pan: v })} />
       </div>
 
-      {/* Record button */}
+      {/* Record button — only shown when showRecordButton is true */}
       {showRecordButton && (
         <button
-          onClick={() => updateTrack(track.id, { isRecording: !track.isRecording })}
+          onClick={handleRecordClick}
+          disabled={!track.armed && !track.isRecording}
           className={`flex items-center justify-center gap-1 w-full py-0.5 rounded text-[10px] font-medium transition-colors ${
             track.isRecording
               ? 'bg-red-500 text-white'
-              : 'bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80'
+              : track.armed
+                ? 'bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80'
+                : 'bg-white/5 text-white/30 cursor-not-allowed'
           }`}
+          title={!track.armed && !track.isRecording ? 'Arm track first' : undefined}
         >
           {track.isRecording ? (
             <><Square size={8} /> Stop</>

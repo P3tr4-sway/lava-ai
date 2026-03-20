@@ -24,9 +24,9 @@ export class Scheduler {
     }
   }
 
-  start() {
+  start(fromBeat: number = 0) {
     this.nextBeatTime = this.engine.context.currentTime
-    this.currentBeat = 0
+    this.currentBeat = fromBeat
     this.schedule()
     this.timerId = window.setInterval(() => this.schedule(), this.scheduleInterval)
   }

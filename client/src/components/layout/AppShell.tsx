@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { MobileHeader } from './MobileHeader'
@@ -9,9 +10,17 @@ import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/components/ui/utils'
 import { Bot } from 'lucide-react'
+import { AudioController } from '@/audio/AudioController'
 
 export function AppShell() {
   useTheme()
+
+  // Initialize AudioController once on mount — bridges Zustand stores → AudioEngine
+  useEffect(() => {
+    const controller = AudioController.getInstance()
+    controller.init()
+    return () => controller.destroy()
+  }, [])
 
   const isMobile = useIsMobile()
   const location = useLocation()

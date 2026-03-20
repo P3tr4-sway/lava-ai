@@ -10,6 +10,8 @@ interface AudioStore {
   masterVolume: number
   metronomeEnabled: boolean
   key: string
+  currentBar: number
+  loop: { start: number; end: number; enabled: boolean }
 
   setPlaybackState: (state: PlaybackState) => void
   setCurrentTime: (time: number) => void
@@ -18,6 +20,9 @@ interface AudioStore {
   setMasterVolume: (vol: number) => void
   toggleMetronome: () => void
   setKey: (key: string) => void
+  setCurrentBar: (bar: number) => void
+  setLoop: (loop: { start: number; end: number; enabled: boolean }) => void
+  toggleLoop: () => void
 }
 
 export const useAudioStore = create<AudioStore>((set) => ({
@@ -28,6 +33,8 @@ export const useAudioStore = create<AudioStore>((set) => ({
   masterVolume: 0.8,
   metronomeEnabled: false,
   key: 'C',
+  currentBar: 0,
+  loop: { start: 0, end: 4, enabled: false },
 
   setPlaybackState: (state) => set({ playbackState: state }),
   setCurrentTime: (time) => set({ currentTime: time }),
@@ -36,4 +43,7 @@ export const useAudioStore = create<AudioStore>((set) => ({
   setMasterVolume: (vol) => set({ masterVolume: vol }),
   toggleMetronome: () => set((state) => ({ metronomeEnabled: !state.metronomeEnabled })),
   setKey: (key) => set({ key }),
+  setCurrentBar: (bar) => set({ currentBar: bar }),
+  setLoop: (loop) => set({ loop }),
+  toggleLoop: () => set((state) => ({ loop: { ...state.loop, enabled: !state.loop.enabled } })),
 }))

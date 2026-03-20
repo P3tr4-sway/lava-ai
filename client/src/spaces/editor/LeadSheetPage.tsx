@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Plus, ChevronDown, Trash2, Music2, Play, Pause, SkipBack,
@@ -242,6 +242,7 @@ export function LeadSheetPage() {
   const playbackState = useAudioStore((s) => s.playbackState)
   const setPlaybackState = useAudioStore((s) => s.setPlaybackState)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
+  const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
   const isPlaying = playbackState === 'playing'
 
   const [addSectionOpen, setAddSectionOpen] = useState(false)
@@ -282,7 +283,37 @@ export function LeadSheetPage() {
 
   const handleSeek = useCallback((globalBarIndex: number) => {
     setCurrentTime(globalBarIndex * barDuration)
-  }, [barDuration, setCurrentTime])
+    setCurrentBar(globalBarIndex)
+  }, [barDuration, setCurrentTime, setCurrentBar])
+
+  // Compute section layout for the DAW panel marker/ruler
+  const dawSections = useMemo(() => {
+    let barStart = 0
+    return sections.map((section) => {
+      const barCount = section.measures.length
+      const result = {
+        label: section.label,
+        type: section.type,
+        barStart,
+        barCount,
+      }
+      barStart += barCount
+      return result
+    })
+  }, [sections])
+
+  // DAW bar click → highlight the corresponding lead sheet measure
+  const handleBarClick = useCallback((bar: number) => {
+    let remaining = bar
+    for (const section of sections) {
+      if (remaining < section.measures.length) {
+        const measure = section.measures[remaining]
+        if (measure) setActiveCell(section.id, measure.id)
+        break
+      }
+      remaining -= section.measures.length
+    }
+  }, [sections, setActiveCell])
 
   const handleCellTabTo = useCallback((sectionId: string, measureId: string, shift: boolean) => {
     const idx = allCells.findIndex((c) => c.sectionId === sectionId && c.measureId === measureId)
@@ -453,6 +484,8 @@ export function LeadSheetPage() {
         onAddTrack={() => addTrack()}
         showRecordButton={true}
         showTransportBar={false}
+        sections={dawSections}
+        onBarClick={handleBarClick}
       />
 
       {/* ── Minimal bottom transport ─────────────────────────────── */}

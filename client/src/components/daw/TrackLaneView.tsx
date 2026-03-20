@@ -1,28 +1,60 @@
 import { Mic } from 'lucide-react'
 import type { TrackLane } from '@/stores/dawPanelStore'
-
-const WAVEFORM_BARS = Array.from({ length: 100 }, (_, i) => {
-  const t = i / 100
-  const envelope = Math.sin(t * Math.PI) * 0.6 + 0.3
-  const wave = Math.sin(i * 2.7) * 0.3 + Math.sin(i * 7.1) * 0.2 + Math.sin(i * 13.3) * 0.15
-  return Math.max(0.08, Math.min(1, envelope * (0.5 + wave)))
-})
+import { BAR_WIDTH_PX, TRACK_HEIGHT_PX } from '@/audio/constants'
+import { ClipView } from './ClipView'
 
 interface TrackLaneViewProps {
   track: TrackLane
   totalBars: number
   beatsPerBar: number
-  loopBars: number
-  playheadPercent: number
+  currentBar: number
+  selectedClipId: string | null
+  snapEnabled: boolean
+  onClipSelect: (clipId: string) => void
+  onClipMove: (clipId: string, newStartBar: number) => void
+  onClipResizeRight: (clipId: string, newLengthInBars: number) => void
+  onClipResizeLeft: (clipId: string, newTrimStart: number, newStartBar: number) => void
+  onDropAudioFile?: (file: File, atBar: number) => void
 }
 
-export function TrackLaneView({ track, totalBars, beatsPerBar, loopBars, playheadPercent }: TrackLaneViewProps) {
+export function TrackLaneView({
+  track,
+  totalBars,
+  beatsPerBar,
+  currentBar,
+  selectedClipId,
+  snapEnabled,
+  onClipSelect,
+  onClipMove,
+  onClipResizeRight,
+  onClipResizeLeft,
+  onDropAudioFile,
+}: TrackLaneViewProps) {
+  const isRecording = track.clips.some((c) => c.isRecording)
+
   return (
-    <div className="h-[88px] relative overflow-hidden border-b border-white/[0.05]">
-      {/* Grid lines */}
+    <div
+      className="relative overflow-hidden border-b border-white/[0.05]"
+      style={{ height: TRACK_HEIGHT_PX }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
+      onDrop={(e) => {
+        e.preventDefault()
+        const file = e.dataTransfer.files[0]
+        if (!file || !onDropAudioFile) return
+        const rect = e.currentTarget.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const atBar = Math.floor(x / BAR_WIDTH_PX)
+        onDropAudioFile(file, atBar)
+      }}
+    >
+      {/* Grid lines for bars and beats */}
       <div className="absolute inset-0 flex">
         {Array.from({ length: totalBars }, (_, i) => (
-          <div key={i} className="flex-1 min-w-[48px] border-r border-white/[0.18] flex">
+          <div
+            key={i}
+            className="flex-1 border-r border-white/[0.18] flex"
+            style={{ minWidth: BAR_WIDTH_PX }}
+          >
             {Array.from({ length: beatsPerBar - 1 }, (_, b) => (
               <div key={b} className="flex-1 border-r border-white/[0.09]" />
             ))}
@@ -32,35 +64,9 @@ export function TrackLaneView({ track, totalBars, beatsPerBar, loopBars, playhea
       </div>
       <div className="absolute top-1/2 left-0 right-0 h-px bg-white/[0.06]" />
 
-      {/* Waveform block */}
-      {track.isRecording && (
-        <div
-          className="absolute top-1.5 bottom-1.5 left-0 rounded-xl overflow-hidden flex items-center"
-          style={{ width: `${(loopBars / totalBars) * 100}%`, backgroundColor: track.color.accent }}
-        >
-          <svg className="w-full h-[65%]" preserveAspectRatio="none" viewBox="0 0 100 100">
-            {WAVEFORM_BARS.map((amp, i) => {
-              const barH = amp * 100
-              const y = (100 - barH) / 2
-              return (
-                <rect
-                  key={i}
-                  x={i}
-                  y={y}
-                  width={0.6}
-                  height={barH}
-                  fill="rgba(255,255,255,0.55)"
-                  rx={0.3}
-                />
-              )
-            })}
-          </svg>
-        </div>
-      )}
-
       {/* Empty state */}
-      {!track.isRecording && !track.hasRecording && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      {track.clips.length === 0 && !isRecording && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="flex items-center gap-1.5 text-white/20">
             <Mic size={13} />
             <span className="text-[11px]">Empty track</span>
@@ -68,18 +74,34 @@ export function TrackLaneView({ track, totalBars, beatsPerBar, loopBars, playhea
         </div>
       )}
 
-      {/* Recording indicator */}
-      {track.isRecording && (
-        <div className="absolute top-1.5 right-2 flex items-center gap-1">
+      {/* Recording indicator overlay */}
+      {isRecording && (
+        <div className="absolute top-1.5 right-2 flex items-center gap-1 z-20 pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
           <span className="text-[9px] text-red-400 font-medium">REC</span>
         </div>
       )}
 
-      {/* Playhead */}
+      {/* Clips */}
+      {track.clips.map((clip) => (
+        <ClipView
+          key={clip.id}
+          clip={clip}
+          barWidthPx={BAR_WIDTH_PX}
+          trackHeight={TRACK_HEIGHT_PX}
+          selected={selectedClipId === clip.id}
+          snapEnabled={snapEnabled}
+          onSelect={onClipSelect}
+          onMove={onClipMove}
+          onResizeRight={onClipResizeRight}
+          onResizeLeft={onClipResizeLeft}
+        />
+      ))}
+
+      {/* Playhead (bar-based position) */}
       <div
-        className="absolute top-0 bottom-0 w-px bg-red-400/70 pointer-events-none z-10"
-        style={{ left: `${playheadPercent}%` }}
+        className="absolute top-0 bottom-0 w-[1px] bg-red-500 pointer-events-none z-10"
+        style={{ left: currentBar * BAR_WIDTH_PX }}
       />
     </div>
   )

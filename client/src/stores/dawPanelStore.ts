@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { Clip } from '../audio/types'
 
 const TRACK_COLORS = [
   { bg: '#6f2e15', accent: '#ff621f' },
@@ -19,6 +20,8 @@ export interface TrackLane {
   isRecording: boolean
   hasRecording: boolean
   color: { bg: string; accent: string }
+  clips: Clip[]
+  armed: boolean
 }
 
 export function makeTrack(name: string, index: number): TrackLane {
@@ -32,6 +35,8 @@ export function makeTrack(name: string, index: number): TrackLane {
     isRecording: false,
     hasRecording: false,
     color: TRACK_COLORS[index % TRACK_COLORS.length],
+    clips: [],
+    armed: false,
   }
 }
 
@@ -39,16 +44,35 @@ export function makeTrack(name: string, index: number): TrackLane {
 // or share via context. For simplicity we export a single shared store here
 // that pages can seed with their own initial tracks.
 
+function clipsOverlap(a: Clip, b: Clip): boolean {
+  return a.startBar < b.startBar + b.lengthInBars &&
+         a.startBar + a.lengthInBars > b.startBar
+}
+
 interface DawPanelStore {
   tracks: TrackLane[]
+  selectedClipId: string | null
+  snapEnabled: boolean
+
   setTracks: (tracks: TrackLane[]) => void
   addTrack: (name?: string) => void
   updateTrack: (id: string, changes: Partial<TrackLane>) => void
   removeTrack: (id: string) => void
+  _syncTrack: (id: string, changes: Partial<TrackLane>) => void
+
+  addClip: (trackId: string, clip: Clip) => void
+  updateClip: (trackId: string, clipId: string, changes: Partial<Clip>) => void
+  removeClip: (trackId: string, clipId: string) => void
+  armTrack: (id: string, armed: boolean) => void
+  selectClip: (clipId: string | null) => void
+  toggleSnap: () => void
+  splitClip: (trackId: string, clipId: string, atBar: number) => void
 }
 
 export const useDawPanelStore = create<DawPanelStore>((set, get) => ({
   tracks: [],
+  selectedClipId: null,
+  snapEnabled: true,
 
   setTracks: (tracks) => set({ tracks }),
 
@@ -80,4 +104,74 @@ export const useDawPanelStore = create<DawPanelStore>((set, get) => ({
       }))
     }
   },
+
+  addClip: (trackId, clip) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t
+        const overlaps = t.clips.some((existing) => clipsOverlap(existing, clip))
+        if (overlaps) return t
+        return { ...t, clips: [...t.clips, clip] }
+      }),
+    })),
+
+  updateClip: (trackId, clipId, changes) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t
+        return {
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === clipId ? Object.assign({}, c, changes) : c
+          ),
+        }
+      }),
+    })),
+
+  removeClip: (trackId, clipId) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t
+        return { ...t, clips: t.clips.filter((c) => c.id !== clipId) }
+      }),
+    })),
+
+  armTrack: (id, armed) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) => (t.id === id ? { ...t, armed } : t)),
+    })),
+
+  selectClip: (clipId) => set({ selectedClipId: clipId }),
+
+  toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
+
+  splitClip: (trackId, clipId, atBar) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t
+        const clip = t.clips.find((c) => c.id === clipId)
+        if (!clip) return t
+        const clipEnd = clip.startBar + clip.lengthInBars
+        if (atBar <= clip.startBar || atBar >= clipEnd) return t
+
+        const clip1: Clip = {
+          ...clip,
+          id: `${clip.id}-a`,
+          lengthInBars: atBar - clip.startBar,
+          trimEnd: 0,
+        }
+        const clip2: Clip = {
+          ...clip,
+          id: `${clip.id}-b`,
+          startBar: atBar,
+          lengthInBars: clipEnd - atBar,
+          trimStart: 0,
+        }
+
+        return {
+          ...t,
+          clips: t.clips.flatMap((c) => (c.id === clipId ? [clip1, clip2] : [c])),
+        }
+      }),
+    })),
 }))

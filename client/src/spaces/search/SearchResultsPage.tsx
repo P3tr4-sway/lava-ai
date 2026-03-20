@@ -355,7 +355,7 @@ function SongActionModal({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-surface-0">
-                {generating ? 'Generating...' : 'AI 生成乐谱 + 伴奏'}
+                {generating ? 'Generating...' : 'AI Score + Backing Track'}
               </p>
               <p className="text-xs text-surface-0/60 mt-0.5 leading-relaxed">
                 {generating
@@ -376,7 +376,7 @@ function SongActionModal({
               <Headphones size={18} className="text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">只要伴奏</p>
+              <p className="text-sm font-medium text-text-primary">Backing Track Only</p>
               <p className="text-xs text-text-muted mt-0.5 leading-relaxed">Generate a backing track only · Read your own score while playing along</p>
             </div>
             <ArrowRight size={16} className="text-text-muted shrink-0 mt-1" />

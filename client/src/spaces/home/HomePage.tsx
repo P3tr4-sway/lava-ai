@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, ArrowRight } from 'lucide-react'
+import { Play } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
 import { CHORD_CHARTS } from '@/data/chordCharts'
 
@@ -71,33 +71,25 @@ export function HomePage() {
         <section>
           <button
             onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
-            className="w-full flex items-center gap-4 bg-surface-0 border border-border hover:border-border-hover rounded-xl p-4 cursor-pointer transition-colors group text-left"
+            className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
           >
-            {/* Play icon */}
-            <div className="w-12 h-12 rounded-full bg-text-primary/10 flex items-center justify-center shrink-0 group-hover:bg-text-primary/15 transition-colors">
-              <Play size={18} className="text-text-primary ml-0.5" />
+            <div className="flex items-center justify-between gap-4 mb-5">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Continue playing</p>
+                <p className="text-2xl font-bold text-text-primary leading-tight truncate">{LAST_PLAYED.title}</p>
+                <p className="text-sm text-text-secondary mt-1">{LAST_PLAYED.artist} · {LAST_PLAYED.section}</p>
+              </div>
+              <div className="w-14 h-14 rounded-full bg-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Play size={22} className="text-surface-0 ml-1" fill="currentColor" />
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-text-muted mb-0.5">Continue playing</p>
-              <p className="text-sm font-semibold text-text-primary">{LAST_PLAYED.title}</p>
-              <p className="text-xs text-text-muted">{LAST_PLAYED.artist} · {LAST_PLAYED.section} · {LAST_PLAYED.progress}%</p>
+            {/* Progress bar */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1 bg-surface-3 rounded-full overflow-hidden">
+                <div className="h-full bg-text-primary rounded-full" style={{ width: `${LAST_PLAYED.progress}%` }} />
+              </div>
+              <span className="text-xs font-medium text-text-secondary shrink-0">{LAST_PLAYED.progress}%</span>
             </div>
-            {/* Progress ring */}
-            <div className="relative w-10 h-10 shrink-0">
-              <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="2" className="text-surface-3" />
-                <circle
-                  cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="2"
-                  className="text-text-primary"
-                  strokeDasharray={`${LAST_PLAYED.progress * 0.94} 94`}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-2xs font-medium text-text-primary">
-                {LAST_PLAYED.progress}%
-              </span>
-            </div>
-            <ArrowRight size={16} className="text-text-muted shrink-0" />
           </button>
         </section>
 

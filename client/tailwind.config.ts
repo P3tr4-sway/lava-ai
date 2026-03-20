@@ -35,7 +35,11 @@ export default {
         '2xs': ['0.625rem', { lineHeight: '1rem' }],
       },
       borderRadius: {
-        DEFAULT: '4px',
+        DEFAULT: 'var(--radius)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-lg)',
+        '2xl': 'var(--radius-lg)',
       },
       animation: {
         'fade-in': 'fadeIn 150ms ease-out',

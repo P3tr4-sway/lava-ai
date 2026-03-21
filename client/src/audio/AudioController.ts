@@ -38,7 +38,7 @@ export class AudioController {
 
   private engine: ToneEngine
   private metronome: ToneMetronome
-  private rafId: number | null = null
+  private intervalId: ReturnType<typeof setInterval> | null = null
   private unsubscribers: Array<() => void> = []
 
   private destroyed = false
@@ -58,8 +58,18 @@ export class AudioController {
   }
 
   init(): void {
-    this.subscribeToStores()
-    this.startRafLoop()
+    // Reset destroyed flag — needed when React StrictMode calls destroy() then init() again
+    this.destroyed = false
+    // Only subscribe if subscriptions were cleared (i.e. after destroy() or first init)
+    if (this.unsubscribers.length === 0) {
+      this.subscribeToStores()
+    }
+    // Clear any stale interval before starting a fresh loop
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId)
+      this.intervalId = null
+    }
+    this.startTickLoop()
   }
 
   private subscribeToStores(): void {
@@ -144,11 +154,11 @@ export class AudioController {
 
     if (shouldRestartEngine) {
       const shouldPlayClips = nextState !== 'count_in'
-      void this.engine.play(
+      this.engine.play(
         audio.currentBar,
         shouldPlayClips ? clips : [],
         audio.loop,
-      )
+      ).catch((err) => console.error('[AudioController] engine.play() failed:', err))
     }
 
     this.syncMetronome(nextState)
@@ -215,9 +225,14 @@ export class AudioController {
     return tracks.flatMap((t) => t.clips).filter((clip) => clip.status !== 'temp')
   }
 
-  private startRafLoop(): void {
-    const tick = () => {
-      if (this.destroyed) return
+  private startTickLoop(): void {
+    // Use setInterval instead of requestAnimationFrame so the loop keeps running
+    // in background tabs and hidden preview frames (rAF is throttled/paused there).
+    this.intervalId = setInterval(() => {
+      if (this.destroyed) {
+        if (this.intervalId !== null) clearInterval(this.intervalId)
+        return
+      }
       const audio = useAudioStore.getState()
 
       if (isRunningState(audio.transportState)) {
@@ -260,11 +275,7 @@ export class AudioController {
           audio.setTransportState('rolling')
         }
       }
-
-      this.rafId = requestAnimationFrame(tick)
-    }
-
-    this.rafId = requestAnimationFrame(tick)
+    }, 16) // ~60 fps
   }
 
   destroy(): void {
@@ -273,9 +284,9 @@ export class AudioController {
     this.unsubscribers.forEach((fn) => fn())
     this.unsubscribers = []
 
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId)
-      this.rafId = null
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId)
+      this.intervalId = null
     }
   }
 }

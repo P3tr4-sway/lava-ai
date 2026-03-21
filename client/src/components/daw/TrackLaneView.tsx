@@ -58,8 +58,8 @@ export function TrackLaneView({
         {Array.from({ length: totalBars }, (_, i) => (
           <div
             key={i}
-            className="flex-1 border-r border-white/[0.18] flex"
-            style={{ minWidth: BAR_WIDTH_PX }}
+            className="shrink-0 border-r border-white/[0.18] flex"
+            style={{ width: BAR_WIDTH_PX }}
           >
             {Array.from({ length: beatsPerBar - 1 }, (_, b) => (
               <div key={b} className="flex-1 border-r border-white/[0.09]" />

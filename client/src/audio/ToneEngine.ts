@@ -63,10 +63,18 @@ export class ToneEngine {
 
   async init(): Promise<void> {
     if (this.initialized) return
-    await Tone.start()
+    try {
+      await Tone.start()
+    } catch (err) {
+      console.warn('[ToneEngine] Tone.start() failed (may need user gesture):', err)
+    }
     const ctx = Tone.getContext().rawContext as AudioContext
     if (ctx.state === 'suspended') {
-      await ctx.resume()
+      try {
+        await ctx.resume()
+      } catch (err) {
+        console.warn('[ToneEngine] AudioContext.resume() failed:', err)
+      }
     }
     this.initialized = true
   }

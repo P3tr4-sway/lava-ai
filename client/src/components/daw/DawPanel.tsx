@@ -704,7 +704,8 @@ export function DawPanel({
                   {Array.from({ length: totalBars }, (_, index) => (
                     <div
                       key={index}
-                      className="relative flex-1 min-w-[48px] border-r border-border cursor-pointer hover:bg-text-primary/[0.06] transition-colors"
+                      className="relative shrink-0 border-r border-border cursor-pointer hover:bg-text-primary/[0.06] transition-colors"
+                      style={{ width: BAR_WIDTH_PX }}
                       onClick={() => handleBarClick(index)}
                       title={`Jump to bar ${index + 1}`}
                     >

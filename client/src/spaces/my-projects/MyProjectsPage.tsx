@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
-import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight } from 'lucide-react'
+import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs'
-import type { SpaceType } from '@lava/shared'
+import type { Project, SpaceType } from '@lava/shared'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -19,25 +19,19 @@ const SPACE_ICONS: Record<SpaceType, React.ElementType> = {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  learn: 'Learn',
-  jam: 'Play',
+  learn: 'Score',
+  jam: 'Jam',
   create: 'Create',
   tools: 'Tools',
   library: 'Library',
   projects: 'Projects',
 }
 
-const MODULE_ROUTES: Record<string, string> = {
-  learn: '/learn',
-  jam: '/jam',
-  create: '/create',
-}
-
 const FILTER_TABS = [
-  { label: 'Projects', value: 'all' },
+  { label: 'All', value: 'all' },
   { label: 'Scores', value: 'learn' },
-  { label: 'Backing Tracks', value: 'jam' },
-  { label: 'Effects', value: 'create' },
+  { label: 'Jam', value: 'jam' },
+  { label: 'Create', value: 'create' },
 ] as const
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,6 +48,14 @@ function formatRelativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString()
 }
 
+function getProjectRoute(project: Project): string {
+  if (project.space === 'learn' && typeof project.metadata.songId === 'string') {
+    return `/play/${project.metadata.songId}`
+  }
+  if (project.space === 'jam') return '/jam'
+  return '/projects'
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function MyProjectsPage() {
@@ -61,11 +63,17 @@ export function MyProjectsPage() {
   const navigate = useNavigate()
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
   const projects = useProjectStore((s) => s.projects)
+  const loading = useProjectStore((s) => s.loading)
+  const loadProjects = useProjectStore((s) => s.loadProjects)
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'projects', projectId: id })
   }, [id, setSpaceContext])
+
+  useEffect(() => {
+    void loadProjects()
+  }, [loadProjects])
 
   const filtered = projects
     .filter((p) => filter === 'all' || p.space === filter)
@@ -97,7 +105,11 @@ export function MyProjectsPage() {
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 size={20} className="animate-spin text-text-muted" />
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -129,10 +141,10 @@ export function MyProjectsPage() {
                     {formatRelativeTime(project.updatedAt)}
                   </p>
                   <button
-                    onClick={() => navigate(MODULE_ROUTES[project.space] ?? '/projects')}
+                    onClick={() => navigate(getProjectRoute(project))}
                     className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
                   >
-                    Continue <ArrowRight size={12} />
+                    Open <ArrowRight size={12} />
                   </button>
                 </div>
               </div>
@@ -152,7 +164,7 @@ function EmptyState() {
       </div>
       <p className="text-sm font-medium mb-1">No projects yet</p>
       <p className="text-xs text-text-muted max-w-xs">
-        Start by exploring a space or ask LAVA AI to create a new project for you.
+        Record a take on any song score and save it to create your first project.
       </p>
     </div>
   )

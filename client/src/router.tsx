@@ -4,7 +4,7 @@ import { HomePage } from '@/spaces/home/HomePage'
 import { SongsPage } from '@/spaces/learn/SongsPage'
 import { JamPage } from '@/spaces/jam/JamPage'
 import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
-import { LibraryPage } from '@/spaces/library/LibraryPage'
+import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
 import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
 
@@ -24,14 +24,14 @@ const routes: RouteObject[] = [
       // Lead Sheet editor — blank project
       { path: 'editor', element: <LeadSheetPage /> },
       { path: 'editor/:id', element: <LeadSheetPage /> },
-      // Library (merged library + projects)
-      { path: 'library', element: <LibraryPage /> },
+      // Projects
+      { path: 'projects', element: <MyProjectsPage /> },
       // Search
       { path: 'search', element: <SearchResultsPage /> },
       // Redirects for removed pages
       { path: 'learn', element: <Navigate to="/" replace /> },
       { path: 'create', element: <Navigate to="/" replace /> },
-      { path: 'projects', element: <Navigate to="/library" replace /> },
+      { path: 'library', element: <Navigate to="/projects" replace /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

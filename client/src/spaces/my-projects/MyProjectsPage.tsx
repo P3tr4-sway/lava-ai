@@ -34,10 +34,10 @@ const MODULE_ROUTES: Record<string, string> = {
 }
 
 const FILTER_TABS = [
-  { label: 'All', value: 'all' },
-  { label: 'Learn', value: 'learn' },
-  { label: 'Play', value: 'jam' },
-  { label: 'Create', value: 'create' },
+  { label: 'Projects', value: 'all' },
+  { label: 'Scores', value: 'learn' },
+  { label: 'Backing Tracks', value: 'jam' },
+  { label: 'Effects', value: 'create' },
 ] as const
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

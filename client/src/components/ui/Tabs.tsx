@@ -54,7 +54,7 @@ export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
     <button
       onClick={() => setActive(value)}
       className={cn(
-        'flex-1 px-3 py-1 text-sm rounded transition-colors',
+        'flex-1 px-3 py-1 text-sm rounded transition-colors whitespace-nowrap',
         active === value
           ? 'bg-surface-4 text-text-primary'
           : 'text-text-secondary hover:text-text-primary',

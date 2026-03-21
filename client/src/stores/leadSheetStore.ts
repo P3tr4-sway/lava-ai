@@ -34,6 +34,7 @@ interface LeadSheetStore {
   tempo: number
   timeSignature: string
   sections: LeadSheetSection[]
+  pdfUrl: string | null
 
   // Editing state
   activeCell: { sectionId: string; measureId: string } | null
@@ -42,6 +43,7 @@ interface LeadSheetStore {
   setKey: (key: string) => void
   setTempo: (bpm: number) => void
   setTimeSignature: (ts: string) => void
+  setPdfUrl: (url: string | null) => void
 
   addSection: (type: SectionType, label?: string) => void
   removeSection: (id: string) => void
@@ -69,12 +71,14 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
   tempo: 120,
   timeSignature: '4/4',
   sections: INITIAL_SECTIONS,
+  pdfUrl: null,
   activeCell: null,
 
   setProjectName: (name) => set({ projectName: name }),
   setKey: (key) => set({ key }),
   setTempo: (tempo) => set({ tempo }),
   setTimeSignature: (timeSignature) => set({ timeSignature }),
+  setPdfUrl: (pdfUrl) => set({ pdfUrl }),
 
   addSection: (type, label) =>
     set((state) => ({
@@ -133,6 +137,7 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
         makeSection('verse', 'Verse 1', 8),
         makeSection('chorus', 'Chorus', 8),
       ],
+      pdfUrl: null,
       activeCell: null,
     }),
 }))

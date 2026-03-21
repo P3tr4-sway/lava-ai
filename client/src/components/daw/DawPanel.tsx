@@ -409,26 +409,27 @@ export function DawPanel({
       setTransportState('locating')
       setCurrentBar(barIndex)
       setCurrentTime(nextTime)
-      requestAnimationFrame(() => setTransportState(resumeState))
+      setTimeout(() => setTransportState(resumeState), 0)
     } else {
       setCurrentBar(barIndex)
       setCurrentTime(nextTime)
     }
   }
 
-  const handlePlayStop = () => {
-    if (isRunningState(transportState)) {
-      if (autoReturn) {
-        setCurrentBar(transportOriginBar)
-        setCurrentTime(barsToSeconds(transportOriginBar, bpm, beatsPerBar))
-      }
-      setTransportState('stopped')
-      setPendingRecordStartBar(null)
-    } else {
-      setTransportOriginBar(currentBar)
-      setPendingRecordStartBar(null)
-      setTransportState('rolling')
+  const handlePlay = () => {
+    if (isRunningState(transportState)) return
+    setTransportOriginBar(currentBar)
+    setPendingRecordStartBar(null)
+    setTransportState('rolling')
+  }
+
+  const handleStop = () => {
+    if (autoReturn) {
+      setCurrentBar(transportOriginBar)
+      setCurrentTime(barsToSeconds(transportOriginBar, bpm, beatsPerBar))
     }
+    setTransportState('stopped')
+    setPendingRecordStartBar(null)
   }
 
   const handleReturnToStart = () => {
@@ -486,11 +487,19 @@ export function DawPanel({
               <SkipBack size={13} />
             </button>
             <button
-              onClick={handlePlayStop}
-              className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity"
-              title={isRunningState(transportState) ? 'Stop' : 'Play'}
+              onClick={handleStop}
+              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+              title="Stop"
             >
-              {isRunningState(transportState) ? <Square size={13} /> : <Play size={14} className="ml-0.5" />}
+              <Square size={13} />
+            </button>
+            <button
+              onClick={handlePlay}
+              disabled={isRunningState(transportState)}
+              className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity disabled:opacity-40"
+              title="Play"
+            >
+              <Play size={14} className="ml-0.5" />
             </button>
           </div>
 

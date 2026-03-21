@@ -121,12 +121,6 @@ export function TrackLaneView({
         />
       ))}
 
-      {/* Playhead (bar-based position) */}
-      {/* currentBar is updated each RAF frame via AudioController; position reflects last frame */}
-      <div
-        className="absolute top-0 bottom-0 w-[1px] bg-red-500 pointer-events-none z-10"
-        style={{ left: currentBar * BAR_WIDTH_PX }}
-      />
     </div>
   )
 }

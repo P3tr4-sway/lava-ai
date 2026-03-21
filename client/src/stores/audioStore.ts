@@ -14,7 +14,7 @@ export type TransportState =
   | 'locating'
   | 'paused'
 export type RecordMode = 'immediate' | 'count_in' | 'pre_roll' | 'punch_in'
-export type MetronomeMode = 'off' | 'always' | 'record_only'
+export type MetronomeMode = 'off' | 'always'
 
 export interface TransportRange {
   start: number
@@ -50,8 +50,11 @@ interface AudioStore {
   loop: TransportRange
   punchRange: TransportRange
 
+  metronomeBeat: number
+
   setPlaybackState: (state: PlaybackState) => void
   setTransportState: (state: TransportState) => void
+  setMetronomeBeat: (beat: number) => void
   setRecordMode: (mode: RecordMode) => void
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
@@ -96,6 +99,7 @@ export const useAudioStore = create<AudioStore>((set) => ({
   outputLatencyMs: 0,
   loop: { start: 0, end: 4, enabled: false },
   punchRange: { start: 4, end: 8, enabled: false },
+  metronomeBeat: 0,
 
   setPlaybackState: (state) =>
     set({
@@ -137,18 +141,14 @@ export const useAudioStore = create<AudioStore>((set) => ({
 
   cycleMetronomeMode: () =>
     set((state) => {
-      const nextMode: MetronomeMode =
-        state.metronomeMode === 'off'
-          ? 'always'
-          : state.metronomeMode === 'always'
-            ? 'record_only'
-            : 'off'
+      const nextMode: MetronomeMode = state.metronomeMode === 'off' ? 'always' : 'off'
       return {
         metronomeMode: nextMode,
         metronomeEnabled: nextMode !== 'off',
       }
     }),
 
+  setMetronomeBeat: (beat) => set({ metronomeBeat: beat }),
   setKey: (key) => set({ key }),
   setCurrentBar: (bar) => set({ currentBar: bar }),
   setCountInBars: (bars) => set({ countInBars: Math.max(0, bars) }),

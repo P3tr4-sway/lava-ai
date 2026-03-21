@@ -34,11 +34,11 @@ export function PanKnob({ value, onChange }: PanKnobProps) {
         dragRef.current = { startY: e.clientY, startValue: value }
         e.preventDefault()
       }}
-      className="w-6 h-6 rounded-full bg-text-primary/10 border-2 border-text-primary/20 shrink-0 flex items-center justify-center cursor-ns-resize select-none"
+      className="w-6 h-6 rounded-full bg-white/15 border-2 border-white/30 shrink-0 flex items-center justify-center cursor-ns-resize select-none"
       title={`Pan: ${label}`}
     >
       <div
-        className="w-0.5 h-[10px] bg-text-primary/50 rounded-full"
+        className="w-0.5 h-[10px] bg-white/70 rounded-full"
         style={{ transform: `rotate(${rotation}deg)`, transformOrigin: 'center bottom' }}
       />
     </div>

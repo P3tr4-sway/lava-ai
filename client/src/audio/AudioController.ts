@@ -17,16 +17,8 @@ function isRunningState(state: TransportState): boolean {
   )
 }
 
-function shouldClick(state: TransportState, metronomeMode: 'off' | 'always' | 'record_only'): boolean {
-  if (metronomeMode === 'off') return false
-  if (metronomeMode === 'always') return isRunningState(state)
-  return (
-    state === 'count_in' ||
-    state === 'pre_roll' ||
-    state === 'recording' ||
-    state === 'auto_punch_wait_in' ||
-    state === 'auto_punch_recording'
-  )
+function shouldClick(state: TransportState, metronomeMode: 'off' | 'always'): boolean {
+  return metronomeMode === 'always' && isRunningState(state)
 }
 
 function isCaptureState(state: TransportState): boolean {
@@ -48,6 +40,10 @@ export class AudioController {
   private constructor() {
     this.engine = ToneEngine.getInstance()
     this.metronome = new ToneMetronome()
+    this.metronome.onBeat = () => {
+      const { metronomeBeat, setMetronomeBeat } = useAudioStore.getState()
+      setMetronomeBeat(metronomeBeat + 1)
+    }
   }
 
   static getInstance(): AudioController {
@@ -158,7 +154,12 @@ export class AudioController {
         audio.currentBar,
         shouldPlayClips ? clips : [],
         audio.loop,
-      ).catch((err) => console.error('[AudioController] engine.play() failed:', err))
+      ).then(() => {
+        // Schedule metronome AFTER engine.play() finishes — engine.play()
+        // calls transport.cancel() which wipes all scheduled events.
+        this.syncMetronome(nextState)
+      }).catch((err) => console.error('[AudioController] engine.play() failed:', err))
+      return
     }
 
     this.syncMetronome(nextState)

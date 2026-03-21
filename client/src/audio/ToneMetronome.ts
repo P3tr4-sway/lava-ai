@@ -19,6 +19,11 @@ export class ToneMetronome {
   private bpm: number
   private beatCount = 0
   private scheduleId: number | null = null
+  private standaloneIntervalId: ReturnType<typeof setInterval> | null = null
+  private standaloneNextBeatTime = 0
+
+  /** Called on every beat tick (both transport-scheduled and standalone). */
+  onBeat?: (isDownbeat: boolean) => void
 
   /** Reusable synths — one per pitch so we avoid per-tick allocation. */
   private downbeatSynth: Tone.Synth
@@ -80,10 +85,50 @@ export class ToneMetronome {
     )
   }
 
-  /** Stop the metronome and clear the scheduled repeat. */
+  /** Stop the transport-scheduled metronome and clear the repeat. */
   stop(): void {
     this.clearSchedule()
     this.beatCount = 0
+  }
+
+  /**
+   * Start a standalone metronome using AudioContext time — works without
+   * Tone.Transport running (e.g. when playback is stopped).
+   */
+  startStandalone(): void {
+    this.stopStandalone()
+    this.beatCount = 0
+
+    const ctx = Tone.getContext().rawContext as AudioContext
+    this.standaloneNextBeatTime = ctx.currentTime + 0.05
+
+    const tick = () => {
+      const now = ctx.currentTime
+      const secPerBeat = 60 / this.bpm
+
+      while (this.standaloneNextBeatTime < now + 0.2) {
+        if (this.enabled) {
+          const isDownbeat = this.beatCount % this.beatsPerBar === 0
+          const synth = isDownbeat ? this.downbeatSynth : this.beatSynth
+          const freq = isDownbeat ? METRONOME_FREQ_BAR : METRONOME_FREQ_BEAT
+          synth.triggerAttackRelease(freq, METRONOME_DECAY_SEC, this.standaloneNextBeatTime)
+          this.onBeat?.(isDownbeat)
+        }
+        this.beatCount++
+        this.standaloneNextBeatTime += secPerBeat
+      }
+    }
+
+    tick()
+    this.standaloneIntervalId = setInterval(tick, 25)
+  }
+
+  /** Stop the standalone metronome interval. */
+  stopStandalone(): void {
+    if (this.standaloneIntervalId !== null) {
+      clearInterval(this.standaloneIntervalId)
+      this.standaloneIntervalId = null
+    }
   }
 
   /** Toggle whether clicks produce audible sound. */
@@ -112,8 +157,9 @@ export class ToneMetronome {
 
   /** Called by the Transport on every quarter-note boundary. */
   private onTick(time: number): void {
+    const isDownbeat = this.beatCount % this.beatsPerBar === 0
+
     if (this.enabled) {
-      const isDownbeat = this.beatCount % this.beatsPerBar === 0
       if (isDownbeat) {
         this.downbeatSynth.triggerAttackRelease(
           METRONOME_FREQ_BAR,
@@ -127,6 +173,7 @@ export class ToneMetronome {
           time,
         )
       }
+      this.onBeat?.(isDownbeat)
     }
 
     this.beatCount++
@@ -135,6 +182,7 @@ export class ToneMetronome {
   /** Stop the metronome and dispose both synths to release audio resources. */
   dispose(): void {
     this.stop()
+    this.stopStandalone()
     this.downbeatSynth.dispose()
     this.beatSynth.dispose()
   }

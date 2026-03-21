@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Plus,
   Circle,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Slider } from '@/components/ui/Slider'
@@ -121,6 +122,7 @@ export function DawPanel({
   const toggleLoop = useAudioStore((s) => s.toggleLoop)
   const metronomeMode = useAudioStore((s) => s.metronomeMode)
   const cycleMetronomeMode = useAudioStore((s) => s.cycleMetronomeMode)
+  const metronomeBeat = useAudioStore((s) => s.metronomeBeat)
   const countInBars = useAudioStore((s) => s.countInBars)
   const preRollBars = useAudioStore((s) => s.preRollBars)
   const autoReturn = useAudioStore((s) => s.autoReturn)
@@ -135,6 +137,7 @@ export function DawPanel({
 
   const snapEnabled = useDawPanelStore((s) => s.snapEnabled)
   const toggleSnap = useDawPanelStore((s) => s.toggleSnap)
+  const armTrack = useDawPanelStore((s) => s.armTrack)
   const selectedClipId = useDawPanelStore((s) => s.selectedClipId)
   const selectClip = useDawPanelStore((s) => s.selectClip)
   const updateClip = useDawPanelStore((s) => s.updateClip)
@@ -146,6 +149,16 @@ export function DawPanel({
   const recordSessionRef = useRef<RecordSession | null>(null)
   const prevTransportStateRef = useRef<TransportState>(transportState)
   const [recordingTrackId, setRecordingTrackId] = useState<string | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [beatFlash, setBeatFlash] = useState(false)
+
+  // Flash beat indicator on each metronome tick
+  useEffect(() => {
+    if (metronomeMode === 'off' || metronomeBeat === 0) return
+    setBeatFlash(true)
+    const t = setTimeout(() => setBeatFlash(false), 80)
+    return () => clearTimeout(t)
+  }, [metronomeBeat, metronomeMode])
 
   useDawKeyboardShortcuts()
 
@@ -394,10 +407,6 @@ export function DawPanel({
   }
 
   const handleRecordStop = () => {
-    if (autoReturn) {
-      setCurrentBar(transportOriginBar)
-      setCurrentTime(barsToSeconds(transportOriginBar, bpm, beatsPerBar))
-    }
     setTransportState('stopped')
   }
 
@@ -424,10 +433,6 @@ export function DawPanel({
   }
 
   const handleStop = () => {
-    if (autoReturn) {
-      setCurrentBar(transportOriginBar)
-      setCurrentTime(barsToSeconds(transportOriginBar, bpm, beatsPerBar))
-    }
     setTransportState('stopped')
     setPendingRecordStartBar(null)
   }
@@ -463,6 +468,27 @@ export function DawPanel({
     togglePunchRange()
   }
 
+  const handleTransportRecord = () => {
+    if (isCaptureState(transportState)) {
+      handleRecordStop()
+      return
+    }
+    if (ACTIVE_RECORD_STATES.includes(transportState)) {
+      handleStop()
+      return
+    }
+    if (tracks.length === 0) return
+
+    const armedTrack = tracks.find((t) => t.recArm)
+    if (armedTrack) {
+      void handleRecordStart(armedTrack.id)
+    } else {
+      const firstTrack = tracks[0]
+      armTrack(firstTrack.id, true)
+      setTimeout(() => void handleRecordStart(firstTrack.id), 0)
+    }
+  }
+
   return (
     <div
       className={cn('shrink-0 flex flex-col bg-surface-0 border-t border-border overflow-hidden', className)}
@@ -477,196 +503,261 @@ export function DawPanel({
       </div>
 
       {showTransportBar && (
-        <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border">
-          <div className="flex items-center gap-0.5">
-            <button
-              onClick={handleReturnToStart}
-              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-              title="Return to beginning"
-            >
-              <SkipBack size={13} />
-            </button>
-            <button
-              onClick={handleStop}
-              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-              title="Stop"
-            >
-              <Square size={13} />
-            </button>
-            <button
-              onClick={handlePlay}
-              disabled={isRunningState(transportState)}
-              className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity disabled:opacity-40"
-              title="Play"
-            >
-              <Play size={14} className="ml-0.5" />
-            </button>
-          </div>
+        <div className="shrink-0 flex flex-col border-b border-border">
+          {/* Primary transport row */}
+          <div className="flex items-center gap-2 px-3 py-1.5">
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={handleReturnToStart}
+                className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+                title="Return to beginning"
+              >
+                <SkipBack size={13} />
+              </button>
+              <button
+                onClick={handleStop}
+                className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+                title="Stop"
+              >
+                <Square size={13} />
+              </button>
+              <button
+                onClick={handlePlay}
+                disabled={isRunningState(transportState)}
+                className="w-8 h-8 rounded-full bg-text-primary text-surface-0 flex items-center justify-center hover:opacity-80 transition-opacity disabled:opacity-40"
+                title="Play"
+              >
+                <Play size={14} className="ml-0.5" />
+              </button>
+              <button
+                onClick={handleTransportRecord}
+                disabled={tracks.length === 0}
+                className={cn(
+                  'w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-30',
+                  isCaptureState(transportState)
+                    ? 'bg-error text-surface-0 animate-pulse'
+                    : ACTIVE_RECORD_STATES.includes(transportState)
+                      ? 'bg-surface-3 text-warning'
+                      : transportRecordIntent
+                        ? 'bg-surface-3 text-error border border-border-hover hover:bg-surface-4'
+                        : 'bg-surface-3 text-text-muted hover:text-text-secondary hover:bg-surface-4',
+                )}
+                title="Record"
+              >
+                <Circle size={14} className={cn(
+                  (isCaptureState(transportState) || transportRecordIntent) && 'fill-current',
+                )} />
+              </button>
+            </div>
 
-          <div
-            className={cn(
-              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium',
-              isCaptureState(transportState)
-                ? 'bg-error/20 text-error'
-                : ACTIVE_RECORD_STATES.includes(transportState)
-                  ? 'bg-warning/20 text-warning'
-                  : transportRecordIntent
-                    ? 'bg-surface-3 text-text-secondary'
-                    : 'bg-surface-2 text-text-muted',
-            )}
-          >
-            <Circle size={8} className={cn(isCaptureState(transportState) && 'animate-pulse')} />
-            <span>
-              {isCaptureState(transportState)
-                ? 'REC'
-                : ACTIVE_RECORD_STATES.includes(transportState)
-                  ? 'READY'
-                  : 'IDLE'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[10px] text-text-muted">BPM</span>
-            <input
-              type="number"
-              value={bpm}
-              onChange={(e) => {
-                if (e.target.value.includes('.')) return
-                const value = Number.parseInt(e.target.value, 10)
-                if (!Number.isNaN(value) && value >= 40 && value <= 240) {
-                  setBpm(value)
-                }
-              }}
-              className="w-12 bg-transparent text-center text-xs text-text-primary/80 border-b border-border focus:outline-none focus:border-border-hover"
-              min={40}
-              max={240}
-              step="1"
-            />
-          </div>
-
-          <button
-            onClick={() => toggleRecordMode('count_in')}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              recordMode === 'count_in'
-                ? 'bg-warning/20 text-warning'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title={`Count-in (${countInBars} bar)`}
-          >
-            Count-in
-          </button>
-          <button
-            onClick={() => toggleRecordMode('pre_roll')}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              recordMode === 'pre_roll'
-                ? 'bg-warning/20 text-warning'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title={`Pre-roll (${preRollBars} bar)`}
-          >
-            Pre-roll
-          </button>
-          <button
-            onClick={handlePunchToggle}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              punchRange.enabled
-                ? 'bg-warning/20 text-warning'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title="Punch range"
-          >
-            Punch
-          </button>
-          <button
-            onClick={toggleLoop}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              loop.enabled
-                ? 'bg-text-primary/20 text-text-primary'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title="Loop"
-          >
-            Loop
-          </button>
-          <button
-            onClick={cycleMetronomeMode}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              metronomeMode !== 'off'
-                ? 'bg-text-primary/20 text-text-primary'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title="Metronome mode"
-          >
-            {metronomeMode === 'off' ? 'Click Off' : metronomeMode === 'always' ? 'Click All' : 'Click Rec'}
-          </button>
-          <button
-            onClick={() => setAutoReturn(!autoReturn)}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              autoReturn
-                ? 'bg-text-primary/20 text-text-primary'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title="Auto return to record/play origin on stop"
-          >
-            Return
-          </button>
-          <button
-            onClick={toggleSnap}
-            className={cn(
-              'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-              snapEnabled
-                ? 'bg-text-primary/20 text-text-primary'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-            )}
-            title="Snap to beat"
-          >
-            Snap
-          </button>
-
-          <div className="flex-1 flex items-center gap-2">
-            <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(currentTime)}</span>
-            <div
-              className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden cursor-pointer group/prog relative"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect()
-                const pct = (e.clientX - rect.left) / rect.width
-                locateToBar((pct * duration) / (beatsPerBar * (60 / bpm)))
-              }}
-            >
-              <div
-                className="h-full bg-text-primary rounded-full transition-[width] duration-100"
-                style={{ width: `${progressPercent}%` }}
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[10px] text-text-muted">BPM</span>
+              <input
+                type="number"
+                value={bpm}
+                onChange={(e) => {
+                  if (e.target.value.includes('.')) return
+                  const value = Number.parseInt(e.target.value, 10)
+                  if (!Number.isNaN(value) && value >= 40 && value <= 240) {
+                    setBpm(value)
+                  }
+                }}
+                className="w-12 bg-transparent text-center text-xs text-text-primary/80 border-b border-border focus:outline-none focus:border-border-hover"
+                min={40}
+                max={240}
+                step="1"
               />
             </div>
-            <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(duration)}</span>
+
+            <button
+              onClick={toggleLoop}
+              className={cn(
+                'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                loop.enabled
+                  ? 'bg-text-primary/20 text-text-primary'
+                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+              )}
+              title="Loop"
+            >
+              Loop
+            </button>
+            <button
+              onClick={cycleMetronomeMode}
+              className={cn(
+                'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                metronomeMode !== 'off'
+                  ? 'bg-text-primary/20 text-text-primary'
+                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+              )}
+              title="Toggle metronome click"
+            >
+              Click
+            </button>
+            {metronomeMode !== 'off' && (
+              <div className="flex items-center gap-1" aria-label="Beat indicator">
+                {Array.from({ length: beatsPerBar }, (_, i) => {
+                  const activeBeat = metronomeBeat > 0 ? (metronomeBeat - 1) % beatsPerBar : -1
+                  const isActive = beatFlash && i === activeBeat
+                  const isDownbeat = i === 0
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        'rounded-full transition-all duration-75',
+                        isActive
+                          ? isDownbeat
+                            ? 'w-2.5 h-2.5 bg-text-primary'
+                            : 'w-2 h-2 bg-text-secondary'
+                          : isDownbeat
+                            ? 'w-2.5 h-2.5 bg-surface-4'
+                            : 'w-2 h-2 bg-surface-3',
+                      )}
+                    />
+                  )
+                })}
+              </div>
+            )}
+            <button
+              onClick={toggleSnap}
+              className={cn(
+                'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                snapEnabled
+                  ? 'bg-text-primary/20 text-text-primary'
+                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+              )}
+              title="Snap to beat"
+            >
+              Snap
+            </button>
+
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className={cn(
+                'p-1.5 rounded transition-colors',
+                showAdvanced
+                  ? 'bg-surface-3 text-text-primary'
+                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+              )}
+              title="Recording options"
+            >
+              <SlidersHorizontal size={12} />
+            </button>
+
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(currentTime)}</span>
+              <div
+                className="flex-1 h-1.5 bg-surface-3 rounded-full overflow-hidden cursor-pointer group/prog relative"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const pct = (e.clientX - rect.left) / rect.width
+                  locateToBar((pct * duration) / (beatsPerBar * (60 / bpm)))
+                }}
+              >
+                <div
+                  className="h-full bg-text-primary rounded-full transition-[width] duration-100"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <span className="text-[11px] text-text-muted tabular-nums shrink-0">{formatTime(duration)}</span>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-1.5 w-20">
+              <Volume2 size={13} className="text-text-muted shrink-0" />
+              <Slider
+                min={0}
+                max={100}
+                value={Math.round(masterVolume * 100)}
+                onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
+              />
+            </div>
+
+            <button
+              onClick={() => {
+                if (isCollapsed) resetDefault()
+                else collapse()
+              }}
+              className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
+              title={isCollapsed ? 'Expand DAW' : 'Collapse DAW'}
+            >
+              {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1.5 w-20">
-            <Volume2 size={13} className="text-text-muted shrink-0" />
-            <Slider
-              min={0}
-              max={100}
-              value={Math.round(masterVolume * 100)}
-              onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
-            />
-          </div>
+          {/* Secondary row — recording options */}
+          {showAdvanced && (
+            <div className="flex items-center gap-2 px-3 py-1 border-t border-border animate-fade-in">
+              <div
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium',
+                  isCaptureState(transportState)
+                    ? 'bg-error text-surface-0'
+                    : ACTIVE_RECORD_STATES.includes(transportState)
+                      ? 'bg-surface-3 text-warning'
+                      : transportRecordIntent
+                        ? 'bg-surface-3 text-text-secondary'
+                        : 'bg-surface-2 text-text-muted',
+                )}
+              >
+                <Circle size={8} className={cn(isCaptureState(transportState) && 'animate-pulse')} />
+                <span>
+                  {isCaptureState(transportState)
+                    ? 'REC'
+                    : ACTIVE_RECORD_STATES.includes(transportState)
+                      ? 'READY'
+                      : 'IDLE'}
+                </span>
+              </div>
 
-          <button
-            onClick={() => {
-              if (isCollapsed) resetDefault()
-              else collapse()
-            }}
-            className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
-            title={isCollapsed ? 'Expand DAW' : 'Collapse DAW'}
-          >
-            {isCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+              <button
+                onClick={() => toggleRecordMode('count_in')}
+                className={cn(
+                  'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                  recordMode === 'count_in'
+                    ? 'bg-warning/20 text-warning'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+                )}
+                title={`Count-in (${countInBars} bar)`}
+              >
+                Count-in
+              </button>
+              <button
+                onClick={() => toggleRecordMode('pre_roll')}
+                className={cn(
+                  'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                  recordMode === 'pre_roll'
+                    ? 'bg-warning/20 text-warning'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+                )}
+                title={`Pre-roll (${preRollBars} bar)`}
+              >
+                Pre-roll
+              </button>
+              <button
+                onClick={handlePunchToggle}
+                className={cn(
+                  'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                  punchRange.enabled
+                    ? 'bg-warning/20 text-warning'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+                )}
+                title="Punch range"
+              >
+                Punch
+              </button>
+              <button
+                onClick={() => setAutoReturn(!autoReturn)}
+                className={cn(
+                  'px-2 py-1 rounded text-[10px] font-medium transition-colors',
+                  autoReturn
+                    ? 'bg-text-primary/20 text-text-primary'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
+                )}
+                title="Auto return to record/play origin on stop"
+              >
+                Return
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -715,7 +806,14 @@ export function DawPanel({
                       key={index}
                       className="relative shrink-0 border-r border-border cursor-pointer hover:bg-text-primary/[0.06] transition-colors"
                       style={{ width: BAR_WIDTH_PX }}
-                      onClick={() => handleBarClick(index)}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const fraction = (e.clientX - rect.left) / BAR_WIDTH_PX
+                        const barPos = snapEnabled
+                          ? index
+                          : index + Math.max(0, Math.min(fraction, 0.999))
+                        handleBarClick(barPos)
+                      }}
                       title={`Jump to bar ${index + 1}`}
                     >
                       {loop.enabled && index >= loop.start && index < loop.end && (
@@ -818,7 +916,7 @@ export function DawPanel({
                   )}
                   <div
                     className={cn(
-                      'w-2 h-2 mx-auto',
+                      'w-2 h-2 -ml-1',
                       isCaptureState(transportState)
                         ? 'bg-error'
                         : ACTIVE_RECORD_STATES.includes(transportState)
@@ -829,7 +927,7 @@ export function DawPanel({
                   />
                   <div
                     className={cn(
-                      'w-px flex-1 mx-auto h-full',
+                      'w-px h-full',
                       isCaptureState(transportState)
                         ? 'bg-error/80'
                         : ACTIVE_RECORD_STATES.includes(transportState)

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect } from 'react'
 import type { Clip } from '@/audio/types'
 import WaveSurfer from 'wavesurfer.js'
 
@@ -47,7 +47,7 @@ export function ClipView({
       container: waveformRef.current,
       waveColor: clip.color,
       progressColor: clip.color,
-      height: heightPx - 18, // leave room for name label
+      height: heightPx - 22, // container is offset 18px below label + 4px padding
       barWidth: widthPx < 60 ? 1 : 2,
       barGap: widthPx < 60 ? 0 : 1,
       barRadius: 1,
@@ -73,117 +73,96 @@ export function ClipView({
     }
   }, [clip.audioBuffer, clip.color, heightPx, widthPx])
 
-  // ── Snap helper ──────────────────────────────────────────────────────────
-  const snapValue = useCallback(
-    (value: number) => {
-      if (snapEnabled) return Math.round(value)
-      return Math.round(value * 4) / 4 // quarter-beat precision
-    },
-    [snapEnabled]
-  )
+  // ── Drag / resize state (ref avoids stale closures on re-render) ─────────
+  type DragMode = 'move' | 'resize-right' | 'resize-left'
+  const dragRef = useRef<{
+    mode: DragMode
+    startX: number
+    startBar: number
+    startLength: number
+    startTrimStart: number
+  } | null>(null)
+
+  const applySnap = (value: number) =>
+    snapEnabled ? Math.round(value) : value
 
   // ── Body drag (move) ─────────────────────────────────────────────────────
-  const handleBodyPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      // Only handle direct clicks on this element; resize handles handle their own events
-      if ((e.target as HTMLElement).dataset.resizeHandle) return
-      e.stopPropagation()
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  const handleBodyPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).dataset.resizeHandle) return
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = {
+      mode: 'move',
+      startX: e.clientX,
+      startBar: clip.startBar,
+      startLength: clip.lengthInBars,
+      startTrimStart: clip.trimStart,
+    }
+    onSelect(clip.id)
+  }
 
-      const startX = e.clientX
-      const startBar = clip.startBar
+  const handleBodyPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.mode !== 'move') return
+    const deltaBar = (e.clientX - drag.startX) / barWidthPx
+    const newBar = applySnap(drag.startBar + deltaBar)
+    onMove(clip.id, Math.max(0, newBar))
+  }
 
-      const handleMove = (ev: PointerEvent) => {
-        const deltaPx = ev.clientX - startX
-        const deltaBar = deltaPx / barWidthPx
-        const newBar = snapValue(startBar + deltaBar)
-        onMove(clip.id, Math.max(0, newBar))
-      }
-
-      const handleUp = () => {
-        window.removeEventListener('pointermove', handleMove)
-        window.removeEventListener('pointerup', handleUp)
-      }
-
-      window.addEventListener('pointermove', handleMove)
-      window.addEventListener('pointerup', handleUp)
-      onSelect(clip.id)
-    },
-    [clip.id, clip.startBar, barWidthPx, snapValue, onMove, onSelect]
-  )
+  const handleBodyPointerUp = () => {
+    dragRef.current = null
+  }
 
   // ── Right-edge resize ────────────────────────────────────────────────────
-  const handleRightResizePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.stopPropagation()
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  const handleRightResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = {
+      mode: 'resize-right',
+      startX: e.clientX,
+      startBar: clip.startBar,
+      startLength: clip.lengthInBars,
+      startTrimStart: clip.trimStart,
+    }
+    onSelect(clip.id)
+  }
 
-      const startX = e.clientX
-      const startLength = clip.lengthInBars
-
-      const handleMove = (ev: PointerEvent) => {
-        const deltaPx = ev.clientX - startX
-        const deltaBar = deltaPx / barWidthPx
-        const newLength = snapValue(startLength + deltaBar)
-        onResizeRight(clip.id, Math.max(0.25, newLength))
-      }
-
-      const handleUp = () => {
-        window.removeEventListener('pointermove', handleMove)
-        window.removeEventListener('pointerup', handleUp)
-      }
-
-      window.addEventListener('pointermove', handleMove)
-      window.addEventListener('pointerup', handleUp)
-      onSelect(clip.id)
-    },
-    [clip.id, clip.lengthInBars, barWidthPx, snapValue, onResizeRight, onSelect]
-  )
+  const handleRightResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.mode !== 'resize-right') return
+    const deltaBar = (e.clientX - drag.startX) / barWidthPx
+    const newLength = applySnap(drag.startLength + deltaBar)
+    onResizeRight(clip.id, Math.max(0.25, newLength))
+  }
 
   // ── Left-edge resize (adjusts trimStart + startBar) ──────────────────────
-  const handleLeftResizePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.stopPropagation()
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  const handleLeftResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = {
+      mode: 'resize-left',
+      startX: e.clientX,
+      startBar: clip.startBar,
+      startLength: clip.lengthInBars,
+      startTrimStart: clip.trimStart,
+    }
+    onSelect(clip.id)
+  }
 
-      const startX = e.clientX
-      const originalTrimStart = clip.trimStart
-      const originalStartBar = clip.startBar
+  const handleLeftResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.mode !== 'resize-left') return
+    const deltaBar = (e.clientX - drag.startX) / barWidthPx
+    const rawTrimStart = drag.startTrimStart + deltaBar
+    const clampedTrimStart = Math.max(0, Math.min(rawTrimStart, clip.lengthInBars - 0.25))
+    const snappedTrimStart = applySnap(clampedTrimStart)
+    const trimDelta = snappedTrimStart - drag.startTrimStart
+    onResizeLeft(clip.id, snappedTrimStart, Math.max(0, drag.startBar + trimDelta))
+  }
 
-      const handleMove = (ev: PointerEvent) => {
-        const deltaPx = ev.clientX - startX
-        const deltaBar = deltaPx / barWidthPx
-        const rawTrimStart = originalTrimStart + deltaBar
-        const clampedTrimStart = Math.max(
-          0,
-          Math.min(rawTrimStart, clip.lengthInBars - 0.25)
-        )
-        const snappedTrimStart = snapValue(clampedTrimStart)
-        const trimDelta = snappedTrimStart - originalTrimStart
-        const newStartBar = Math.max(0, originalStartBar + trimDelta)
-        onResizeLeft(clip.id, snappedTrimStart, newStartBar)
-      }
-
-      const handleUp = () => {
-        window.removeEventListener('pointermove', handleMove)
-        window.removeEventListener('pointerup', handleUp)
-      }
-
-      window.addEventListener('pointermove', handleMove)
-      window.addEventListener('pointerup', handleUp)
-      onSelect(clip.id)
-    },
-    [
-      clip.id,
-      clip.trimStart,
-      clip.startBar,
-      clip.lengthInBars,
-      barWidthPx,
-      snapValue,
-      onResizeLeft,
-      onSelect,
-    ]
-  )
+  const handlePointerUp = () => {
+    dragRef.current = null
+  }
 
   // Background: clip color at 20% opacity for the body
   const bgColor = clip.color + '33'
@@ -200,17 +179,16 @@ export function ClipView({
         width: widthPx,
         height: heightPx,
         backgroundColor: bgColor,
+        boxShadow: selected
+          ? 'inset 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 1px rgba(255,255,255,0.4)'
+          : hasError
+            ? 'inset 0 0 0 1px rgba(239,68,68,0.8)'
+            : undefined,
+        filter: selected ? 'brightness(1.2)' : undefined,
       }}
       className={[
         'absolute top-[2px] rounded overflow-hidden select-none',
-        'border',
-        hasError
-          ? 'border-error/60'
-          : selected
-            ? 'border-white/40 ring-1 ring-white/50'
-            : isTemp
-              ? 'border-warning/60 border-dashed'
-              : 'border-white/10',
+        isTemp && !selected ? 'border border-dashed border-white/40' : 'border-0',
         isRecording ? 'animate-pulse' : '',
       ]
         .filter(Boolean)
@@ -223,17 +201,26 @@ export function ClipView({
         aria-label="Resize clip start"
         className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-white/20 transition-colors"
         onPointerDown={handleLeftResizePointerDown}
+        onPointerMove={handleLeftResizePointerMove}
+        onPointerUp={handlePointerUp}
       />
+
+      {/* Selected overlay */}
+      {selected && (
+        <div className="absolute inset-0 bg-white/10 pointer-events-none z-10" />
+      )}
 
       {/* ── Clip content area (body drag target) ───────────────── */}
       <div
         className="absolute inset-0 ml-2 mr-2 cursor-grab active:cursor-grabbing"
         onPointerDown={handleBodyPointerDown}
+        onPointerMove={handleBodyPointerMove}
+        onPointerUp={handleBodyPointerUp}
       >
         {/* Top label */}
         <div
           style={{ color: clip.color }}
-          className="text-[10px] px-1 py-0.5 truncate font-medium leading-tight pointer-events-none"
+          className="relative z-10 text-[10px] px-1 py-0.5 truncate font-medium leading-tight pointer-events-none"
         >
           {clip.name}
           {isTemp && ' · queued'}
@@ -241,10 +228,10 @@ export function ClipView({
           {hasError && ' · failed'}
         </div>
 
-        {/* Waveform (wavesurfer.js) */}
+        {/* Waveform (wavesurfer.js) — positioned below the label */}
         <div
           ref={waveformRef}
-          className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden"
+          className="absolute inset-x-0 bottom-0 top-[18px] pointer-events-none overflow-hidden"
         />
       </div>
 
@@ -260,6 +247,8 @@ export function ClipView({
         aria-label="Resize clip end"
         className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-white/20 transition-colors"
         onPointerDown={handleRightResizePointerDown}
+        onPointerMove={handleRightResizePointerMove}
+        onPointerUp={handlePointerUp}
       />
     </div>
   )

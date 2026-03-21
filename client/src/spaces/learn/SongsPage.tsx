@@ -1,14 +1,15 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useDawPanelStore, makeTrack } from '@/stores/dawPanelStore'
 import {
-  Music, FileMusic, ChevronDown, Check, ArrowLeft, Sparkles,
+  Music, FileMusic, ArrowLeft, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { CHORD_CHARTS } from '@/data/chordCharts'
 import { DawPanel } from '@/components/daw/DawPanel'
+import type { DawSectionLabel } from '@/components/daw/DawPanel'
 
 const PARTS = [
   { id: 'lead', label: 'Lead Guitar' },
@@ -17,12 +18,12 @@ const PARTS = [
 ]
 
 const PROGRESS_SECTIONS = [
-  { id: 1, label: 'Intro', status: 'done' as const, accuracy: 96 },
-  { id: 2, label: 'Verse 1', status: 'done' as const, accuracy: 88 },
-  { id: 3, label: 'Chorus', status: 'current' as const, accuracy: 71 },
-  { id: 4, label: 'Verse 2', status: 'locked' as const, accuracy: 0 },
-  { id: 5, label: 'Bridge', status: 'locked' as const, accuracy: 0 },
-  { id: 6, label: 'Outro', status: 'locked' as const, accuracy: 0 },
+  { id: 1, label: 'Intro',   type: 'intro',  barCount: 2, status: 'done'    as const, accuracy: 96 },
+  { id: 2, label: 'Verse 1', type: 'verse',  barCount: 4, status: 'done'    as const, accuracy: 88 },
+  { id: 3, label: 'Chorus',  type: 'chorus', barCount: 3, status: 'current' as const, accuracy: 71 },
+  { id: 4, label: 'Verse 2', type: 'verse',  barCount: 4, status: 'locked'  as const, accuracy: 0  },
+  { id: 5, label: 'Bridge',  type: 'bridge', barCount: 2, status: 'locked'  as const, accuracy: 0  },
+  { id: 6, label: 'Outro',   type: 'outro',  barCount: 1, status: 'locked'  as const, accuracy: 0  },
 ]
 
 export function SongsPage() {
@@ -33,7 +34,6 @@ export function SongsPage() {
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
 
   const [selectedPart, setSelectedPart] = useState('lead')
-  const [partsOpen, setPartsOpen] = useState(false)
   const [generating, setGenerating] = useState(isGenerateMode)
 
   // Audio store
@@ -109,6 +109,15 @@ export function SongsPage() {
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
+  const dawSections = useMemo<DawSectionLabel[]>(() => {
+    let barStart = 0
+    return PROGRESS_SECTIONS.map((s) => {
+      const section = { label: s.label, type: s.type, barStart, barCount: s.barCount }
+      barStart += s.barCount
+      return section
+    })
+  }, [])
+
   if (!chart) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -130,55 +139,66 @@ export function SongsPage() {
   return (
     <div className="h-full flex flex-col">
 
-      {/* ── Header bar ──────────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-0/90 backdrop-blur-sm">
+      {/* ── Header toolbar ──────────────────────────────────────── */}
+      <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-0/90 backdrop-blur-sm">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center justify-center size-8 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors shrink-0"
+          className="flex items-center justify-center size-7 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors shrink-0"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={15} />
         </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold text-text-primary truncate">{chart.title}</h1>
-            {chart.artist && <span className="text-xs text-text-muted shrink-0">— {chart.artist}</span>}
-          </div>
-          <div className="flex items-center gap-2 text-2xs text-text-muted font-mono mt-0.5">
-            <span>{chart.tuning ?? 'Standard'}</span>
-            <span>·</span>
-            <span>Key: {chart.key}</span>
-            <span>·</span>
-            <span>{chart.timeSignature ?? '4/4'}</span>
-            <span>·</span>
-            <span>♩ = {chart.tempo ?? '—'}</span>
-          </div>
+
+        {/* Title */}
+        <div className="flex items-center gap-1.5">
+          <Music size={15} className="text-text-muted shrink-0" />
+          <span className="text-sm font-semibold text-text-primary">{chart.title}</span>
+          {chart.artist && <span className="text-xs text-text-muted">— {chart.artist}</span>}
         </div>
-        {/* Part selector */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setPartsOpen(!partsOpen)}
-            className="flex items-center gap-1.5 text-xs font-medium text-text-secondary border border-border rounded-full px-3 py-1.5 hover:bg-surface-3 transition-colors"
-          >
-            {PARTS.find((p) => p.id === selectedPart)?.label}
-            <ChevronDown size={12} className={cn('transition-transform', partsOpen && 'rotate-180')} />
-          </button>
-          {partsOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-surface-0 border border-border rounded-lg shadow-lg py-1 z-10 min-w-[180px]">
-              {PARTS.map((part) => (
-                <button
-                  key={part.id}
-                  onClick={() => { setSelectedPart(part.id); setPartsOpen(false) }}
-                  className={cn(
-                    'w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-surface-3 transition-colors',
-                    selectedPart === part.id ? 'text-text-primary font-medium' : 'text-text-secondary',
-                  )}
-                >
-                  {selectedPart === part.id && <Check size={11} />}
-                  <span className={selectedPart !== part.id ? 'ml-[19px]' : ''}>{part.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
+
+        <div className="h-4 w-px bg-border shrink-0" />
+
+        {/* Key */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-text-muted">Key</span>
+          <span className="text-xs bg-surface-2 border border-border rounded px-1.5 py-1 text-text-primary tabular-nums">
+            {chart.key}
+          </span>
+        </div>
+
+        {/* Time signature */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-text-muted">Time</span>
+          <span className="text-xs bg-surface-2 border border-border rounded px-1.5 py-1 text-text-primary tabular-nums">
+            {chart.timeSignature ?? '4/4'}
+          </span>
+        </div>
+
+        {/* Tempo */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-text-muted">♩=</span>
+          <span className="text-xs bg-surface-2 border border-border rounded px-1.5 py-1 text-text-primary tabular-nums">
+            {chart.tempo ?? '—'}
+          </span>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Part picker */}
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-2 border border-border">
+          {PARTS.map((part) => (
+            <button
+              key={part.id}
+              onClick={() => setSelectedPart(part.id)}
+              className={cn(
+                'flex items-center px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+                selectedPart === part.id
+                  ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
+                  : 'text-text-muted hover:text-text-secondary',
+              )}
+            >
+              {part.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -291,6 +311,7 @@ export function SongsPage() {
         onUpdateTrack={updateTrack}
         onAddTrack={() => addTrack()}
         showRecordButton={false}
+        sections={dawSections}
       />
     </div>
   )

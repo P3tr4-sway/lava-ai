@@ -21,6 +21,7 @@ const MIME_TYPES: Record<string, string> = {
 
 export async function audioRoutes(app: FastifyInstance) {
   app.post('/upload', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const data = await request.file()
     if (!data) return reply.status(400).send({ error: 'No file provided' })
 
@@ -83,6 +84,8 @@ export async function audioRoutes(app: FastifyInstance) {
     // 3. Determine Content-Type from the stored format
     const mimeType = MIME_TYPES[record.format.toLowerCase()] ?? 'application/octet-stream'
     reply.header('Content-Type', mimeType)
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+    reply.header('Accept-Ranges', 'bytes')
 
     // 4. Stream the file to the client
     const stream = createReadStream(record.filePath)

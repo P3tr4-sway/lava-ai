@@ -28,6 +28,26 @@ function transportStateToPlaybackState(state: TransportState): PlaybackState {
   return 'playing'
 }
 
+function readBoolean(key: string, defaultValue: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key)
+    if (v === 'true') return true
+    if (v === 'false') return false
+  } catch {}
+  return defaultValue
+}
+
+function readNumber(key: string, defaultValue: number): number {
+  try {
+    const v = localStorage.getItem(key)
+    if (v !== null) {
+      const n = Number(v)
+      if (!Number.isNaN(n) && Number.isFinite(n)) return n
+    }
+  } catch {}
+  return defaultValue
+}
+
 interface AudioStore {
   playbackState: PlaybackState
   transportState: TransportState
@@ -84,10 +104,10 @@ export const useAudioStore = create<AudioStore>((set) => ({
   recordMode: 'immediate',
   currentTime: 0,
   duration: 0,
-  bpm: 120,
-  masterVolume: 0.8,
-  metronomeEnabled: false,
-  metronomeMode: 'off',
+  bpm: readNumber('lava-bpm', 120),
+  masterVolume: readNumber('lava-master-volume', 0.8),
+  metronomeEnabled: readBoolean('lava-metronome-enabled', false),
+  metronomeMode: readBoolean('lava-metronome-enabled', false) ? 'always' : 'off',
   key: 'C',
   currentBar: 0,
   countInBars: 1,
@@ -121,30 +141,43 @@ export const useAudioStore = create<AudioStore>((set) => ({
   setRecordMode: (mode) => set({ recordMode: mode }),
   setCurrentTime: (time) => set({ currentTime: time }),
   setDuration: (duration) => set({ duration }),
-  setBpm: (bpm) => set({ bpm }),
-  setMasterVolume: (vol) => set({ masterVolume: vol }),
+  setBpm: (bpm) => {
+    try { localStorage.setItem('lava-bpm', String(bpm)) } catch {}
+    set({ bpm })
+  },
+  setMasterVolume: (vol) => {
+    try { localStorage.setItem('lava-master-volume', String(vol)) } catch {}
+    set({ masterVolume: vol })
+  },
 
   toggleMetronome: () =>
     set((state) => {
       const nextMode = state.metronomeMode === 'off' ? 'always' : 'off'
+      const enabled = nextMode !== 'off'
+      try { localStorage.setItem('lava-metronome-enabled', String(enabled)) } catch {}
       return {
         metronomeMode: nextMode,
-        metronomeEnabled: nextMode !== 'off',
+        metronomeEnabled: enabled,
       }
     }),
 
-  setMetronomeMode: (mode) =>
+  setMetronomeMode: (mode) => {
+    const enabled = mode !== 'off'
+    try { localStorage.setItem('lava-metronome-enabled', String(enabled)) } catch {}
     set({
       metronomeMode: mode,
-      metronomeEnabled: mode !== 'off',
-    }),
+      metronomeEnabled: enabled,
+    })
+  },
 
   cycleMetronomeMode: () =>
     set((state) => {
       const nextMode: MetronomeMode = state.metronomeMode === 'off' ? 'always' : 'off'
+      const enabled = nextMode !== 'off'
+      try { localStorage.setItem('lava-metronome-enabled', String(enabled)) } catch {}
       return {
         metronomeMode: nextMode,
-        metronomeEnabled: nextMode !== 'off',
+        metronomeEnabled: enabled,
       }
     }),
 

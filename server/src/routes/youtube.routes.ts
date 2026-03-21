@@ -119,6 +119,7 @@ export async function youtubeRoutes(app: FastifyInstance) {
           }
         })
 
+      reply.header('Cache-Control', 'private, max-age=300')
       return { results }
     } catch (err) {
       app.log.error(err, 'yt-dlp search failed')
@@ -128,6 +129,7 @@ export async function youtubeRoutes(app: FastifyInstance) {
 
   // ── Start analysis (async) ──────────────────────────────────────────────
   app.post<{ Body: { videoId: string; title?: string } }>('/analyze', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const { videoId, title } = request.body ?? {}
     if (!videoId) return reply.status(400).send({ error: 'videoId is required' })
 
@@ -176,6 +178,12 @@ export async function youtubeRoutes(app: FastifyInstance) {
       .get()
 
     if (!row) return reply.status(404).send({ error: 'Not found' })
+
+    if (row.status === 'completed') {
+      reply.header('Cache-Control', 'private, max-age=86400')
+    } else {
+      reply.header('Cache-Control', 'no-store')
+    }
 
     return {
       id: row.id,

@@ -8,6 +8,7 @@ const PDF_UPLOAD_DIR = './uploads/pdfs'
 
 export async function pdfRoutes(app: FastifyInstance) {
   app.post('/upload', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const data = await request.file()
     if (!data) return reply.status(400).send({ error: 'No file provided' })
 

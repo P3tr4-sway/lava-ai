@@ -4,7 +4,8 @@
  */
 
 export interface ChordMiniAppChord {
-  time: number       // seconds
+  start: number      // seconds (start time)
+  end: number        // seconds (end time)
   chord: string      // e.g. "C:maj", "A:min", "G:7", "N" (no chord)
   confidence: number // 0-1
 }
@@ -97,7 +98,7 @@ export function chordsToMeasures(
 
     // Find chords that fall within this measure
     const chordsInMeasure = chords
-      .filter((c) => c.time >= measureStart && c.time < measureEnd)
+      .filter((c) => c.start >= measureStart && c.start < measureEnd)
       .map((c) => normalizeChordName(c.chord))
       .filter((c) => c !== '')
 
@@ -194,6 +195,21 @@ export function buildAnalysisScore(
 
   const measures = chordsToMeasures(chordResult.chords, beatResult.beats, beatsPerMeasure)
   const sections = splitIntoSections(measures)
+
+  // Fallback: if no measures could be generated, create a single empty section
+  if (sections.length === 0) {
+    const fallbackBars = Math.max(1, Math.round((chordResult.duration * beatResult.bpm) / (60 * beatsPerMeasure)))
+    sections.push({
+      id: makeId('s'),
+      label: 'Song',
+      type: 'verse',
+      measures: Array.from({ length: Math.min(fallbackBars, 32) }, () => ({
+        id: makeId('m'),
+        chords: [],
+      })),
+    })
+  }
+
   const key = detectKey(chordResult.chords)
 
   return {

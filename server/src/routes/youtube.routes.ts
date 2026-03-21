@@ -3,7 +3,7 @@ import { spawn } from 'child_process'
 import { mkdir, stat, readFile } from 'fs/promises'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
-import { eq } from 'drizzle-orm'
+import { eq, like, and } from 'drizzle-orm'
 import { db } from '../db/client.js'
 import { transcriptions, audioFiles } from '../db/schema.js'
 import { buildAnalysisScore, type AnalysisScore } from '../utils/chordMapper.js'
@@ -131,6 +131,23 @@ export async function youtubeRoutes(app: FastifyInstance) {
     const { videoId, title } = request.body ?? {}
     if (!videoId) return reply.status(400).send({ error: 'videoId is required' })
 
+    // Cache hit: return existing completed analysis for the same videoId
+    const cached = await db
+      .select()
+      .from(transcriptions)
+      .where(
+        and(
+          eq(transcriptions.status, 'completed'),
+          like(transcriptions.scoreJson, `%"videoId":"${videoId}"%`),
+        ),
+      )
+      .get()
+
+    if (cached) {
+      app.log.info(`[pipeline] Cache hit for ${videoId} → transcription ${cached.id}`)
+      return { transcriptionId: cached.id }
+    }
+
     const id = uuidv4()
     const now = Date.now()
 
@@ -165,6 +182,7 @@ export async function youtubeRoutes(app: FastifyInstance) {
       status: row.status,
       scoreJson: row.scoreJson ? JSON.parse(row.scoreJson) : null,
       error: row.error ?? null,
+      audioFileId: row.audioFileId ?? null,
     }
   })
 }
@@ -180,22 +198,26 @@ async function runPipeline(
   try {
     await mkdir(UPLOAD_DIR, { recursive: true })
 
-    // 1. Download audio
-    log.info(`[pipeline] Downloading audio for ${videoId}`)
-    const outTemplate = join(UPLOAD_DIR, `yt-${videoId}.%(ext)s`)
-    await run('yt-dlp', [
-      '-x',
-      '--audio-format', 'mp3',
-      '--audio-quality', '0',
-      '-o', outTemplate,
-      '--no-playlist',
-      '--no-warnings',
-      `https://www.youtube.com/watch?v=${videoId}`,
-    ])
-
-    // Find the downloaded file
+    // 1. Download audio (skip if already cached on disk)
     const mp3Path = join(UPLOAD_DIR, `yt-${videoId}.mp3`)
-    const fileStat = await stat(mp3Path)
+    let fileStat: import('fs').Stats | null = null
+    try {
+      fileStat = await stat(mp3Path)
+      log.info(`[pipeline] Audio cache hit for ${videoId} — skipping download`)
+    } catch {
+      log.info(`[pipeline] Downloading audio for ${videoId}`)
+      const outTemplate = join(UPLOAD_DIR, `yt-${videoId}.%(ext)s`)
+      await run('yt-dlp', [
+        '-x',
+        '--audio-format', 'mp3',
+        '--audio-quality', '0',
+        '-o', outTemplate,
+        '--no-playlist',
+        '--no-warnings',
+        `https://www.youtube.com/watch?v=${videoId}`,
+      ])
+      fileStat = await stat(mp3Path)
+    }
 
     // Store audio file record
     const audioId = uuidv4()
@@ -203,7 +225,7 @@ async function runPipeline(
       id: audioId,
       name: title || `yt-${videoId}.mp3`,
       format: 'mp3',
-      size: fileStat.size,
+      size: fileStat!.size,
       filePath: mp3Path,
       createdAt: Date.now(),
     })
@@ -232,6 +254,13 @@ async function runPipeline(
     const chords = (chordResult.chords ?? []) as import('../utils/chordMapper.js').ChordMiniAppChord[]
     const duration = (chordResult.duration ?? 0) as number
 
+    // Debug: log what ChordMiniApp actually returned
+    log.info(`[pipeline] Chord result keys: ${Object.keys(chordResult).join(', ')}`)
+    log.info(`[pipeline] Chords count: ${chords.length}, duration: ${duration}`)
+    if (chords.length > 0) log.info(`[pipeline] First chord: ${JSON.stringify(chords[0])}`)
+    log.info(`[pipeline] Beat result keys: ${Object.keys(beatResult).join(', ')}`)
+    log.info(`[pipeline] Beats count: ${(beatResult.beats as number[] | undefined)?.length ?? 0}, bpm: ${beatResult.bpm}`)
+
     const score: AnalysisScore = buildAnalysisScore(
       { chords, duration },
       {
@@ -241,6 +270,8 @@ async function runPipeline(
         time_signature: (beatResult.time_signature ?? 4) as number,
       },
     )
+
+    log.info(`[pipeline] Score sections: ${score.sections.length}, total measures: ${score.sections.reduce((a, s) => a + s.measures.length, 0)}`)
 
     // Add title to score
     const scoreWithTitle = { ...score, title: title || videoId, videoId }

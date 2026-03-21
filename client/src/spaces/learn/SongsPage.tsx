@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useAudioStore } from '@/stores/audioStore'
@@ -13,13 +13,9 @@ import { CHORD_CHARTS, type ChordChart } from '@/data/chordCharts'
 import { DawPanel } from '@/components/daw/DawPanel'
 import type { DawSectionLabel } from '@/components/daw/DawPanel'
 import { ChordGrid, PdfViewer, MetadataBar } from '@/components/score'
-import { youtubeService, type AnalysisScore } from '@/services/youtubeService'
-
-const PARTS = [
-  { id: 'lead', label: 'Lead Guitar' },
-  { id: 'rhythm', label: 'Rhythm Guitar' },
-  { id: 'bass', label: 'Bass Line' },
-]
+import { youtubeService } from '@/services/youtubeService'
+import { ToneEngine } from '@/audio/ToneEngine'
+import type { Clip } from '@/audio/types'
 
 const PROGRESS_SECTIONS = [
   { id: 1, label: 'Intro',   type: 'intro',  barCount: 2, status: 'done'    as const, accuracy: 96 },
@@ -37,65 +33,119 @@ export function SongsPage() {
   const isGenerateMode = searchParams.get('generate') === '1'
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
 
-  const [selectedPart, setSelectedPart] = useState('lead')
-
   // Audio store — bpm used in buildProjectData
   const bpm = useAudioStore((s) => s.bpm)
+  const setBpm = useAudioStore((s) => s.setBpm)
+  const setDuration = useAudioStore((s) => s.setDuration)
 
   // Static chart lookup
   const staticChart = CHORD_CHARTS.find((c) => c.id === id)
 
   // Analysis result (from YouTube → ChordMiniApp pipeline)
   const [analysisChart, setAnalysisChart] = useState<ChordChart | null>(null)
-  const [analysisScore, setAnalysisScore] = useState<AnalysisScore | null>(null)
   const [loadingAnalysis, setLoadingAnalysis] = useState(false)
   const loadFromAnalysis = useLeadSheetStore((s) => s.loadFromAnalysis)
 
-  // Fetch analysis result when navigating with ?generate=1 and no static chart
+  // Pending audio import — resolved after useDawSetup resets tracks
+  const [pendingAudioImport, setPendingAudioImport] = useState<{
+    audioFileId: string
+    totalBars: number
+    duration: number
+    title: string
+    setAt: number  // timestamp to detect stale tracks
+  } | null>(null)
+  const [analysisTotalBars, setAnalysisTotalBars] = useState(16)
+
+  // Fetch / poll analysis result when navigating with ?generate=1 and no static chart
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+
   useEffect(() => {
     if (!isGenerateMode || !id || staticChart) return
 
     let cancelled = false
     setLoadingAnalysis(true)
+    setAnalysisError(null)
 
-    youtubeService.pollAnalysis(id)
-      .then((result) => {
-        if (cancelled || !result.scoreJson) return
+    const loadResult = (result: import('@/services/youtubeService').AnalysisPollResult) => {
+      if (cancelled) return
 
-        const score = result.scoreJson
-        setAnalysisScore(score)
+      if (!result.scoreJson) {
+        setAnalysisError('Analysis completed but no score was generated.')
+        setLoadingAnalysis(false)
+        return
+      }
 
-        // Build a synthetic ChordChart for the header
-        setAnalysisChart({
-          id,
-          title: score.title || 'Untitled',
-          artist: '',
-          style: 'Auto-detected',
-          key: score.key,
-          tempo: score.tempo,
-          timeSignature: score.timeSignature,
+      const score = result.scoreJson
+
+      // Build a synthetic ChordChart for the header
+      setAnalysisChart({
+        id,
+        title: score.title || 'Untitled',
+        artist: '',
+        style: 'Auto-detected',
+        key: score.key,
+        tempo: score.tempo,
+        timeSignature: score.timeSignature,
+      })
+
+      // Populate the lead sheet store with analyzed sections
+      loadFromAnalysis({
+        projectName: score.title || 'Untitled',
+        key: score.key,
+        tempo: score.tempo,
+        timeSignature: score.timeSignature,
+        sections: score.sections.map((s) => ({
+          ...s,
+          type: s.type as 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom',
+        })),
+      })
+
+      // Sync BPM to detected tempo
+      setBpm(score.tempo)
+
+      // Queue audio import for the DAW (resolved after useDawSetup resets tracks)
+      if (result.audioFileId) {
+        const beatsPerMeasure = parseInt(score.timeSignature?.split('/')[0] ?? '4', 10) || 4
+        const bars = Math.max(16, Math.ceil((score.duration * score.tempo) / (60 * beatsPerMeasure)))
+        setAnalysisTotalBars(bars)
+        setPendingAudioImport({
+          audioFileId: result.audioFileId,
+          totalBars: bars,
+          duration: score.duration,
+          title: score.title || 'Audio',
+          setAt: Date.now(),
         })
+      }
 
-        // Populate the lead sheet store with analyzed sections
-        loadFromAnalysis({
-          projectName: score.title || 'Untitled',
-          key: score.key,
-          tempo: score.tempo,
-          timeSignature: score.timeSignature,
-          sections: score.sections.map((s) => ({
-            ...s,
-            type: s.type as 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom',
-          })),
-        })
-      })
-      .catch(() => {
-        // Analysis not ready or failed — will show "not found"
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingAnalysis(false)
-      })
+      setLoadingAnalysis(false)
+    }
 
-    return () => { cancelled = true }
+    // Poll every 2s until completed/error (handles page refresh mid-analysis)
+    const poll = async () => {
+      try {
+        const result = await youtubeService.pollAnalysis(id)
+        if (cancelled) return
+
+        if (result.status === 'completed') {
+          loadResult(result)
+        } else if (result.status === 'error') {
+          setAnalysisError(result.error ?? 'Analysis failed')
+          setLoadingAnalysis(false)
+        }
+        // else: still in progress → timer continues
+      } catch {
+        // Network error — keep polling
+      }
+    }
+
+    // First poll immediately, then every 2s
+    poll()
+    const timer = setInterval(poll, 2000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isGenerateMode])
 
@@ -117,12 +167,68 @@ export function SongsPage() {
 
   useEffect(() => {
     if (!staticChart) return // Skip for analysis charts — already loaded via loadFromAnalysis
-    resetLeadSheet()
-    setLeadSheetKey(staticChart.key)
-    setLeadSheetTempo(staticChart.tempo ?? 120)
-    setLeadSheetTimeSig(staticChart.timeSignature ?? '4/4')
+
+    // If the static chart has predefined sections with chords, load them directly
+    if (staticChart.sections?.length) {
+      loadFromAnalysis({
+        projectName: staticChart.title,
+        key: staticChart.key,
+        tempo: staticChart.tempo ?? 120,
+        timeSignature: staticChart.timeSignature ?? '4/4',
+        sections: staticChart.sections,
+      })
+    } else {
+      resetLeadSheet()
+      setLeadSheetKey(staticChart.key)
+      setLeadSheetTempo(staticChart.tempo ?? 120)
+      setLeadSheetTimeSig(staticChart.timeSignature ?? '4/4')
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staticChart?.id])
+
+  // Auto-import audio to first DAW track once useDawSetup has reset the tracks.
+  // Guard: track IDs are `track-{timestamp}-{index}`, so compare creation time
+  // against `pendingAudioImport.setAt` to skip stale (pre-reset) tracks.
+  const updateTrackRef = useRef(updateTrack)
+  updateTrackRef.current = updateTrack
+
+  useEffect(() => {
+    if (!pendingAudioImport || tracks.length === 0) return
+
+    const trackCreatedAt = parseInt(tracks[0].id.split('-')[1] ?? '0', 10)
+    if (trackCreatedAt <= pendingAudioImport.setAt) return  // useDawSetup hasn't reset yet
+    if (tracks[0].clips.length > 0) { setPendingAudioImport(null); return }
+
+    const { audioFileId, totalBars, duration, title } = pendingAudioImport
+    const trackId = tracks[0].id
+    const trackColor = tracks[0].color.accent
+
+    setPendingAudioImport(null)
+    setDuration(duration)
+
+    const clip: Clip = {
+      id: `clip-yt-${Date.now()}`,
+      trackId,
+      startBar: 0,
+      lengthInBars: totalBars,
+      trimStart: 0,
+      trimEnd: 0,
+      audioFileId,
+      committedAudioFileId: audioFileId,
+      name: title,
+      color: trackColor,
+      status: 'committed',
+    }
+
+    ToneEngine.getInstance().loadBuffer(audioFileId)
+      .then((audioBuffer) => {
+        updateTrackRef.current(trackId, { clips: [{ ...clip, audioBuffer }], hasRecording: true })
+      })
+      .catch(() => {
+        updateTrackRef.current(trackId, { clips: [clip], hasRecording: true })
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAudioImport, tracks])
 
   // View mode — default to 'pdf' when a pdfUrl is present, else 'leadsheet'
   const [mode, setMode] = useState<'leadsheet' | 'pdf'>(() => chart?.pdfUrl ? 'pdf' : 'leadsheet')
@@ -167,26 +273,27 @@ export function SongsPage() {
     buildProjectData,
   })
 
-  // DAW timeline section labels
+  // DAW timeline section labels — derived from analysis, static chart, or fallback
+  const leadSheetSections = useLeadSheetStore((s) => s.sections)
   const dawSections = useMemo<DawSectionLabel[]>(() => {
-    // If we have analysis sections, use those for DAW labels
-    if (analysisScore?.sections?.length) {
+    // Use lead sheet store sections (populated from analysis or static chart data)
+    if (leadSheetSections?.length) {
       let barStart = 0
-      return analysisScore.sections.map((s) => {
+      return leadSheetSections.map((s) => {
         const barCount = s.measures.length
         const section = { label: s.label, type: s.type, barStart, barCount }
         barStart += barCount
         return section
       })
     }
-    // Otherwise use static progress sections
+    // Fallback to static progress sections
     let barStart = 0
     return PROGRESS_SECTIONS.map((s) => {
       const section = { label: s.label, type: s.type, barStart, barCount: s.barCount }
       barStart += s.barCount
       return section
     })
-  }, [analysisScore])
+  }, [leadSheetSections])
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'learn', projectId: id })
@@ -198,7 +305,28 @@ export function SongsPage() {
       <div className="h-full flex items-center justify-center">
         <div className="text-center flex flex-col items-center gap-4">
           <Loader2 size={32} className="text-text-muted animate-spin" />
-          <p className="text-sm font-medium text-text-primary">Loading score...</p>
+          <p className="text-sm font-medium text-text-primary">Analyzing song...</p>
+          <p className="text-xs text-text-muted">Detecting chords, beats & tempo</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Analysis error
+  if (analysisError) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center flex flex-col items-center gap-4">
+          <FileMusic size={40} className="text-text-muted" />
+          <p className="text-sm font-medium text-text-primary">Analysis failed</p>
+          <p className="text-xs text-text-muted max-w-xs">{analysisError}</p>
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <ArrowLeft size={14} />
+            Go back
+          </button>
         </div>
       </div>
     )
@@ -296,23 +424,6 @@ export function SongsPage() {
           </div>
         )}
 
-        {/* Part picker */}
-        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-2 border border-border">
-          {PARTS.map((part) => (
-            <button
-              key={part.id}
-              onClick={() => setSelectedPart(part.id)}
-              className={cn(
-                'flex items-center px-2.5 py-1 rounded-md text-xs font-medium transition-all',
-                selectedPart === part.id
-                  ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
-                  : 'text-text-muted hover:text-text-secondary',
-              )}
-            >
-              {part.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ── Score area ──────────────────────────────────────────── */}
@@ -331,6 +442,7 @@ export function SongsPage() {
         onAddTrack={() => addTrack()}
         showRecordButton={true}
         sections={dawSections}
+        totalBars={analysisTotalBars}
       />
 
       {/* ── Unsaved-changes dialog ───────────────────────────────── */}

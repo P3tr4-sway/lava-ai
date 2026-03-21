@@ -40,6 +40,7 @@ export interface AnalysisPollResult {
   status: AnalysisStatus
   scoreJson: AnalysisScore | null
   error: string | null
+  audioFileId: string | null
 }
 
 export const youtubeService = {

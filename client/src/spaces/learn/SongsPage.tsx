@@ -5,14 +5,15 @@ import { useAudioStore } from '@/stores/audioStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useDawSetup } from '@/hooks/useDawSetup'
 import { useProjectSave } from '@/hooks/useProjectSave'
-import { Music, FileMusic, ArrowLeft, AlignLeft, NotebookPen } from 'lucide-react'
+import { Music, FileMusic, ArrowLeft, AlignLeft, NotebookPen, Loader2 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog'
-import { CHORD_CHARTS } from '@/data/chordCharts'
+import { CHORD_CHARTS, type ChordChart } from '@/data/chordCharts'
 import { DawPanel } from '@/components/daw/DawPanel'
 import type { DawSectionLabel } from '@/components/daw/DawPanel'
 import { ChordGrid, PdfViewer, MetadataBar } from '@/components/score'
+import { youtubeService, type AnalysisScore } from '@/services/youtubeService'
 
 const PARTS = [
   { id: 'lead', label: 'Lead Guitar' },
@@ -41,7 +42,65 @@ export function SongsPage() {
   // Audio store — bpm used in buildProjectData
   const bpm = useAudioStore((s) => s.bpm)
 
-  const chart = CHORD_CHARTS.find((c) => c.id === id)
+  // Static chart lookup
+  const staticChart = CHORD_CHARTS.find((c) => c.id === id)
+
+  // Analysis result (from YouTube → ChordMiniApp pipeline)
+  const [analysisChart, setAnalysisChart] = useState<ChordChart | null>(null)
+  const [analysisScore, setAnalysisScore] = useState<AnalysisScore | null>(null)
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false)
+  const loadFromAnalysis = useLeadSheetStore((s) => s.loadFromAnalysis)
+
+  // Fetch analysis result when navigating with ?generate=1 and no static chart
+  useEffect(() => {
+    if (!isGenerateMode || !id || staticChart) return
+
+    let cancelled = false
+    setLoadingAnalysis(true)
+
+    youtubeService.pollAnalysis(id)
+      .then((result) => {
+        if (cancelled || !result.scoreJson) return
+
+        const score = result.scoreJson
+        setAnalysisScore(score)
+
+        // Build a synthetic ChordChart for the header
+        setAnalysisChart({
+          id,
+          title: score.title || 'Untitled',
+          artist: '',
+          style: 'Auto-detected',
+          key: score.key,
+          tempo: score.tempo,
+          timeSignature: score.timeSignature,
+        })
+
+        // Populate the lead sheet store with analyzed sections
+        loadFromAnalysis({
+          projectName: score.title || 'Untitled',
+          key: score.key,
+          tempo: score.tempo,
+          timeSignature: score.timeSignature,
+          sections: score.sections.map((s) => ({
+            ...s,
+            type: s.type as 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom',
+          })),
+        })
+      })
+      .catch(() => {
+        // Analysis not ready or failed — will show "not found"
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAnalysis(false)
+      })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isGenerateMode])
+
+  // Use static chart or analysis chart
+  const chart = staticChart ?? analysisChart
 
   // DAW setup — handles track seeding, duration, and committed clip tracking
   const { tracks, addTrack, updateTrack, committedClipIds, hasCommittedClips } = useDawSetup({
@@ -50,20 +109,20 @@ export function SongsPage() {
     resetKey: chart?.id,
   })
 
-  // Lead sheet store — populated from chart so ChordGrid can read it
+  // Lead sheet store — populated from chart so ChordGrid can read it (for static charts only)
   const resetLeadSheet = useLeadSheetStore((s) => s.reset)
   const setLeadSheetKey = useLeadSheetStore((s) => s.setKey)
   const setLeadSheetTempo = useLeadSheetStore((s) => s.setTempo)
   const setLeadSheetTimeSig = useLeadSheetStore((s) => s.setTimeSignature)
 
   useEffect(() => {
-    if (!chart) return
+    if (!staticChart) return // Skip for analysis charts — already loaded via loadFromAnalysis
     resetLeadSheet()
-    setLeadSheetKey(chart.key)
-    setLeadSheetTempo(chart.tempo ?? 120)
-    setLeadSheetTimeSig(chart.timeSignature ?? '4/4')
+    setLeadSheetKey(staticChart.key)
+    setLeadSheetTempo(staticChart.tempo ?? 120)
+    setLeadSheetTimeSig(staticChart.timeSignature ?? '4/4')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chart?.id])
+  }, [staticChart?.id])
 
   // View mode — default to 'pdf' when a pdfUrl is present, else 'leadsheet'
   const [mode, setMode] = useState<'leadsheet' | 'pdf'>(() => chart?.pdfUrl ? 'pdf' : 'leadsheet')
@@ -110,17 +169,40 @@ export function SongsPage() {
 
   // DAW timeline section labels
   const dawSections = useMemo<DawSectionLabel[]>(() => {
+    // If we have analysis sections, use those for DAW labels
+    if (analysisScore?.sections?.length) {
+      let barStart = 0
+      return analysisScore.sections.map((s) => {
+        const barCount = s.measures.length
+        const section = { label: s.label, type: s.type, barStart, barCount }
+        barStart += barCount
+        return section
+      })
+    }
+    // Otherwise use static progress sections
     let barStart = 0
     return PROGRESS_SECTIONS.map((s) => {
       const section = { label: s.label, type: s.type, barStart, barCount: s.barCount }
       barStart += s.barCount
       return section
     })
-  }, [])
+  }, [analysisScore])
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'learn', projectId: id })
   }, [id, setSpaceContext])
+
+  // Loading state for analysis
+  if (loadingAnalysis) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center flex flex-col items-center gap-4">
+          <Loader2 size={32} className="text-text-muted animate-spin" />
+          <p className="text-sm font-medium text-text-primary">Loading score...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!chart) {
     return (
@@ -157,6 +239,11 @@ export function SongsPage() {
           <Music size={15} className="text-text-muted shrink-0" />
           <span className="text-sm font-semibold text-text-primary">{chart.title}</span>
           {chart.artist && <span className="text-xs text-text-muted">— {chart.artist}</span>}
+          {analysisChart && (
+            <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-success/15 text-success">
+              AI Generated
+            </span>
+          )}
         </div>
 
         <div className="h-4 w-px bg-border shrink-0" />

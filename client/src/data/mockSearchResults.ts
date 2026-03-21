@@ -7,6 +7,7 @@ export interface YoutubeResult {
   views: string
   uploadedAt: string
   gradient: string
+  thumbnail?: string
   songId?: string
 }
 

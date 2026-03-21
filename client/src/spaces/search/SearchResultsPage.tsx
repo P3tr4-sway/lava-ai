@@ -1,8 +1,38 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Play, Pause, Search, Music2, Sparkles, X, ArrowRight, Loader2, Headphones } from 'lucide-react'
+import { ArrowLeft, Play, Pause, Search, Music2, Sparkles, X, ArrowRight, Loader2, Headphones, AlertCircle, RotateCcw } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
-import { MOCK_SEARCH_RESULTS, type YoutubeResult } from '@/data/mockSearchResults'
+import { youtubeService, type YoutubeSearchResult, type AnalysisStatus } from '@/services/youtubeService'
+import type { YoutubeResult } from '@/data/mockSearchResults'
+
+// Gradient palette for results without thumbnails
+const GRADIENTS = [
+  'from-amber-800 to-stone-900',
+  'from-blue-800 to-slate-900',
+  'from-emerald-800 to-slate-900',
+  'from-rose-800 to-slate-900',
+  'from-cyan-800 to-slate-900',
+  'from-violet-800 to-slate-900',
+  'from-orange-800 to-stone-900',
+  'from-teal-800 to-slate-900',
+  'from-lime-800 to-slate-900',
+  'from-red-800 to-slate-900',
+]
+
+/** Map API result to the UI-facing YoutubeResult */
+function toYoutubeResult(r: YoutubeSearchResult, idx: number): YoutubeResult {
+  return {
+    id: r.id,
+    title: r.title,
+    artist: r.channel,
+    channel: r.channel,
+    duration: r.duration,
+    views: r.views,
+    uploadedAt: r.uploadedAt,
+    gradient: GRADIENTS[idx % GRADIENTS.length],
+    thumbnail: r.thumbnail,
+  }
+}
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
@@ -11,14 +41,37 @@ export function SearchResultsPage() {
   const navigate = useNavigate()
   const query = searchParams.get('q') ?? ''
   const [inputValue, setInputValue] = useState(query)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [results, setResults] = useState<YoutubeResult[]>([])
+  const [error, setError] = useState<string | null>(null)
   const [selectedResult, setSelectedResult] = useState<YoutubeResult | null>(null)
 
+  // Fetch real YouTube results when query changes
   useEffect(() => {
     setInputValue(query)
+    if (!query.trim()) {
+      setResults([])
+      return
+    }
+
+    let cancelled = false
     setIsLoading(true)
-    const t = setTimeout(() => setIsLoading(false), 1200)
-    return () => clearTimeout(t)
+    setError(null)
+
+    youtubeService.search(query)
+      .then((data) => {
+        if (cancelled) return
+        setResults(data.map(toYoutubeResult))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(err.message ?? 'Search failed')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => { cancelled = true }
   }, [query])
 
   const handleSearch = (e: React.FormEvent) => {
@@ -32,8 +85,8 @@ export function SearchResultsPage() {
     setSelectedResult(result)
   }
 
-  const topResult = MOCK_SEARCH_RESULTS[0]
-  const otherResults = MOCK_SEARCH_RESULTS.slice(1)
+  const topResult = results[0]
+  const otherResults = results.slice(1)
 
   return (
     <div className="h-full overflow-y-auto">
@@ -65,37 +118,58 @@ export function SearchResultsPage() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {isLoading ? (
           <SearchSkeleton />
-        ) : (
+        ) : error ? (
+          <div className="flex flex-col items-center gap-3 py-20 text-text-muted">
+            <AlertCircle size={32} />
+            <p className="text-sm">{error}</p>
+            <button
+              onClick={() => setSearchParams({ q: query })}
+              className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <RotateCcw size={14} />
+              Retry
+            </button>
+          </div>
+        ) : results.length === 0 && query ? (
+          <div className="flex flex-col items-center gap-2 py-20 text-text-muted">
+            <Search size={32} />
+            <p className="text-sm">No results found for "{query}"</p>
+          </div>
+        ) : results.length > 0 ? (
           <div className="flex flex-col gap-10">
 
             {/* Top Result */}
-            <section>
-              <p className="text-sm text-text-muted mb-4">Top result</p>
-              <TopResultCard
-                result={topResult}
-                onViewSheet={() => handleResultClick(topResult)}
-              />
-            </section>
+            {topResult && (
+              <section>
+                <p className="text-sm text-text-muted mb-4">Top result</p>
+                <TopResultCard
+                  result={topResult}
+                  onViewSheet={() => handleResultClick(topResult)}
+                />
+              </section>
+            )}
 
             {/* All Results */}
-            <section>
-              <p className="text-sm text-text-muted mb-4">
-                All results{' '}
-                <span className="text-text-muted/60">({MOCK_SEARCH_RESULTS.length})</span>
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {otherResults.map((result) => (
-                  <SearchResultCard
-                    key={result.id}
-                    result={result}
-                    onClick={() => handleResultClick(result)}
-                  />
-                ))}
-              </div>
-            </section>
+            {otherResults.length > 0 && (
+              <section>
+                <p className="text-sm text-text-muted mb-4">
+                  All results{' '}
+                  <span className="text-text-muted/60">({results.length})</span>
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {otherResults.map((result) => (
+                    <SearchResultCard
+                      key={result.id}
+                      result={result}
+                      onClick={() => handleResultClick(result)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* ── Song Action Modal ─────────────────────────────────────── */}
@@ -103,10 +177,34 @@ export function SearchResultsPage() {
         <SongActionModal
           result={selectedResult}
           onClose={() => setSelectedResult(null)}
-          onGenerate={(songId) => navigate(`/learn/songs/${songId}?generate=1`)}
-          onViewScore={(songId) => navigate(`/learn/songs/${songId}`)}
         />
       )}
+    </div>
+  )
+}
+
+// ─── Thumbnail helper ─────────────────────────────────────────────────────
+
+function Thumbnail({ result, className, children }: { result: YoutubeResult; className?: string; children?: React.ReactNode }) {
+  const [imgError, setImgError] = useState(false)
+
+  if (result.thumbnail && !imgError) {
+    return (
+      <div className={cn('relative bg-surface-3', className)}>
+        <img
+          src={result.thumbnail}
+          alt={result.title}
+          className="w-full h-full object-cover"
+          onError={() => setImgError(true)}
+        />
+        {children}
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('relative bg-gradient-to-br', result.gradient, className)}>
+      {children}
     </div>
   )
 }
@@ -126,7 +224,7 @@ function TopResultCard({
     <div className="border border-border hover:border-border-hover rounded-lg overflow-hidden bg-surface-0 transition-colors">
 
       {/* Thumbnail */}
-      <div className={cn('relative aspect-video w-full bg-gradient-to-br', result.gradient)}>
+      <Thumbnail result={result} className="aspect-video w-full">
 
         {/* Play / Pause — always visible */}
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
@@ -171,7 +269,7 @@ function TopResultCard({
         <div className="absolute bottom-3 right-3 px-2 py-0.5 bg-black/70 rounded text-white text-xs font-medium tabular-nums">
           {result.duration}
         </div>
-      </div>
+      </Thumbnail>
 
       {/* Info */}
       <div className="p-6 flex flex-col gap-4">
@@ -196,7 +294,7 @@ function TopResultCard({
             <Music2 size={15} />
             View Sheet Music
           </button>
-          <YtButton />
+          <YtButton videoId={result.id} />
         </div>
       </div>
     </div>
@@ -218,7 +316,7 @@ function SearchResultCard({
       className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
     >
       {/* Thumbnail */}
-      <div className={cn('relative aspect-video w-full bg-gradient-to-br', result.gradient)}>
+      <Thumbnail result={result} className="aspect-video w-full">
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="flex items-center justify-center size-12 rounded-full bg-black/50 backdrop-blur-sm">
             <Play size={20} className="text-white ml-0.5" fill="white" />
@@ -227,7 +325,7 @@ function SearchResultCard({
         <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/70 rounded text-white text-xs font-medium tabular-nums">
           {result.duration}
         </div>
-      </div>
+      </Thumbnail>
 
       {/* Info */}
       <div className="p-4 flex flex-col gap-1.5">
@@ -264,132 +362,249 @@ function YtBadge() {
   )
 }
 
-function YtButton() {
+function YtButton({ videoId }: { videoId: string }) {
   return (
-    <button
-      disabled
-      title="Open on YouTube (coming soon)"
-      className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-text-secondary border border-border rounded-full opacity-50 cursor-not-allowed"
+    <a
+      href={`https://www.youtube.com/watch?v=${videoId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-text-secondary border border-border rounded-full hover:border-border-hover hover:text-text-primary transition-colors"
     >
       <YtIcon />
       YouTube
-    </button>
+    </a>
   )
 }
 
-// ─── Song Action Modal ────────────────────────────────────────────────────
+// ─── Song Action Modal with polling progress ──────────────────────────────
+
+const STATUS_LABELS: Record<AnalysisStatus, string> = {
+  downloading: 'Downloading audio...',
+  analyzing_chords: 'Analyzing chords...',
+  analyzing_beats: 'Detecting beats & tempo...',
+  processing: 'Building score...',
+  completed: 'Done!',
+  error: 'Something went wrong',
+}
+
+const STATUS_ORDER: AnalysisStatus[] = ['downloading', 'analyzing_chords', 'analyzing_beats', 'processing', 'completed']
 
 function SongActionModal({
   result,
   onClose,
-  onGenerate,
-  onViewScore,
 }: {
   result: YoutubeResult
   onClose: () => void
-  onGenerate: (songId: string) => void
-  onViewScore: (songId: string) => void
 }) {
   const backdropRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
   const [generating, setGenerating] = useState(false)
-  const songId = result.songId ?? 'wonderwall'
+  const [status, setStatus] = useState<AnalysisStatus | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !generating) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, generating])
 
-  const handleGenerate = () => {
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
+
+  const handleGenerate = useCallback(async () => {
     setGenerating(true)
-    // Simulate AI processing then navigate
-    setTimeout(() => onGenerate(songId), 1800)
+    setStatus('downloading')
+    setErrorMsg(null)
+
+    try {
+      const transcriptionId = await youtubeService.startAnalysis(result.id, result.title)
+
+      // Start polling
+      pollRef.current = setInterval(async () => {
+        try {
+          const poll = await youtubeService.pollAnalysis(transcriptionId)
+          setStatus(poll.status)
+
+          if (poll.status === 'completed') {
+            if (pollRef.current) clearInterval(pollRef.current)
+            // Navigate to the score page with the transcription ID
+            navigate(`/play/${transcriptionId}?generate=1`)
+          } else if (poll.status === 'error') {
+            if (pollRef.current) clearInterval(pollRef.current)
+            setErrorMsg(poll.error ?? 'Analysis failed')
+            setGenerating(false)
+          }
+        } catch {
+          // Polling error — keep trying
+        }
+      }, 2000)
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to start analysis')
+      setGenerating(false)
+      setStatus(null)
+    }
+  }, [result.id, result.title, navigate])
+
+  const handleRetry = () => {
+    setErrorMsg(null)
+    handleGenerate()
   }
+
+  const currentStepIdx = status ? STATUS_ORDER.indexOf(status) : -1
+  const progress = status === 'completed' ? 100
+    : status === 'error' ? 0
+    : currentStepIdx >= 0 ? Math.round(((currentStepIdx + 0.5) / (STATUS_ORDER.length - 1)) * 100)
+    : 0
 
   return (
     <div
       ref={backdropRef}
-      onClick={(e) => e.target === backdropRef.current && onClose()}
+      onClick={(e) => e.target === backdropRef.current && !generating && onClose()}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
     >
       <div className="w-full sm:max-w-md bg-surface-1 border border-border rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-bottom-4 duration-200">
 
         {/* Header — song info */}
         <div className="relative px-5 pt-5 pb-4">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
-          >
-            <X size={16} />
-          </button>
+          {!generating && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 p-1.5 rounded text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
 
           <div className="flex items-start gap-4">
-            <div className={cn('w-14 h-14 rounded-lg bg-gradient-to-br shrink-0 flex items-center justify-center', result.gradient)}>
-              <Music2 size={22} className="text-surface-0/80" />
-            </div>
+            {result.thumbnail ? (
+              <img
+                src={result.thumbnail}
+                alt=""
+                className="w-14 h-14 rounded-lg object-cover shrink-0"
+              />
+            ) : (
+              <div className={cn('w-14 h-14 rounded-lg bg-gradient-to-br shrink-0 flex items-center justify-center', result.gradient)}>
+                <Music2 size={22} className="text-surface-0/80" />
+              </div>
+            )}
             <div className="flex-1 min-w-0 pr-6">
               <p className="text-base font-semibold text-text-primary leading-snug line-clamp-2">{result.title}</p>
-              <p className="text-sm text-text-muted mt-0.5">{result.artist}</p>
+              <p className="text-sm text-text-muted mt-0.5">{result.channel}</p>
             </div>
           </div>
         </div>
 
         <div className="w-full h-px bg-border" />
 
-        {/* Options */}
+        {/* Options / Progress */}
         <div className="px-5 py-4 flex flex-col gap-3">
 
-          {/* Option A: AI Score + Backing Track — primary */}
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="w-full flex items-start gap-4 p-4 bg-text-primary rounded-xl transition-opacity text-left disabled:opacity-60 hover:opacity-90"
-          >
-            <div className="w-10 h-10 rounded-full bg-surface-0/15 flex items-center justify-center shrink-0 mt-0.5">
-              {generating
-                ? <Loader2 size={18} className="text-surface-0 animate-spin" />
-                : <Sparkles size={18} className="text-surface-0" />
-              }
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-surface-0">
-                {generating ? 'Generating...' : 'AI Score + Backing Track'}
-              </p>
-              <p className="text-xs text-surface-0/60 mt-0.5 leading-relaxed">
-                {generating
-                  ? 'Analyzing audio, extracting chords and melody...'
-                  : 'Auto-detect key & tempo · Generate guitar tabs · Matched backing track'
-                }
-              </p>
-            </div>
-            {!generating && <ArrowRight size={16} className="text-surface-0/50 shrink-0 mt-1" />}
-          </button>
+          {generating ? (
+            /* ── Progress view ──────────────────────────────────── */
+            <div className="flex flex-col gap-4 py-2">
+              {/* Progress bar */}
+              <div className="w-full h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-text-primary rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
 
-          {/* Option B: Backing track only */}
-          <button
-            onClick={() => onViewScore(songId)}
-            className="w-full flex items-start gap-4 p-4 bg-surface-0 border border-border hover:border-border-hover rounded-xl transition-colors text-left group"
-          >
-            <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center shrink-0 group-hover:bg-surface-4 transition-colors mt-0.5">
-              <Headphones size={18} className="text-text-secondary" />
+              {/* Steps */}
+              <div className="flex flex-col gap-2">
+                {STATUS_ORDER.slice(0, -1).map((step, i) => {
+                  const isActive = step === status
+                  const isDone = currentStepIdx > i
+                  return (
+                    <div key={step} className="flex items-center gap-3">
+                      <div className={cn(
+                        'size-5 rounded-full flex items-center justify-center text-xs shrink-0 transition-colors',
+                        isDone ? 'bg-success/20 text-success' : isActive ? 'bg-text-primary text-surface-0' : 'bg-surface-3 text-text-muted',
+                      )}>
+                        {isDone ? '✓' : isActive ? <Loader2 size={12} className="animate-spin" /> : (i + 1)}
+                      </div>
+                      <span className={cn(
+                        'text-sm transition-colors',
+                        isActive ? 'text-text-primary font-medium' : isDone ? 'text-text-secondary' : 'text-text-muted',
+                      )}>
+                        {STATUS_LABELS[step]}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Error state */}
+              {errorMsg && (
+                <div className="flex flex-col items-center gap-3 pt-2">
+                  <div className="flex items-center gap-2 text-error text-sm">
+                    <AlertCircle size={16} />
+                    <span>{errorMsg}</span>
+                  </div>
+                  <button
+                    onClick={handleRetry}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-primary border border-border rounded-full hover:bg-surface-2 transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                    Retry
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">Backing Track Only</p>
-              <p className="text-xs text-text-muted mt-0.5 leading-relaxed">Generate a backing track only · Read your own score while playing along</p>
-            </div>
-            <ArrowRight size={16} className="text-text-muted shrink-0 mt-1" />
-          </button>
+          ) : (
+            /* ── Action buttons ─────────────────────────────────── */
+            <>
+              {/* Option A: AI Score + Backing Track — primary */}
+              <button
+                onClick={handleGenerate}
+                className="w-full flex items-start gap-4 p-4 bg-text-primary rounded-xl transition-opacity text-left hover:opacity-90"
+              >
+                <div className="w-10 h-10 rounded-full bg-surface-0/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles size={18} className="text-surface-0" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-surface-0">AI Score + Backing Track</p>
+                  <p className="text-xs text-surface-0/60 mt-0.5 leading-relaxed">
+                    Auto-detect key & tempo · Generate chord chart · Matched backing track
+                  </p>
+                </div>
+                <ArrowRight size={16} className="text-surface-0/50 shrink-0 mt-1" />
+              </button>
+
+              {/* Option B: Backing track only */}
+              <button
+                onClick={() => navigate(`/play/${result.id}`)}
+                className="w-full flex items-start gap-4 p-4 bg-surface-0 border border-border hover:border-border-hover rounded-xl transition-colors text-left group"
+              >
+                <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center shrink-0 group-hover:bg-surface-4 transition-colors mt-0.5">
+                  <Headphones size={18} className="text-text-secondary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary">Backing Track Only</p>
+                  <p className="text-xs text-text-muted mt-0.5 leading-relaxed">Generate a backing track only · Read your own score while playing along</p>
+                </div>
+                <ArrowRight size={16} className="text-text-muted shrink-0 mt-1" />
+              </button>
+            </>
+          )}
 
         </div>
 
         {/* Footer hint */}
-        <div className="px-5 pb-5 pt-0">
-          <p className="text-2xs text-text-muted text-center">
-            3 free AI generations per month · No credit card required
-          </p>
-        </div>
+        {!generating && (
+          <div className="px-5 pb-5 pt-0">
+            <p className="text-2xs text-text-muted text-center">
+              3 free AI generations per month · No credit card required
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

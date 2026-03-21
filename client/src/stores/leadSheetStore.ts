@@ -56,6 +56,15 @@ interface LeadSheetStore {
   setActiveCell: (sectionId: string, measureId: string) => void
   clearActiveCell: () => void
 
+  /** Bulk-load sections from analysis result */
+  loadFromAnalysis: (data: {
+    projectName: string
+    key: string
+    tempo: number
+    timeSignature: string
+    sections: LeadSheetSection[]
+  }) => void
+
   reset: () => void
 }
 
@@ -125,6 +134,17 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
 
   setActiveCell: (sectionId, measureId) => set({ activeCell: { sectionId, measureId } }),
   clearActiveCell: () => set({ activeCell: null }),
+
+  loadFromAnalysis: (data) =>
+    set({
+      projectName: data.projectName,
+      key: data.key,
+      tempo: data.tempo,
+      timeSignature: data.timeSignature,
+      sections: data.sections,
+      pdfUrl: null,
+      activeCell: null,
+    }),
 
   reset: () =>
     set({

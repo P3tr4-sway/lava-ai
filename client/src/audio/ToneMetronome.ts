@@ -62,7 +62,7 @@ export class ToneMetronome {
     // Clean up any previous schedule
     this.clearSchedule()
 
-    if (beatsPerBar !== undefined) {
+    if (beatsPerBar !== undefined && beatsPerBar > 0) {
       this.beatsPerBar = beatsPerBar
     }
 
@@ -130,6 +130,13 @@ export class ToneMetronome {
     }
 
     this.beatCount++
+  }
+
+  /** Stop the metronome and dispose both synths to release audio resources. */
+  dispose(): void {
+    this.stop()
+    this.downbeatSynth.dispose()
+    this.beatSynth.dispose()
   }
 
   /** Clear the Transport schedule if one exists. */

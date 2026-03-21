@@ -62,6 +62,7 @@ interface RecordSession {
   tempClipId: string
   recordPassId: string
   startBar: number
+  bpm: number
   phase: 'queued' | 'recording'
   fileName: string
   recordMode: Clip['recordMode']
@@ -154,7 +155,7 @@ export function DawPanel({
   const playheadLeft = currentBar * BAR_WIDTH_PX
   const countdownBeats =
     pendingRecordStartBar !== null && ACTIVE_RECORD_STATES.includes(transportState)
-      ? Math.max(0, Math.ceil((pendingRecordStartBar - currentBar) * beatsPerBar))
+      ? Math.max(1, Math.ceil((pendingRecordStartBar - currentBar) * beatsPerBar))
       : 0
   const transportRecordIntent = tracks.some((track) => track.recordReady || track.recording || track.recArm)
 
@@ -166,6 +167,7 @@ export function DawPanel({
       const audioFile = await audioService.upload(file)
       const engine = ToneEngine.getInstance()
       const audioBuffer = await engine.loadBuffer(audioFile.id)
+      if (!audioBuffer) return
 
       const clipWidthInBars = audioBuffer.duration * (bpm / 60) / beatsPerBar
       const clip: Clip = {
@@ -218,7 +220,7 @@ export function DawPanel({
       const { blob, audioBuffer } = await recorder.stop()
       const file = new File([blob], `${session.fileName}.webm`, { type: blob.type || 'audio/webm' })
       const uploaded = await audioService.upload(file)
-      const committedLengthInBars = audioBuffer.duration * (bpm / 60) / beatsPerBar
+      const committedLengthInBars = audioBuffer.duration * (session.bpm / 60) / beatsPerBar
 
       updateClip(session.trackId, session.tempClipId, {
         audioBuffer,
@@ -288,9 +290,10 @@ export function DawPanel({
   useEffect(() => {
     const session = recordSessionRef.current
     if (!session || session.phase !== 'recording') return
+    const { trackId, tempClipId, startBar } = session  // capture before any async
 
-    const clipLength = Math.max(0.25, currentBar - session.startBar)
-    updateClip(session.trackId, session.tempClipId, {
+    const clipLength = Math.max(0.25, currentBar - startBar)
+    updateClip(trackId, tempClipId, {
       lengthInBars: clipLength,
       status: 'recording',
     })
@@ -332,6 +335,7 @@ export function DawPanel({
       tempClipId,
       recordPassId,
       startBar,
+      bpm,
       phase: 'queued',
       fileName,
       recordMode: clipRecordMode,
@@ -518,6 +522,7 @@ export function DawPanel({
               type="number"
               value={bpm}
               onChange={(e) => {
+                if (e.target.value.includes('.')) return
                 const value = Number.parseInt(e.target.value, 10)
                 if (!Number.isNaN(value) && value >= 40 && value <= 240) {
                   setBpm(value)
@@ -526,6 +531,7 @@ export function DawPanel({
               className="w-12 bg-transparent text-center text-xs text-text-primary/80 border-b border-border focus:outline-none focus:border-border-hover"
               min={40}
               max={240}
+              step="1"
             />
           </div>
 

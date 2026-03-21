@@ -4,6 +4,7 @@ export class Recorder {
   private mediaRecorder: MediaRecorder | null = null
   private chunks: Blob[] = []
   private stream: MediaStream | null = null
+  private source: MediaStreamAudioSourceNode | null = null
   private liveAnalyser: AnalyserNode | null = null
   private mimeType = ''
 
@@ -34,8 +35,8 @@ export class Recorder {
     const ctx = Tone.getContext().rawContext as AudioContext
     this.liveAnalyser = ctx.createAnalyser()
     this.liveAnalyser.fftSize = 2048
-    const source = ctx.createMediaStreamSource(this.stream)
-    source.connect(this.liveAnalyser)
+    this.source = ctx.createMediaStreamSource(this.stream)
+    this.source.connect(this.liveAnalyser)
 
     // Start MediaRecorder with 100ms chunk interval
     this.chunks = []
@@ -63,11 +64,14 @@ export class Recorder {
           resolve({ blob, audioBuffer })
         } catch (err) {
           reject(err)
+        } finally {
+          this.stream?.getTracks().forEach(track => track.stop())
+          this.source?.disconnect()
+          this.source = null
+          this.liveAnalyser = null
         }
       }
       this.mediaRecorder.stop()
-      // Disconnect liveAnalyser
-      this.liveAnalyser = null
     })
   }
 

@@ -38,6 +38,8 @@ export function ClipView({
   useEffect(() => {
     if (!waveformRef.current || !clip.audioBuffer) return
 
+    let mounted = true
+
     // Destroy any previous instance
     wsRef.current?.destroy()
 
@@ -58,9 +60,14 @@ export function ClipView({
     const channelData = clip.audioBuffer.getChannelData(0)
     ws.load('', [channelData], clip.audioBuffer.duration)
 
+    ws.on('error', (err) => {
+      console.error('WaveSurfer load failed:', err)
+    })
+
     wsRef.current = ws
 
     return () => {
+      mounted = false
       ws.destroy()
       wsRef.current = null
     }
@@ -186,6 +193,8 @@ export function ClipView({
 
   return (
     <div
+      role="region"
+      aria-label={clip.name || 'Audio clip'}
       style={{
         left: leftPx,
         width: widthPx,
@@ -211,6 +220,7 @@ export function ClipView({
       {/* ── Left resize handle ─────────────────────────────────── */}
       <div
         data-resize-handle="left"
+        aria-label="Resize clip start"
         className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-white/20 transition-colors"
         onPointerDown={handleLeftResizePointerDown}
       />
@@ -247,6 +257,7 @@ export function ClipView({
       {/* ── Right resize handle ────────────────────────────────── */}
       <div
         data-resize-handle="right"
+        aria-label="Resize clip end"
         className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-white/20 transition-colors"
         onPointerDown={handleRightResizePointerDown}
       />

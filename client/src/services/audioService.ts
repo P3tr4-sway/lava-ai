@@ -15,7 +15,11 @@ export const audioService = {
 
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText))
+          try {
+            resolve(JSON.parse(xhr.responseText))
+          } catch (e) {
+            reject(new Error(`Invalid JSON response: ${xhr.responseText}`))
+          }
         } else {
           reject(new Error(`Upload failed: ${xhr.status}`))
         }

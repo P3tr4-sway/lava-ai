@@ -21,6 +21,7 @@ export function TrackControls({
   const armTrack = useDawPanelStore((s) => s.armTrack)
 
   const handleRecordClick = () => {
+    if (!showRecordButton) return  // guard for disabled state
     if (track.recording || track.recordReady) {
       onRecordStop?.(track.id)
     } else {

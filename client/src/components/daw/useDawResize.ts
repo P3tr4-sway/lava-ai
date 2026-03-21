@@ -37,7 +37,8 @@ export function useDawResize() {
     })
   }, [])
 
-  const onHandlePointerUp = useCallback(() => {
+  const onHandlePointerUp = useCallback((e: React.PointerEvent) => {
+    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
     dragRef.current = null
   }, [])
 

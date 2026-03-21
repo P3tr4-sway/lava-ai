@@ -180,7 +180,7 @@ export class ToneEngine {
     await toneBuffer.load(url)
 
     const raw = toneBuffer.get()
-    if (!raw) throw new Error(`Failed to decode audio for ${audioFileId}`)
+    if (!raw) throw new Error(`Failed to decode audio for fileId="${audioFileId}" url="${url}"`)
     this.bufferCache.set(audioFileId, raw)
     return raw
   }
@@ -206,7 +206,11 @@ export class ToneEngine {
     for (const clip of clips) {
       const clipEnd = clip.startBar + clip.lengthInBars
       if (clipEnd <= fromBar) continue
-      this.scheduleClip(clip, playheadSec)
+      try {
+        this.scheduleClip(clip, playheadSec)
+      } catch (err) {
+        console.error(`ToneEngine: failed to schedule clip ${clip.id}`, err)
+      }
     }
 
     Tone.getTransport().start()
@@ -296,6 +300,7 @@ export class ToneEngine {
     } else {
       const seekedIntoClip = playheadSec - clipStartSec
       offset = seekedIntoClip + trimStartSec
+      offset = Math.min(offset, clip.audioBuffer.duration - 0.001)
       duration = clipDurationSec - seekedIntoClip
       if (duration <= 0) return
       transportTime = playheadSec
@@ -329,6 +334,7 @@ export class ToneEngine {
     for (const [, players] of this.activePlayers) {
       for (const player of players) {
         try {
+          player.stop()
           player.dispose()
         } catch {
           // already disposed — ignore

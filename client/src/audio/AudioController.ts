@@ -41,6 +41,7 @@ export class AudioController {
   private rafId: number | null = null
   private unsubscribers: Array<() => void> = []
 
+  private destroyed = false
   private prevTrackIds: Set<string> = new Set()
   private prevTrackProps: Map<string, { volume: number; pan: number; muted: boolean; solo: boolean }> = new Map()
 
@@ -216,6 +217,7 @@ export class AudioController {
 
   private startRafLoop(): void {
     const tick = () => {
+      if (this.destroyed) return
       const audio = useAudioStore.getState()
 
       if (isRunningState(audio.transportState)) {
@@ -266,6 +268,8 @@ export class AudioController {
   }
 
   destroy(): void {
+    this.destroyed = true
+
     this.unsubscribers.forEach((fn) => fn())
     this.unsubscribers = []
 

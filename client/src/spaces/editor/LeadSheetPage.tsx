@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Plus, ChevronDown, Trash2, Music2,
+  ArrowLeft, Plus, ChevronDown, Trash2, Music2, AlignLeft, NotebookPen,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useAgentStore } from '@/stores/agentStore'
@@ -242,6 +242,7 @@ export function LeadSheetPage() {
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
 
+  const [mode, setMode] = useState<'leadsheet' | 'score'>('leadsheet')
   const [addSectionOpen, setAddSectionOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -397,8 +398,36 @@ export function LeadSheetPage() {
 
         <div className="flex-1" />
 
-        {/* Add section */}
-        <div className="relative">
+        {/* Mode picker */}
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-2 border border-border">
+          <button
+            onClick={() => setMode('leadsheet')}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              mode === 'leadsheet'
+                ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
+                : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            <AlignLeft size={11} />
+            Lead Sheet
+          </button>
+          <button
+            onClick={() => setMode('score')}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              mode === 'score'
+                ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
+                : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            <NotebookPen size={11} />
+            Score
+          </button>
+        </div>
+
+        {/* Add section — only in lead sheet mode */}
+        <div className={cn('relative', mode === 'score' && 'invisible')}>
           <button
             onClick={() => setAddSectionOpen(!addSectionOpen)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-3 transition-colors"
@@ -423,56 +452,78 @@ export function LeadSheetPage() {
         </div>
       </div>
 
-      {/* ── Lead sheet content area ──────────────────────────────── */}
-      <div
-        className="flex-1 overflow-y-auto px-6 py-5"
-        onClick={(e) => {
-          // Clear active cell when clicking outside a measure
-          if (e.target === e.currentTarget) clearActiveCell()
-        }}
-      >
-        {sections.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center flex flex-col items-center gap-4">
-              <Music2 size={40} className="text-text-muted" />
-              <p className="text-sm font-medium text-text-primary">No sections yet</p>
-              <p className="text-xs text-text-muted">Click "Add Section" to start building your lead sheet</p>
-              <button
-                onClick={() => addSection('verse', 'Verse 1')}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-text-primary text-surface-0 text-sm font-medium hover:opacity-90 transition-opacity"
-              >
-                <Plus size={14} />
-                Add first section
-              </button>
+      {/* ── Content area ─────────────────────────────────────────── */}
+      {mode === 'leadsheet' ? (
+        <div
+          className="flex-1 overflow-y-auto px-6 py-5"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) clearActiveCell()
+          }}
+        >
+          {sections.length === 0 ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center flex flex-col items-center gap-4">
+                <Music2 size={40} className="text-text-muted" />
+                <p className="text-sm font-medium text-text-primary">No sections yet</p>
+                <p className="text-xs text-text-muted">Click "Add Section" to start building your lead sheet</p>
+                <button
+                  onClick={() => addSection('verse', 'Verse 1')}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-text-primary text-surface-0 text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  <Plus size={14} />
+                  Add first section
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="max-w-3xl mx-auto flex flex-col gap-8">
-            {/* Title block */}
-            <div className="text-center pt-2 pb-1">
-              <p className="text-xs text-text-muted font-mono">
-                {key} major · {timeSignature} · ♩= {tempo}
+          ) : (
+            <div className="max-w-3xl mx-auto flex flex-col gap-8">
+              {/* Title block */}
+              <div className="text-center pt-2 pb-1">
+                <p className="text-xs text-text-muted font-mono">
+                  {key} major · {timeSignature} · ♩= {tempo}
+                </p>
+              </div>
+
+              {/* Sections */}
+              {sections.map((section, sIdx) => (
+                <SectionBlock
+                  key={section.id}
+                  section={section}
+                  activeCellId={activeCell?.sectionId === section.id ? activeCell.measureId : null}
+                  onCellActivate={(sId, mId) => setActiveCell(sId, mId)}
+                  onCellTabTo={handleCellTabTo}
+                  startBarIndex={sectionStartBars[sIdx]}
+                  onSeek={handleSeek}
+                />
+              ))}
+
+              {/* Bottom padding */}
+              <div className="h-4" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-6 py-5 flex items-center justify-center">
+          <div className="text-center flex flex-col items-center gap-4 max-w-sm">
+            <div className="size-14 rounded-2xl bg-surface-2 border border-border flex items-center justify-center">
+              <NotebookPen size={24} className="text-text-muted" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-semibold text-text-primary">Score View</p>
+              <p className="text-xs text-text-muted leading-relaxed">
+                Standard notation score rendering is coming soon. Switch to Lead Sheet mode to edit chord charts.
               </p>
             </div>
-
-            {/* Sections */}
-            {sections.map((section, sIdx) => (
-              <SectionBlock
-                key={section.id}
-                section={section}
-                activeCellId={activeCell?.sectionId === section.id ? activeCell.measureId : null}
-                onCellActivate={(sId, mId) => setActiveCell(sId, mId)}
-                onCellTabTo={handleCellTabTo}
-                startBarIndex={sectionStartBars[sIdx]}
-                onSeek={handleSeek}
-              />
-            ))}
-
-            {/* Bottom padding */}
-            <div className="h-4" />
+            <button
+              onClick={() => setMode('leadsheet')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-3 transition-colors"
+            >
+              <AlignLeft size={12} />
+              Switch to Lead Sheet
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── DAW Panel ───────────────────────────────────────────── */}
       <DawPanel

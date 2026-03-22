@@ -41,6 +41,14 @@ export function TaskCard({ task, className }: TaskCardProps) {
     return () => window.removeEventListener('keydown', handler)
   }, [expanded])
 
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    if (!expanded || task.status !== 'active') return
+    const timer = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(timer)
+  }, [expanded, task.status])
+
   const elapsed = task.completedAt
     ? null
     : `${Math.floor((Date.now() - task.createdAt) / 60000)}:${String(Math.floor(((Date.now() - task.createdAt) % 60000) / 1000)).padStart(2, '0')}`

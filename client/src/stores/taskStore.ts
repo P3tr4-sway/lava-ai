@@ -38,19 +38,17 @@ interface TaskStore {
   tasks: BackgroundTask[]
   // addTask: transcriptionId, YouTube videoId, display title
   addTask: (id: string, videoId: string, title: string) => void
-  updateTask: (id: string, updates: Partial<BackgroundTask>) => void
+  updateTask: (id: string, updates: Partial<Omit<BackgroundTask, 'id' | 'videoId' | 'createdAt'>>) => void
   removeTask: (id: string) => void
   getTask: (id: string) => BackgroundTask | undefined
-  activeTasks: () => BackgroundTask[]
-  completedTasks: () => BackgroundTask[]
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
 
   addTask: (id, videoId, title) => {
-    // Dedup: if task already active, don't add again
-    if (get().tasks.find((t) => t.id === id && t.status === 'active')) return
+    // Dedup: if task already exists (any status), don't add again
+    if (get().tasks.find((t) => t.id === id)) return
     const task: BackgroundTask = {
       id,
       videoId,
@@ -64,7 +62,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set((state) => ({ tasks: [task, ...state.tasks] }))
   },
 
-  updateTask: (id, updates) =>
+  updateTask: (id, updates: Partial<Omit<BackgroundTask, 'id' | 'videoId' | 'createdAt'>>) =>
     set((state) => ({
       tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
     })),
@@ -73,6 +71,4 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
 
   getTask: (id) => get().tasks.find((t) => t.id === id),
-  activeTasks: () => get().tasks.filter((t) => t.status === 'active'),
-  completedTasks: () => get().tasks.filter((t) => t.status === 'completed'),
 }))

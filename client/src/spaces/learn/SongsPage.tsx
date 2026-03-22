@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
+import { useTaskStore, STAGE_LABEL } from '@/stores/taskStore'
 import { useDawSetup } from '@/hooks/useDawSetup'
 import { useProjectSave } from '@/hooks/useProjectSave'
 import { Music, FileMusic, ArrowLeft, AlignLeft, NotebookPen, Loader2 } from 'lucide-react'
@@ -59,95 +60,103 @@ export function SongsPage() {
   // Fetch / poll analysis result when navigating with ?generate=1 and no static chart
   const [analysisError, setAnalysisError] = useState<string | null>(null)
 
+  const loadResult = useCallback((result: import('@/services/youtubeService').AnalysisPollResult) => {
+    if (!result.scoreJson) {
+      setAnalysisError('Analysis completed but no score was generated.')
+      setLoadingAnalysis(false)
+      return
+    }
+    const score = result.scoreJson
+    setAnalysisChart({
+      id: id!,
+      title: score.title || 'Untitled',
+      artist: '',
+      style: 'Auto-detected',
+      key: score.key,
+      tempo: score.tempo,
+      timeSignature: score.timeSignature,
+    })
+    loadFromAnalysis({
+      projectName: score.title || 'Untitled',
+      key: score.key,
+      tempo: score.tempo,
+      timeSignature: score.timeSignature,
+      sections: score.sections.map((s) => ({
+        ...s,
+        type: s.type as 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom',
+      })),
+    })
+    setBpm(score.tempo)
+    if (result.audioFileId) {
+      const beatsPerMeasure = parseInt(score.timeSignature?.split('/')[0] ?? '4', 10) || 4
+      const bars = Math.max(16, Math.ceil((score.duration! * score.tempo) / (60 * beatsPerMeasure)))
+      setAnalysisTotalBars(bars)
+      setPendingAudioImport({
+        audioFileId: result.audioFileId,
+        totalBars: bars,
+        duration: score.duration!,
+        title: score.title || 'Audio',
+        setAt: Date.now(),
+      })
+    }
+    setLoadingAnalysis(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, loadFromAnalysis, setBpm])
+
+  const getTask = useTaskStore((s) => s.getTask)
+  const addTask = useTaskStore((s) => s.addTask)
+
+  // Derive task data reactively
+  const task = id ? getTask(id) : undefined
+  const taskProgress = task?.progress ?? 0
+  const taskStage = task?.stage ?? 'downloading'
+
   useEffect(() => {
     if (!isGenerateMode || !id || staticChart) return
 
-    let cancelled = false
+    const existingTask = getTask(id)
+
+    if (existingTask?.status === 'completed' && existingTask.result) {
+      // Already done — load immediately from store
+      loadResult(existingTask.result)
+      return
+    }
+
+    if (existingTask?.status === 'active') {
+      // Already polling globally — nothing to do here
+      setLoadingAnalysis(true)
+      return
+    }
+
+    // No task in store — check server (handles page refresh case)
     setLoadingAnalysis(true)
     setAnalysisError(null)
 
-    const loadResult = (result: import('@/services/youtubeService').AnalysisPollResult) => {
-      if (cancelled) return
-
-      if (!result.scoreJson) {
-        setAnalysisError('Analysis completed but no score was generated.')
+    youtubeService.pollAnalysis(id).then((result) => {
+      if (result.status === 'completed') {
+        loadResult(result)
+      } else if (result.status === 'error') {
+        setAnalysisError(result.error ?? 'Analysis failed')
         setLoadingAnalysis(false)
-        return
+      } else {
+        // Server still processing — register in store so global poller takes over
+        const title = document.title || 'Song'
+        addTask(id, id, title)
       }
-
-      const score = result.scoreJson
-
-      // Build a synthetic ChordChart for the header
-      setAnalysisChart({
-        id,
-        title: score.title || 'Untitled',
-        artist: '',
-        style: 'Auto-detected',
-        key: score.key,
-        tempo: score.tempo,
-        timeSignature: score.timeSignature,
-      })
-
-      // Populate the lead sheet store with analyzed sections
-      loadFromAnalysis({
-        projectName: score.title || 'Untitled',
-        key: score.key,
-        tempo: score.tempo,
-        timeSignature: score.timeSignature,
-        sections: score.sections.map((s) => ({
-          ...s,
-          type: s.type as 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom',
-        })),
-      })
-
-      // Sync BPM to detected tempo
-      setBpm(score.tempo)
-
-      // Queue audio import for the DAW (resolved after useDawSetup resets tracks)
-      if (result.audioFileId) {
-        const beatsPerMeasure = parseInt(score.timeSignature?.split('/')[0] ?? '4', 10) || 4
-        const bars = Math.max(16, Math.ceil((score.duration * score.tempo) / (60 * beatsPerMeasure)))
-        setAnalysisTotalBars(bars)
-        setPendingAudioImport({
-          audioFileId: result.audioFileId,
-          totalBars: bars,
-          duration: score.duration,
-          title: score.title || 'Audio',
-          setAt: Date.now(),
-        })
-      }
-
-      setLoadingAnalysis(false)
-    }
-
-    // Poll every 2s until completed/error (handles page refresh mid-analysis)
-    const poll = async () => {
-      try {
-        const result = await youtubeService.pollAnalysis(id)
-        if (cancelled) return
-
-        if (result.status === 'completed') {
-          loadResult(result)
-        } else if (result.status === 'error') {
-          setAnalysisError(result.error ?? 'Analysis failed')
-          setLoadingAnalysis(false)
-        }
-        // else: still in progress → timer continues
-      } catch {
-        // Network error — keep polling
-      }
-    }
-
-    // First poll immediately, then every 2s
-    poll()
-    const timer = setInterval(poll, 2000)
-
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    }).catch(() => {
+      // Network error — register optimistically, global poller will catch up
+      addTask(id, id, 'Song')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isGenerateMode])
+
+  // React to task completing while page is open
+  useEffect(() => {
+    if (!task || task.status !== 'completed' || !task.result) return
+    if (analysisChart) return // already loaded
+    loadResult(task.result)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.status])
 
   // Use static chart or analysis chart
   const chart = staticChart ?? analysisChart
@@ -303,10 +312,30 @@ export function SongsPage() {
   if (loadingAnalysis) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center flex flex-col items-center gap-4">
-          <Loader2 size={32} className="text-text-muted animate-spin" />
-          <p className="text-sm font-medium text-text-primary">Analyzing song...</p>
-          <p className="text-xs text-text-muted">Detecting chords, beats & tempo</p>
+        <div className="text-center flex flex-col items-center gap-5 max-w-xs">
+          <Loader2 size={28} className="text-text-muted animate-spin" />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium text-text-primary">Analyzing song...</p>
+            <p className="text-xs text-text-muted">{STAGE_LABEL[taskStage]}</p>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-0.5 bg-surface-3 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${taskProgress}%` }}
+            />
+          </div>
+          <p className="text-xs text-text-muted tabular-nums">{taskProgress}%</p>
+
+          {/* Continue in background */}
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary transition-colors mt-1"
+          >
+            <ArrowLeft size={13} />
+            Continue in Background
+          </button>
         </div>
       </div>
     )

@@ -4,6 +4,7 @@ import { ArrowLeft, Play, Pause, Search, Music2, Sparkles, X, ArrowRight, Loader
 import { cn } from '@/components/ui/utils'
 import { youtubeService, type YoutubeSearchResult, type AnalysisStatus } from '@/services/youtubeService'
 import type { YoutubeResult } from '@/data/mockSearchResults'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // Gradient palette for results without thumbnails
 const GRADIENTS = [
@@ -398,6 +399,7 @@ function SongActionModal({
 }) {
   const backdropRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const { requireAuth } = useRequireAuth()
   const [generating, setGenerating] = useState(false)
   const [status, setStatus] = useState<AnalysisStatus | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -419,6 +421,7 @@ function SongActionModal({
   }, [])
 
   const handleGenerate = useCallback(async () => {
+    if (!requireAuth('AI Score Generation')) return
     setGenerating(true)
     setStatus('downloading')
     setErrorMsg(null)
@@ -450,7 +453,7 @@ function SongActionModal({
       setGenerating(false)
       setStatus(null)
     }
-  }, [result.id, result.title, navigate])
+  }, [result.id, result.title, navigate, requireAuth])
 
   const handleRetry = () => {
     setErrorMsg(null)

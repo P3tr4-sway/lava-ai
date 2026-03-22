@@ -1,8 +1,11 @@
-import { useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Play } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Play, X, Search, Mic, FilePlus2, type LucideIcon } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
+import { PricingCards } from '@/components/marketing/PricingCards'
+import { cn } from '@/components/ui/utils'
 import { CHORD_CHARTS } from '@/data/chordCharts'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -33,11 +36,39 @@ const LAST_PLAYED = {
   section: 'Chorus',
 }
 
+// ─── QuickStartCard ──────────────────────────────────────────────────────────
+
+interface QuickStartCardProps {
+  icon: LucideIcon
+  title: string
+  description: string
+  onClick: () => void
+  className?: string
+}
+
+function QuickStartCard({ icon: Icon, title, description, onClick, className }: QuickStartCardProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'bg-surface-0 border border-border hover:border-border-hover rounded-xl p-4 cursor-pointer transition-all group text-left',
+        className,
+      )}
+    >
+      <Icon size={20} className="text-text-secondary group-hover:text-text-primary transition-colors mb-2" />
+      <p className="text-sm font-medium text-text-primary">{title}</p>
+      <p className="text-xs text-text-secondary mt-0.5">{description}</p>
+    </button>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function HomePage() {
   const navigate = useNavigate()
   const chatRef = useRef<ChatInputRef>(null)
+  const [showBanner, setShowBanner] = useState(true)
+  const { isAuthenticated } = useRequireAuth()
 
   const handleSend = (message: string) => {
     navigate(`/search?q=${encodeURIComponent(message)}`)
@@ -45,6 +76,39 @@ export function HomePage() {
 
   return (
     <div className="h-full overflow-y-auto">
+
+      {/* Guests: sign-up CTA banner */}
+      {!isAuthenticated && (
+        <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
+          <p className="text-sm text-text-secondary">
+            Create a free account to save your progress and unlock AI features
+          </p>
+          <Link to="/signup" className="text-sm font-medium text-accent hover:underline shrink-0 ml-4">
+            Sign Up Free
+          </Link>
+        </div>
+      )}
+
+      {/* Logged-in: upgrade banner */}
+      {isAuthenticated && showBanner && (
+        <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
+          <p className="text-sm text-text-secondary">
+            <span className="font-medium text-text-primary">Free Plan</span> — 3 AI transcriptions per month
+          </p>
+          <div className="flex items-center gap-3">
+            <Link to="/pricing" className="text-sm font-medium text-accent hover:underline">
+              Upgrade
+            </Link>
+            <button
+              onClick={() => setShowBanner(false)}
+              className="text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10 pb-12">
 
         {/* ── 1. Hero — search-first ────────────────────────────── */}
@@ -67,33 +131,60 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ── 2. Continue where you left off ────────────────────── */}
+        {/* ── 2. Quick start ──────────────────────────────────────── */}
         <section>
-          <button
-            onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
-            className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
-          >
-            <div className="flex items-center justify-between gap-4 mb-5">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Continue playing</p>
-                <p className="text-2xl font-bold text-text-primary leading-tight truncate">{LAST_PLAYED.title}</p>
-                <p className="text-sm text-text-secondary mt-1">{LAST_PLAYED.artist} · {LAST_PLAYED.section}</p>
-              </div>
-              <div className="w-14 h-14 rounded-full bg-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Play size={22} className="text-surface-0 ml-1" fill="currentColor" />
-              </div>
-            </div>
-            {/* Progress bar */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-1 bg-surface-3 rounded-full overflow-hidden">
-                <div className="h-full bg-text-primary rounded-full" style={{ width: `${LAST_PLAYED.progress}%` }} />
-              </div>
-              <span className="text-xs font-medium text-text-secondary shrink-0">{LAST_PLAYED.progress}%</span>
-            </div>
-          </button>
+          <p className="text-sm text-text-muted mb-4">Quick start</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <QuickStartCard
+              icon={Search}
+              title="Learn a Song"
+              description="Search and play along"
+              onClick={() => chatRef.current?.setValue('')}
+            />
+            <QuickStartCard
+              icon={Mic}
+              title="Jam Session"
+              description="Record and loop"
+              onClick={() => navigate('/jam')}
+            />
+            <QuickStartCard
+              icon={FilePlus2}
+              title="Create Lead Sheet"
+              description="Write your own charts"
+              onClick={() => navigate('/editor')}
+            />
+          </div>
         </section>
 
-        {/* ── 3. Picked for you ─────────────────────────────────── */}
+        {/* ── 3. Continue where you left off (logged-in only) ───── */}
+        {isAuthenticated && (
+          <section>
+            <button
+              onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
+              className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
+            >
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Continue playing</p>
+                  <p className="text-2xl font-bold text-text-primary leading-tight truncate">{LAST_PLAYED.title}</p>
+                  <p className="text-sm text-text-secondary mt-1">{LAST_PLAYED.artist} · {LAST_PLAYED.section}</p>
+                </div>
+                <div className="w-14 h-14 rounded-full bg-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Play size={22} className="text-surface-0 ml-1" fill="currentColor" />
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1 bg-surface-3 rounded-full overflow-hidden">
+                  <div className="h-full bg-text-primary rounded-full" style={{ width: `${LAST_PLAYED.progress}%` }} />
+                </div>
+                <span className="text-xs font-medium text-text-secondary shrink-0">{LAST_PLAYED.progress}%</span>
+              </div>
+            </button>
+          </section>
+        )}
+
+        {/* ── 4. Picked for you ─────────────────────────────────── */}
         <section>
           <p className="text-sm text-text-muted mb-4">Picked for you</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -134,7 +225,15 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ── 4. Free tier note ─────────────────────────────────── */}
+        {/* ── 5. Pricing (guests only) ─────────────────────────── */}
+        {!isAuthenticated && (
+          <section>
+            <p className="text-sm text-text-muted mb-4">Plans & Pricing</p>
+            <PricingCards />
+          </section>
+        )}
+
+        {/* ── 6. Free tier note ─────────────────────────────────── */}
         <p className="text-xs text-text-muted text-center">
           3 free AI transcriptions every month · No credit card required
         </p>

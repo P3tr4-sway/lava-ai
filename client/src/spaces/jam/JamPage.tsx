@@ -24,6 +24,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { LIBRARY_MODAL_ID } from '@/components/library/LibraryModal'
 import { KEYS, SCALES } from '@lava/shared'
 import { DawPanel } from '@/components/daw/DawPanel'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 const STYLES = ['Rock', 'Jazz', 'Blues', 'Funk', 'Lo-fi', 'Latin', 'R&B', 'Electronic'] as const
 
@@ -65,6 +66,7 @@ export function JamPage() {
   const updateDawTrack = useDawPanelStore((s) => s.updateTrack)
 
   const openModal = useUIStore((s) => s.openModal)
+  const { requireAuth } = useRequireAuth()
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'jam', projectId: id })
@@ -120,6 +122,7 @@ export function JamPage() {
 
   const handleGenerate = () => {
     if (!trackPrompt.trim() || isGenerating) return
+    if (!requireAuth('Recording')) return
     setIsGenerating(true)
     setTimeout(() => setIsGenerating(false), 2000)
   }

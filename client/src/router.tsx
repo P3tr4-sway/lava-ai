@@ -7,8 +7,16 @@ import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
 import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
 import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
+import { SettingsPage } from '@/spaces/settings/SettingsPage'
+import { PricingPage } from '@/spaces/pricing/PricingPage'
+import { LoginPage } from '@/spaces/auth/LoginPage'
+import { SignupPage } from '@/spaces/auth/SignupPage'
 
 const routes: RouteObject[] = [
+  // Auth pages — outside AppShell
+  { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
+  // App — inside AppShell (auth-gated)
   {
     path: '/',
     element: <AppShell />,
@@ -28,6 +36,9 @@ const routes: RouteObject[] = [
       { path: 'projects', element: <MyProjectsPage /> },
       // Search
       { path: 'search', element: <SearchResultsPage /> },
+      // Settings & Pricing
+      { path: 'settings', element: <SettingsPage /> },
+      { path: 'pricing', element: <PricingPage /> },
       // Redirects for removed pages
       { path: 'learn', element: <Navigate to="/" replace /> },
       { path: 'create', element: <Navigate to="/" replace /> },

@@ -11,6 +11,7 @@ import { useLeadSheetStore, type SectionType } from '@/stores/leadSheetStore'
 import { useDawSetup } from '@/hooks/useDawSetup'
 import { useAudioStore } from '@/stores/audioStore'
 import { useProjectSave } from '@/hooks/useProjectSave'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { DawPanel } from '@/components/daw/DawPanel'
 import { pdfService } from '@/services/pdfService'
 import { ChordGrid, PdfViewer, MetadataBar } from '@/components/score'
@@ -54,6 +55,8 @@ export function LeadSheetPage() {
   const setAudioKey = useAudioStore((s) => s.setKey)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
+
+  const { requireAuth } = useRequireAuth()
 
   const [mode, setMode] = useState<'leadsheet' | 'score'>('leadsheet')
   const [addSectionOpen, setAddSectionOpen] = useState(false)
@@ -210,7 +213,7 @@ export function LeadSheetPage() {
           hasContent={hasContent}
           isSaved={isSaved}
           showSavedBadge={showSavedBadge}
-          onSave={() => void handleSave()}
+          onSave={() => { if (!requireAuth('Save Lead Sheet')) return; void handleSave() }}
         />
 
         {/* Mode picker */}

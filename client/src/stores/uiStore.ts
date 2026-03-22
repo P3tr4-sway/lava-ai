@@ -25,6 +25,8 @@ interface UIStore {
   sidebarOpen: boolean
   activeModal: string | null
   theme: Theme
+  authPromptOpen: boolean
+  authPromptAction: string | null
 
   toggleAgentPanel: () => void
   setAgentPanelOpen: (open: boolean) => void
@@ -33,6 +35,8 @@ interface UIStore {
   openModal: (id: string) => void
   closeModal: () => void
   setTheme: (theme: Theme) => void
+  openAuthPrompt: (action?: string) => void
+  closeAuthPrompt: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -57,4 +61,9 @@ export const useUIStore = create<UIStore>((set) => ({
     try { localStorage.setItem('lava-theme', theme) } catch {}
     set({ theme })
   },
+
+  authPromptOpen: false,
+  authPromptAction: null,
+  openAuthPrompt: (action) => set({ authPromptOpen: true, authPromptAction: action ?? null }),
+  closeAuthPrompt: () => set({ authPromptOpen: false, authPromptAction: null }),
 }))

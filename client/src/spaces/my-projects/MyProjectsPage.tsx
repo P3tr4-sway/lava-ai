@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
+import { useAuthStore } from '@/stores/authStore'
 import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs'
@@ -61,6 +62,7 @@ function getProjectRoute(project: Project): string {
 export function MyProjectsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
   const projects = useProjectStore((s) => s.projects)
   const loading = useProjectStore((s) => s.loading)
@@ -78,6 +80,21 @@ export function MyProjectsPage() {
   const filtered = projects
     .filter((p) => filter === 'all' || p.space === filter)
     .sort((a, b) => b.updatedAt - a.updatedAt)
+
+  if (!isAuthenticated) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+          <FolderOpen size={48} className="text-text-muted mb-4" />
+          <h3 className="text-lg font-semibold text-text-primary mb-2">Your projects will appear here</h3>
+          <p className="text-sm text-text-secondary mb-6 max-w-sm">
+            Sign up for a free account to save your lead sheets, recordings, and more
+          </p>
+          <Button onClick={() => navigate('/signup')}>Sign Up Free</Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -157,15 +174,18 @@ export function MyProjectsPage() {
 }
 
 function EmptyState() {
+  const navigate = useNavigate()
   return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
-        <FolderOpen size={24} className="text-text-muted" />
-      </div>
-      <p className="text-sm font-medium mb-1">No projects yet</p>
-      <p className="text-xs text-text-muted max-w-xs">
-        Record a take on any song score and save it to create your first project.
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <FolderOpen size={48} className="text-text-muted mb-4" />
+      <h3 className="text-lg font-semibold text-text-primary mb-2">No projects yet</h3>
+      <p className="text-sm text-text-secondary mb-6 max-w-sm">
+        Start by searching for a song or creating a lead sheet
       </p>
+      <div className="flex gap-3">
+        <Button onClick={() => navigate('/')}>Search Songs</Button>
+        <Button variant="outline" onClick={() => navigate('/editor')}>New Lead Sheet</Button>
+      </div>
     </div>
   )
 }

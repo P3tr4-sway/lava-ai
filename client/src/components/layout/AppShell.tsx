@@ -5,6 +5,9 @@ import { MobileHeader } from './MobileHeader'
 import { BottomNav } from './BottomNav'
 import { AgentPanel } from '@/components/agent/AgentPanel'
 import { LibraryModal } from '@/components/library/LibraryModal'
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal'
+import { GuestWelcomeModal } from '@/components/onboarding/GuestWelcomeModal'
+import { AuthPromptModal } from '@/components/auth/AuthPromptModal'
 import { useUIStore } from '@/stores/uiStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -56,6 +59,9 @@ export function AppShell() {
         {!isHome && <AgentPanel />}
 
         <LibraryModal />
+        <OnboardingModal />
+        <GuestWelcomeModal />
+        <AuthPromptModal />
       </div>
     )
   }
@@ -88,6 +94,9 @@ export function AppShell() {
       {!isHome && <AgentPanel />}
 
       <LibraryModal />
+      <OnboardingModal />
+      <GuestWelcomeModal />
+      <AuthPromptModal />
     </div>
   )
 }

@@ -6,6 +6,13 @@ import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { CreateProjectSchema, UpdateProjectSchema } from '@lava/shared'
 
+function parseProject(row: { id: string; name: string; description: string | null; space: string; metadata: string; createdAt: number; updatedAt: number }) {
+  return {
+    ...row,
+    metadata: JSON.parse(row.metadata) as Record<string, unknown>,
+  }
+}
+
 export async function projectRoutes(app: FastifyInstance) {
   app.get('/', async (request, reply) => {
     const results = await db.select().from(projects).orderBy(projects.updatedAt)
@@ -19,7 +26,7 @@ export async function projectRoutes(app: FastifyInstance) {
 
     reply.header('Cache-Control', 'private, no-cache')
     reply.header('ETag', etag)
-    return results
+    return results.map(parseProject)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (request, reply) => {
@@ -34,7 +41,7 @@ export async function projectRoutes(app: FastifyInstance) {
 
     reply.header('Cache-Control', 'private, no-cache')
     reply.header('ETag', etag)
-    return project
+    return parseProject(project)
   })
 
   app.post('/', async (request, reply) => {
@@ -56,7 +63,8 @@ export async function projectRoutes(app: FastifyInstance) {
       updatedAt: now,
     })
 
-    return await db.select().from(projects).where(eq(projects.id, id)).get()
+    const created = await db.select().from(projects).where(eq(projects.id, id)).get()
+    return created ? parseProject(created) : created
   })
 
   app.put<{ Params: { id: string } }>('/:id', async (request, reply) => {
@@ -79,7 +87,8 @@ export async function projectRoutes(app: FastifyInstance) {
       })
       .where(eq(projects.id, request.params.id))
 
-    return await db.select().from(projects).where(eq(projects.id, request.params.id)).get()
+    const updated = await db.select().from(projects).where(eq(projects.id, request.params.id)).get()
+    return updated ? parseProject(updated) : updated
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {

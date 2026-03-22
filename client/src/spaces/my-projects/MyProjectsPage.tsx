@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useAuthStore } from '@/stores/authStore'
-import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight, Loader2 } from 'lucide-react'
+import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { projectService } from '@/services/projectService'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import type { Project, SpaceType } from '@lava/shared'
 
@@ -50,8 +51,8 @@ function formatRelativeTime(ts: number): string {
 }
 
 function getProjectRoute(project: Project): string {
-  if (project.space === 'learn' && typeof project.metadata.songId === 'string') {
-    return `/play/${project.metadata.songId}`
+  if (project.space === 'learn') {
+    return `/editor/${project.id}`
   }
   if (project.space === 'jam') return '/jam'
   return '/projects'
@@ -67,7 +68,22 @@ export function MyProjectsPage() {
   const projects = useProjectStore((s) => s.projects)
   const loading = useProjectStore((s) => s.loading)
   const loadProjects = useProjectStore((s) => s.loadProjects)
+  const removeProject = useProjectStore((s) => s.removeProject)
   const [filter, setFilter] = useState('all')
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const handleDelete = async (project: Project) => {
+    if (!window.confirm(`Delete "${project.name}"? This cannot be undone.`)) return
+    setDeleting(project.id)
+    try {
+      await projectService.delete(project.id)
+      removeProject(project.id)
+    } catch (err) {
+      console.error('Delete project failed:', err)
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'projects', projectId: id })
@@ -157,12 +173,22 @@ export function MyProjectsPage() {
                   <p className="text-2xs text-text-muted">
                     {formatRelativeTime(project.updatedAt)}
                   </p>
-                  <button
-                    onClick={() => navigate(getProjectRoute(project))}
-                    className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    Open <ArrowRight size={12} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDelete(project)}
+                      disabled={deleting === project.id}
+                      className="flex items-center justify-center size-6 rounded text-text-muted hover:text-error hover:bg-surface-3 transition-colors disabled:opacity-50"
+                      title="Delete project"
+                    >
+                      {deleting === project.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    </button>
+                    <button
+                      onClick={() => navigate(getProjectRoute(project))}
+                      className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      Open <ArrowRight size={12} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )

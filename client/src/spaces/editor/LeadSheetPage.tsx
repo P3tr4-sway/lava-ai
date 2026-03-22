@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Plus, ChevronDown, Music2, AlignLeft, NotebookPen, FileUp, Upload,
+  ArrowLeft, Plus, ChevronDown, Music2, AlignLeft, NotebookPen, FileUp, Upload, Loader2,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -11,8 +11,12 @@ import { useLeadSheetStore, type SectionType } from '@/stores/leadSheetStore'
 import { useDawSetup } from '@/hooks/useDawSetup'
 import { useAudioStore } from '@/stores/audioStore'
 import { useProjectSave } from '@/hooks/useProjectSave'
+import { useProjectStore } from '@/stores/projectStore'
+import { useDawPanelStore, makeTrack } from '@/stores/dawPanelStore'
+import { projectService } from '@/services/projectService'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { DawPanel } from '@/components/daw/DawPanel'
+import { ToneEngine } from '@/audio/ToneEngine'
 import { pdfService } from '@/services/pdfService'
 import { ChordGrid, PdfViewer, MetadataBar } from '@/components/score'
 
@@ -28,8 +32,13 @@ const SECTION_PRESETS: { type: SectionType; label: string }[] = [
 // ── LeadSheetPage ─────────────────────────────────────────────────────────
 
 export function LeadSheetPage() {
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
+  const setActiveProject = useProjectStore((s) => s.setActiveProject)
+  const loadFromProject = useLeadSheetStore((s) => s.loadFromProject)
+  const setTracks = useDawPanelStore((s) => s.setTracks)
+  const updateClip = useDawPanelStore((s) => s.updateClip)
 
   const projectName = useLeadSheetStore((s) => s.projectName)
   const setProjectName = useLeadSheetStore((s) => s.setProjectName)
@@ -107,13 +116,72 @@ export function LeadSheetPage() {
 
   const {
     saving, isSaved, showSavedBadge, blocker, handleSave, handleDialogSave,
-  } = useProjectSave({ hasContent, contentFingerprint, buildProjectData })
+  } = useProjectSave({ hasContent, contentFingerprint, buildProjectData, projectId: id })
 
-  // Reset lead sheet store on mount (useDawSetup handles tracks + duration)
+  const [loadingProject, setLoadingProject] = useState(!!id)
+
+  // Load existing project or reset for new
   useEffect(() => {
-    reset()
+    if (id) {
+      setLoadingProject(true)
+      projectService.get(id).then((project) => {
+        loadFromProject(project)
+        setActiveProject(project)
+
+        // Restore DAW tracks from metadata (useDawSetup resets on mount, so we overwrite after fetch)
+        const savedTracks = Array.isArray(project.metadata.tracks) ? project.metadata.tracks as Array<{
+          name: string
+          color: { bg: string; accent: string }
+          clips: Array<{ audioFileId?: string; startBar: number; lengthInBars: number; name: string }>
+        }> : []
+
+        if (savedTracks.length > 0) {
+          const restoredTracks = savedTracks.map((t, idx) => {
+            const base = makeTrack(t.name, idx)
+            const trackColor = t.color ?? base.color
+            const clips = (t.clips ?? []).map((c, ci) => ({
+              id: `clip-restored-${Date.now()}-${ci}`,
+              trackId: base.id,
+              startBar: c.startBar ?? 0,
+              lengthInBars: c.lengthInBars ?? 4,
+              trimStart: 0,
+              trimEnd: 0,
+              audioFileId: c.audioFileId,
+              committedAudioFileId: c.audioFileId,
+              name: c.name ?? 'Recording',
+              color: trackColor.accent,
+              status: 'committed' as const,
+            }))
+            return { ...base, color: trackColor, clips, hasRecording: clips.length > 0 }
+          })
+          setTracks(restoredTracks)
+
+          // Re-fetch audio buffers for each clip (non-blocking)
+          const engine = ToneEngine.getInstance()
+          for (const track of restoredTracks) {
+            for (const clip of track.clips) {
+              if (clip.audioFileId) {
+                engine.loadBuffer(clip.audioFileId).then((audioBuffer) => {
+                  updateClip(track.id, clip.id, { audioBuffer })
+                }).catch((err) => {
+                  console.warn(`Failed to load audio for clip "${clip.name}":`, err)
+                })
+              }
+            }
+          }
+        }
+      }).catch(() => {
+        navigate('/projects', { replace: true })
+      }).finally(() => {
+        setLoadingProject(false)
+      })
+    } else {
+      reset()
+      setActiveProject(null)
+    }
+    return () => { setActiveProject(null) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [id])
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'learn' })
@@ -157,6 +225,14 @@ export function LeadSheetPage() {
       remaining -= section.measures.length
     }
   }, [sections, setActiveCell])
+
+  if (loadingProject) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-text-muted" />
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col">

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { Project } from '@lava/shared'
 
 export type SectionType = 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom'
 
@@ -64,6 +65,9 @@ interface LeadSheetStore {
     timeSignature: string
     sections: LeadSheetSection[]
   }) => void
+
+  /** Restore state from a saved project's metadata */
+  loadFromProject: (project: Project) => void
 
   reset: () => void
 }
@@ -145,6 +149,28 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
       pdfUrl: null,
       activeCell: null,
     }),
+
+  loadFromProject: (project) => {
+    const m = project.metadata
+    const sections = Array.isArray(m.sections)
+      ? (m.sections as Array<{ id: string; type: string; label: string; measures: Array<{ id: string; chords: string[] }> }>).map((s) => ({
+          id: s.id,
+          label: s.label,
+          type: s.type as SectionType,
+          measures: s.measures.map((ms) => ({ id: ms.id, chords: ms.chords ?? [] })),
+        }))
+      : [makeSection('intro', 'Intro', 4), makeSection('verse', 'Verse 1', 8), makeSection('chorus', 'Chorus', 8)]
+
+    set({
+      projectName: project.name,
+      key: typeof m.key === 'string' ? m.key : 'C',
+      tempo: typeof m.tempo === 'number' ? m.tempo : typeof m.bpm === 'number' ? m.bpm : 120,
+      timeSignature: typeof m.timeSignature === 'string' ? m.timeSignature : '4/4',
+      pdfUrl: typeof m.pdfUrl === 'string' ? m.pdfUrl : null,
+      sections,
+      activeCell: null,
+    })
+  },
 
   reset: () =>
     set({

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { useBlocker } from 'react-router-dom'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useBlocker, useNavigate } from 'react-router-dom'
 import { useProjectStore } from '@/stores/projectStore'
 import { projectService } from '@/services/projectService'
 import type { CreateProject } from '@lava/shared'
@@ -11,14 +11,27 @@ interface UseProjectSaveOptions {
   contentFingerprint: string
   /** Builds the project payload to send to the server */
   buildProjectData: () => CreateProject
+  /** If editing an existing project, its ID */
+  projectId?: string
 }
 
-export function useProjectSave({ hasContent, contentFingerprint, buildProjectData }: UseProjectSaveOptions) {
+export function useProjectSave({ hasContent, contentFingerprint, buildProjectData, projectId }: UseProjectSaveOptions) {
+  const navigate = useNavigate()
   const upsertProject = useProjectStore((s) => s.upsertProject)
   const [saving, setSaving] = useState(false)
-  const [isSaved, setIsSaved] = useState(false)
+  const [isSaved, setIsSaved] = useState(!!projectId)
   const [showSavedBadge, setShowSavedBadge] = useState(false)
   const lastSavedFingerprintRef = useRef('')
+  const currentIdRef = useRef<string | undefined>(projectId)
+
+  // Sync projectId when it changes (e.g. navigating to /editor/:id)
+  useEffect(() => {
+    currentIdRef.current = projectId
+    if (projectId) {
+      setIsSaved(true)
+      lastSavedFingerprintRef.current = contentFingerprint
+    }
+  }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDirty = hasContent && !isSaved
 
@@ -32,12 +45,20 @@ export function useProjectSave({ hasContent, contentFingerprint, buildProjectDat
   // Block navigation when dirty
   const blocker = useBlocker(isDirty)
 
-  const handleSave = async (): Promise<boolean> => {
+  const handleSave = useCallback(async (): Promise<boolean> => {
     if (saving) return false
     setSaving(true)
     try {
       const data = buildProjectData()
-      const project = await projectService.create(data)
+      let project
+      if (currentIdRef.current) {
+        project = await projectService.update(currentIdRef.current, data)
+      } else {
+        project = await projectService.create(data)
+        currentIdRef.current = project.id
+        // Update URL so subsequent saves are updates
+        navigate(`/editor/${project.id}`, { replace: true })
+      }
       upsertProject(project)
       lastSavedFingerprintRef.current = contentFingerprint
       setIsSaved(true)
@@ -50,12 +71,12 @@ export function useProjectSave({ hasContent, contentFingerprint, buildProjectDat
     } finally {
       setSaving(false)
     }
-  }
+  }, [saving, buildProjectData, contentFingerprint, navigate, upsertProject])
 
-  const handleDialogSave = async () => {
+  const handleDialogSave = useCallback(async () => {
     const ok = await handleSave()
     if (ok) blocker.proceed?.()
-  }
+  }, [handleSave, blocker])
 
   return {
     saving,

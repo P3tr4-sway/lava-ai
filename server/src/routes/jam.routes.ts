@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 export async function jamRoutes(app: FastifyInstance) {
   app.post('/session', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const parsed = JamSessionSchema.safeParse(request.body)
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 

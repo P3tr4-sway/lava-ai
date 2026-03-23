@@ -1,76 +1,121 @@
-import { useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Play, ArrowRight } from 'lucide-react'
-import { useAgent } from '@/hooks/useAgent'
+import { useRef, useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Play, X, Search, Mic, FilePlus2, type LucideIcon } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
+import { PricingCards } from '@/components/marketing/PricingCards'
+import { cn } from '@/components/ui/utils'
 import { CHORD_CHARTS } from '@/data/chordCharts'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const HOT_CHORD_CHARTS = CHORD_CHARTS.filter((c) =>
-  ['wonderwall', 'wish-you-were-here', 'let-her-go'].includes(c.id),
+const RECOMMENDED_CHARTS = CHORD_CHARTS.filter((c) =>
+  ['wish-you-were-here', 'let-her-go', 'hotel-california', 'wonderwall'].includes(c.id),
 )
-
-const HOT_BACKING_TRACKS = [
-  {
-    title: 'Indie Pop Groove',
-    style: 'Pop',
-    bpm: 95,
-    gradient: 'from-pink-500 to-orange-400',
-  },
-  {
-    title: 'Country Fingerpick',
-    style: 'Country',
-    bpm: 78,
-    gradient: 'from-amber-500 to-yellow-600',
-  },
-  {
-    title: 'Rock Anthem Drive',
-    style: 'Rock',
-    bpm: 120,
-    gradient: 'from-red-600 to-rose-800',
-  },
-]
 
 const SUGGESTIONS = [
   'Wonderwall by Oasis',
+  'Hotel California',
   'A simple blues in E',
   'Something easy for beginners',
 ]
 
+const DIFFICULTY_MAP: Record<string, { label: string; stars: string }> = {
+  'wonderwall': { label: 'Beginner', stars: '★' },
+  'wish-you-were-here': { label: 'Intermediate', stars: '★★' },
+  'let-her-go': { label: 'Beginner', stars: '★' },
+  'hotel-california': { label: 'Advanced', stars: '★★★' },
+}
+
 // TODO: replace with real auth + activity data
-const IS_LOGGED_IN = false
-const PREVIOUS_ACTIVITY: {
+const LAST_PLAYED = {
+  id: 'wish-you-were-here',
+  title: 'Wish You Were Here',
+  artist: 'Pink Floyd',
+  progress: 45,
+  section: 'Chorus',
+}
+
+// ─── QuickStartCard ──────────────────────────────────────────────────────────
+
+interface QuickStartCardProps {
+  icon: LucideIcon
   title: string
-  thumbnail: string
-  progress: number
-  sublabel: string
-  href: string
-} | null = null
+  description: string
+  onClick: () => void
+  className?: string
+}
+
+function QuickStartCard({ icon: Icon, title, description, onClick, className }: QuickStartCardProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'bg-surface-0 border border-border hover:border-border-hover rounded-xl p-4 cursor-pointer transition-all group text-left',
+        className,
+      )}
+    >
+      <Icon size={20} className="text-text-secondary group-hover:text-text-primary transition-colors mb-2" />
+      <p className="text-sm font-medium text-text-primary">{title}</p>
+      <p className="text-xs text-text-secondary mt-0.5">{description}</p>
+    </button>
+  )
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function HomePage() {
-  const { sendMessage } = useAgent()
   const navigate = useNavigate()
   const chatRef = useRef<ChatInputRef>(null)
+  const [showBanner, setShowBanner] = useState(true)
+  const { isAuthenticated } = useRequireAuth()
 
   const handleSend = (message: string) => {
-    sendMessage(message)
-    navigate('/learn')
+    navigate(`/search?q=${encodeURIComponent(message)}`)
   }
-
-  const showContinue = IS_LOGGED_IN && PREVIOUS_ACTIVITY
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-6 pt-[28vh] flex flex-col gap-14 pb-12">
 
-        {/* ── Hero prompt ──────────────────────────────────────── */}
-        <section className="pb-4">
-          <h1 className="text-4xl font-bold text-text-primary mb-2 text-center">Play the music you love</h1>
-          <p className="text-base text-text-secondary text-center mb-8">Your AI-powered music companion</p>
-          <ChatInput ref={chatRef} onSend={handleSend} placeholder="What do you want to play?" />
+      {/* Guests: sign-up CTA banner */}
+      {!isAuthenticated && (
+        <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
+          <p className="text-sm text-text-secondary">
+            Create a free account to save your progress and unlock AI features
+          </p>
+          <Link to="/signup" className="text-sm font-medium text-accent hover:underline shrink-0 ml-4">
+            Sign Up Free
+          </Link>
+        </div>
+      )}
+
+      {/* Logged-in: upgrade banner */}
+      {isAuthenticated && showBanner && (
+        <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
+          <p className="text-sm text-text-secondary">
+            <span className="font-medium text-text-primary">Free Plan</span> — 3 AI transcriptions per month
+          </p>
+          <div className="flex items-center gap-3">
+            <Link to="/pricing" className="text-sm font-medium text-accent hover:underline">
+              Upgrade
+            </Link>
+            <button
+              onClick={() => setShowBanner(false)}
+              className="text-text-muted hover:text-text-secondary transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10 pb-12">
+
+        {/* ── 1. Hero — search-first ────────────────────────────── */}
+        <section>
+          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to play?</h1>
+          <p className="text-sm text-text-secondary text-center mb-6">Search for any song — AI generates the score and backing track for you</p>
+          <ChatInput ref={chatRef} onSend={handleSend} placeholder="Song name, artist, or paste a link..." />
 
           {/* Suggestion tags */}
           <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
@@ -84,157 +129,115 @@ export function HomePage() {
               </button>
             ))}
           </div>
-
-          {/* Free quota nudge */}
-          <p className="text-xs text-text-muted text-center mt-6">
-            3 free AI transcriptions every month. No credit card required.
-          </p>
-
-          <div className="w-24 h-px bg-gradient-to-r from-transparent via-text-muted/30 to-transparent mx-auto mt-8" />
         </section>
 
-        {/* ── Continue Where You Left Off ──────────────────────── */}
-        {showContinue && (
+        {/* ── 2. Quick start ──────────────────────────────────────── */}
+        <section>
+          <p className="text-sm text-text-muted mb-4">Quick start</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <QuickStartCard
+              icon={Search}
+              title="Learn a Song"
+              description="Search and play along"
+              onClick={() => chatRef.current?.setValue('')}
+            />
+            <QuickStartCard
+              icon={Mic}
+              title="Jam Session"
+              description="Record and loop"
+              onClick={() => navigate('/jam')}
+            />
+            <QuickStartCard
+              icon={FilePlus2}
+              title="Create Lead Sheet"
+              description="Write your own charts"
+              onClick={() => navigate('/editor')}
+            />
+          </div>
+        </section>
+
+        {/* ── 3. Continue where you left off (logged-in only) ───── */}
+        {isAuthenticated && (
           <section>
-            <h2 className="text-2xl font-semibold text-text-primary mb-4">Continue Where You Left Off</h2>
-            <div
-              onClick={() => navigate(PREVIOUS_ACTIVITY.href)}
-              className="flex items-center gap-4 bg-surface-0 border border-border hover:border-border-hover rounded-lg p-4 cursor-pointer transition-colors"
+            <button
+              onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
+              className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
             >
-              {/* Thumbnail */}
-              <div className="w-14 h-14 rounded-lg bg-surface-2 shrink-0 overflow-hidden">
-                <img
-                  src={PREVIOUS_ACTIVITY.thumbnail}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* Details */}
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold text-text-primary leading-tight truncate">
-                  {PREVIOUS_ACTIVITY.title}
-                </p>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-text-primary rounded-full"
-                      style={{ width: `${PREVIOUS_ACTIVITY.progress}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-text-muted shrink-0">{PREVIOUS_ACTIVITY.progress}%</span>
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Continue playing</p>
+                  <p className="text-2xl font-bold text-text-primary leading-tight truncate">{LAST_PLAYED.title}</p>
+                  <p className="text-sm text-text-secondary mt-1">{LAST_PLAYED.artist} · {LAST_PLAYED.section}</p>
                 </div>
-                <p className="text-xs text-text-muted mt-1">{PREVIOUS_ACTIVITY.sublabel}</p>
+                <div className="w-14 h-14 rounded-full bg-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Play size={22} className="text-surface-0 ml-1" fill="currentColor" />
+                </div>
               </div>
-
-              {/* Continue button */}
-              <button className="flex items-center gap-1.5 px-4 py-2 bg-text-primary text-surface-0 text-sm font-medium rounded-full shrink-0 hover:opacity-80 transition-opacity">
-                Continue
-                <ArrowRight size={14} />
-              </button>
-            </div>
+              {/* Progress bar */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1 bg-surface-3 rounded-full overflow-hidden">
+                  <div className="h-full bg-text-primary rounded-full" style={{ width: `${LAST_PLAYED.progress}%` }} />
+                </div>
+                <span className="text-xs font-medium text-text-secondary shrink-0">{LAST_PLAYED.progress}%</span>
+              </div>
+            </button>
           </section>
         )}
 
-        {/* ── Hot ChordChart ──────────────────────────────────── */}
+        {/* ── 4. Picked for you ─────────────────────────────────── */}
         <section>
-          <div className="mb-2">
-            <button
-              onClick={() => navigate('/chord-charts')}
-              className="flex items-center gap-1 group"
-            >
-              <h2 className="text-2xl font-semibold text-text-primary">Hot ChordChart</h2>
-              <ChevronRight size={20} className="text-text-muted group-hover:text-text-primary transition-colors mt-0.5" />
-            </button>
-            <p className="text-sm text-text-muted mt-1">Popular chord progressions to learn</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-            {HOT_CHORD_CHARTS.map((chart) => (
-              <div
-                key={chart.title}
-                onClick={() => navigate(`/learn/songs/${chart.id}`)}
-                className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
-              >
-                {/* Album Art — black mockup */}
-                <div className="aspect-[4/3] w-full bg-black flex items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-white/60 text-xs font-mono tracking-widest uppercase mb-2">{chart.style}</p>
-                    <p className="text-white text-2xl font-bold">{chart.key}</p>
+          <p className="text-sm text-text-muted mb-4">Picked for you</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {RECOMMENDED_CHARTS.map((chart) => {
+              const diff = DIFFICULTY_MAP[chart.id]
+              return (
+                <div
+                  key={chart.id}
+                  onClick={() => navigate(`/learn/songs/${chart.id}`)}
+                  className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
+                >
+                  {/* Cover */}
+                  <div className="aspect-square w-full bg-surface-2 relative flex items-center justify-center">
+                    <div className="text-center">
+                      <p className="text-text-muted text-[10px] font-mono tracking-widest uppercase mb-1">{chart.style}</p>
+                      <p className="text-text-primary text-xl font-bold">{chart.key}</p>
+                    </div>
+                    {/* Play overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-surface-0/50 backdrop-blur-sm">
+                        <Play size={18} className="text-text-primary ml-0.5" fill="currentColor" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Info */}
+                  <div className="p-3.5">
+                    <p className="text-sm font-semibold text-text-primary leading-tight truncate">{chart.title}</p>
+                    <p className="text-xs text-text-muted mt-0.5 truncate">{chart.artist}</p>
+                    <div className="mt-2">
+                      <span className="text-2xs text-text-secondary bg-surface-2 px-2 py-0.5 rounded-full">
+                        {diff?.stars} {diff?.label}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                {/* Info */}
-                <div className="flex flex-col gap-2 p-6">
-                  <p className="text-base font-semibold text-text-primary leading-tight">{chart.title}</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-text-muted">{chart.style}</span>
-                    <span className="text-text-muted">·</span>
-                    <span className="text-sm text-text-muted">Key of {chart.key}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
 
-        {/* ── Hot Backing Track ─────────────────────────────────── */}
-        <section>
-          <div className="mb-2">
-            <button
-              onClick={() => navigate('/backing-tracks')}
-              className="flex items-center gap-1 group"
-            >
-              <h2 className="text-2xl font-semibold text-text-primary">Hot Backing Track</h2>
-              <ChevronRight size={20} className="text-text-muted group-hover:text-text-primary transition-colors mt-0.5" />
-            </button>
-            <p className="text-sm text-text-muted mt-1">Trending tracks to jam with</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-            {HOT_BACKING_TRACKS.map((track) => (
-              <BackingTrackCard key={track.title} track={track} onClick={() => navigate('/jam')} />
-            ))}
-          </div>
-        </section>
+        {/* ── 5. Pricing (guests only) ─────────────────────────── */}
+        {!isAuthenticated && (
+          <section>
+            <p className="text-sm text-text-muted mb-4">Plans & Pricing</p>
+            <PricingCards />
+          </section>
+        )}
 
-      </div>
-    </div>
-  )
-}
+        {/* ── 6. Free tier note ─────────────────────────────────── */}
+        <p className="text-xs text-text-muted text-center">
+          3 free AI transcriptions every month · No credit card required
+        </p>
 
-// ─── Backing Track Card with hover play ───────────────────────────────────────
-
-function BackingTrackCard({
-  track,
-  onClick,
-}: {
-  track: (typeof HOT_BACKING_TRACKS)[number]
-  onClick: () => void
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden cursor-pointer transition-colors group"
-    >
-      {/* Album Art */}
-      <div className={`aspect-[4/3] w-full bg-gradient-to-br ${track.gradient} relative flex items-center justify-center`}>
-        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-          <div className="w-6 h-6 rounded-full bg-white/20" />
-        </div>
-
-        {/* Play overlay on hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm">
-            <Play size={22} className="text-white ml-0.5" fill="white" />
-          </div>
-        </div>
-      </div>
-      {/* Info */}
-      <div className="flex flex-col gap-2 p-6">
-        <p className="text-base font-semibold text-text-primary leading-tight">{track.title}</p>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-text-muted">{track.style}</span>
-          <span className="text-text-muted">·</span>
-          <span className="text-sm text-text-muted">{track.bpm} BPM</span>
-        </div>
       </div>
     </div>
   )

@@ -8,6 +8,8 @@ import { audioRoutes } from './routes/audio.routes.js'
 import { transcriptionRoutes } from './routes/transcription.routes.js'
 import { jamRoutes } from './routes/jam.routes.js'
 import { toolsRoutes } from './routes/tools.routes.js'
+import { pdfRoutes } from './routes/pdf.routes.js'
+import { youtubeRoutes } from './routes/youtube.routes.js'
 
 export async function buildApp() {
   const app = Fastify({
@@ -33,6 +35,8 @@ export async function buildApp() {
   await app.register(transcriptionRoutes, { prefix: '/api/transcribe' })
   await app.register(jamRoutes, { prefix: '/api/jam' })
   await app.register(toolsRoutes, { prefix: '/api/tools' })
+  await app.register(pdfRoutes, { prefix: '/api/pdf' })
+  await app.register(youtubeRoutes, { prefix: '/api/youtube' })
 
   app.get('/api/health', async () => ({ status: 'ok', ts: Date.now() }))
 

@@ -72,14 +72,14 @@ export function LibraryContent({ onSelect }: LibraryContentProps) {
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded border text-left transition-colors',
                   selected
-                    ? 'bg-white/10 border-white/30'
+                    ? 'bg-surface-3 border-border'
                     : 'bg-surface-3 border-transparent hover:bg-surface-4',
                 )}
               >
                 <div
                   className={cn(
                     'w-8 h-8 rounded flex items-center justify-center shrink-0',
-                    selected ? 'bg-white text-black' : 'bg-surface-4 text-text-muted',
+                    selected ? 'bg-accent text-surface-0' : 'bg-surface-4 text-text-muted',
                   )}
                 >
                   {selected && isPlaying ? (

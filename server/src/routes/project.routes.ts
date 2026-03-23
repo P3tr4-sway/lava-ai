@@ -1,22 +1,51 @@
 import type { FastifyInstance } from 'fastify'
+import { createHash } from 'crypto'
 import { db } from '../db/client.js'
 import { projects } from '../db/schema.js'
 import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { CreateProjectSchema, UpdateProjectSchema } from '@lava/shared'
 
+function parseProject(row: { id: string; name: string; description: string | null; space: string; metadata: string; createdAt: number; updatedAt: number }) {
+  return {
+    ...row,
+    metadata: JSON.parse(row.metadata) as Record<string, unknown>,
+  }
+}
+
 export async function projectRoutes(app: FastifyInstance) {
-  app.get('/', async () => {
-    return await db.select().from(projects).orderBy(projects.updatedAt)
+  app.get('/', async (request, reply) => {
+    const results = await db.select().from(projects).orderBy(projects.updatedAt)
+
+    const maxUpdatedAt = results.reduce((max, p) => Math.max(max, p.updatedAt), 0)
+    const etag = `"${createHash('md5').update(JSON.stringify(maxUpdatedAt)).digest('hex')}"`
+
+    if (request.headers['if-none-match'] === etag) {
+      return reply.status(304).send()
+    }
+
+    reply.header('Cache-Control', 'private, no-cache')
+    reply.header('ETag', etag)
+    return results.map(parseProject)
   })
 
   app.get<{ Params: { id: string } }>('/:id', async (request, reply) => {
     const project = await db.select().from(projects).where(eq(projects.id, request.params.id)).get()
     if (!project) return reply.status(404).send({ error: 'Not found' })
-    return project
+
+    const etag = `"${createHash('md5').update(JSON.stringify(project.updatedAt)).digest('hex')}"`
+
+    if (request.headers['if-none-match'] === etag) {
+      return reply.status(304).send()
+    }
+
+    reply.header('Cache-Control', 'private, no-cache')
+    reply.header('ETag', etag)
+    return parseProject(project)
   })
 
   app.post('/', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const parsed = CreateProjectSchema.safeParse(request.body)
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -34,10 +63,12 @@ export async function projectRoutes(app: FastifyInstance) {
       updatedAt: now,
     })
 
-    return await db.select().from(projects).where(eq(projects.id, id)).get()
+    const created = await db.select().from(projects).where(eq(projects.id, id)).get()
+    return created ? parseProject(created) : created
   })
 
   app.put<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const parsed = UpdateProjectSchema.safeParse(request.body)
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -56,10 +87,12 @@ export async function projectRoutes(app: FastifyInstance) {
       })
       .where(eq(projects.id, request.params.id))
 
-    return await db.select().from(projects).where(eq(projects.id, request.params.id)).get()
+    const updated = await db.select().from(projects).where(eq(projects.id, request.params.id)).get()
+    return updated ? parseProject(updated) : updated
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     await db.delete(projects).where(eq(projects.id, request.params.id))
     return reply.status(204).send()
   })

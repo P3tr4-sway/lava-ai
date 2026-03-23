@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
-import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight } from 'lucide-react'
+import { useAuthStore } from '@/stores/authStore'
+import { FolderOpen, Plus, BookOpen, Music, Layers, Wrench, Library, ArrowRight, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { projectService } from '@/services/projectService'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs'
-import type { SpaceType } from '@lava/shared'
+import type { Project, SpaceType } from '@lava/shared'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -19,24 +21,18 @@ const SPACE_ICONS: Record<SpaceType, React.ElementType> = {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  learn: 'Learn',
-  jam: 'Play',
+  learn: 'Score',
+  jam: 'Jam',
   create: 'Create',
   tools: 'Tools',
   library: 'Library',
   projects: 'Projects',
 }
 
-const MODULE_ROUTES: Record<string, string> = {
-  learn: '/learn',
-  jam: '/jam',
-  create: '/create',
-}
-
 const FILTER_TABS = [
   { label: 'All', value: 'all' },
-  { label: 'Learn', value: 'learn' },
-  { label: 'Play', value: 'jam' },
+  { label: 'Scores', value: 'learn' },
+  { label: 'Jam', value: 'jam' },
   { label: 'Create', value: 'create' },
 ] as const
 
@@ -54,22 +50,67 @@ function formatRelativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString()
 }
 
+function getProjectRoute(project: Project): string {
+  if (project.space === 'learn') {
+    return `/editor/${project.id}`
+  }
+  if (project.space === 'jam') return '/jam'
+  return '/projects'
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function MyProjectsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
   const projects = useProjectStore((s) => s.projects)
+  const loading = useProjectStore((s) => s.loading)
+  const loadProjects = useProjectStore((s) => s.loadProjects)
+  const removeProject = useProjectStore((s) => s.removeProject)
   const [filter, setFilter] = useState('all')
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const handleDelete = async (project: Project) => {
+    if (!window.confirm(`Delete "${project.name}"? This cannot be undone.`)) return
+    setDeleting(project.id)
+    try {
+      await projectService.delete(project.id)
+      removeProject(project.id)
+    } catch (err) {
+      console.error('Delete project failed:', err)
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'projects', projectId: id })
   }, [id, setSpaceContext])
 
+  useEffect(() => {
+    void loadProjects()
+  }, [loadProjects])
+
   const filtered = projects
     .filter((p) => filter === 'all' || p.space === filter)
     .sort((a, b) => b.updatedAt - a.updatedAt)
+
+  if (!isAuthenticated) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+          <FolderOpen size={48} className="text-text-muted mb-4" />
+          <h3 className="text-lg font-semibold text-text-primary mb-2">Your projects will appear here</h3>
+          <p className="text-sm text-text-secondary mb-6 max-w-sm">
+            Sign up for a free account to save your lead sheets, recordings, and more
+          </p>
+          <Button onClick={() => navigate('/signup')}>Sign Up Free</Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -97,7 +138,11 @@ export function MyProjectsPage() {
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 size={20} className="animate-spin text-text-muted" />
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -128,12 +173,22 @@ export function MyProjectsPage() {
                   <p className="text-2xs text-text-muted">
                     {formatRelativeTime(project.updatedAt)}
                   </p>
-                  <button
-                    onClick={() => navigate(MODULE_ROUTES[project.space] ?? '/projects')}
-                    className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    Continue <ArrowRight size={12} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDelete(project)}
+                      disabled={deleting === project.id}
+                      className="flex items-center justify-center size-6 rounded text-text-muted hover:text-error hover:bg-surface-3 transition-colors disabled:opacity-50"
+                      title="Delete project"
+                    >
+                      {deleting === project.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    </button>
+                    <button
+                      onClick={() => navigate(getProjectRoute(project))}
+                      className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      Open <ArrowRight size={12} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )
@@ -145,15 +200,18 @@ export function MyProjectsPage() {
 }
 
 function EmptyState() {
+  const navigate = useNavigate()
   return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
-        <FolderOpen size={24} className="text-text-muted" />
-      </div>
-      <p className="text-sm font-medium mb-1">No projects yet</p>
-      <p className="text-xs text-text-muted max-w-xs">
-        Start by exploring a space or ask LAVA AI to create a new project for you.
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <FolderOpen size={48} className="text-text-muted mb-4" />
+      <h3 className="text-lg font-semibold text-text-primary mb-2">No projects yet</h3>
+      <p className="text-sm text-text-secondary mb-6 max-w-sm">
+        Start by searching for a song or creating a lead sheet
       </p>
+      <div className="flex gap-3">
+        <Button onClick={() => navigate('/')}>Search Songs</Button>
+        <Button variant="outline" onClick={() => navigate('/editor')}>New Lead Sheet</Button>
+      </div>
     </div>
   )
 }

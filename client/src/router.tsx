@@ -1,36 +1,48 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { HomePage } from '@/spaces/home/HomePage'
-import { LearnPage } from '@/spaces/learn/LearnPage'
 import { SongsPage } from '@/spaces/learn/SongsPage'
 import { JamPage } from '@/spaces/jam/JamPage'
 import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
-import { BackingTracksPage } from '@/spaces/backing-tracks/BackingTracksPage'
-import { ChordChartsPage } from '@/spaces/chord-charts/ChordChartsPage'
-import { CreatePage } from '@/spaces/create/CreatePage'
 import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
-import { LibraryPage } from '@/spaces/library/LibraryPage'
+import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
+import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
+import { SettingsPage } from '@/spaces/settings/SettingsPage'
+import { PricingPage } from '@/spaces/pricing/PricingPage'
+import { LoginPage } from '@/spaces/auth/LoginPage'
+import { SignupPage } from '@/spaces/auth/SignupPage'
 
 const routes: RouteObject[] = [
+  // Auth pages — outside AppShell
+  { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
+  // App — inside AppShell (auth-gated)
   {
     path: '/',
     element: <AppShell />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: 'learn', element: <LearnPage /> },
-      { path: 'learn/songs', element: <SongsPage /> },
+      // Player — unified score + accompaniment
+      { path: 'play/:id', element: <SongsPage /> },
+      // Legacy routes → redirect to new player
       { path: 'learn/songs/:id', element: <SongsPage /> },
-      { path: 'learn/jam', element: <JamPage /> },
-      { path: 'learn/techniques', element: <LearnPage /> },
-      { path: 'backing-tracks', element: <BackingTracksPage /> },
-      { path: 'chord-charts', element: <ChordChartsPage /> },
+      // Jam / free play
       { path: 'jam', element: <PlayHubPage /> },
-      { path: 'jam/:id', element: <PlayHubPage /> },
-      { path: 'create', element: <CreatePage /> },
-      { path: 'create/:id', element: <CreatePage /> },
-      { path: 'library', element: <LibraryPage /> },
+      { path: 'jam/:id', element: <JamPage /> },
+      // Lead Sheet editor — blank project
+      { path: 'editor', element: <LeadSheetPage /> },
+      { path: 'editor/:id', element: <LeadSheetPage /> },
+      // Projects
       { path: 'projects', element: <MyProjectsPage /> },
-      { path: 'projects/:id', element: <MyProjectsPage /> },
+      // Search
+      { path: 'search', element: <SearchResultsPage /> },
+      // Settings & Pricing
+      { path: 'settings', element: <SettingsPage /> },
+      { path: 'pricing', element: <PricingPage /> },
+      // Redirects for removed pages
+      { path: 'learn', element: <Navigate to="/" replace /> },
+      { path: 'create', element: <Navigate to="/" replace /> },
+      { path: 'library', element: <Navigate to="/projects" replace /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

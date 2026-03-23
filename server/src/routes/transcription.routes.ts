@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 
 export async function transcriptionRoutes(app: FastifyInstance) {
   app.post('/', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
     const body = request.body as { audioFileId?: string }
     if (!body.audioFileId) return reply.status(400).send({ error: 'audioFileId required' })
 

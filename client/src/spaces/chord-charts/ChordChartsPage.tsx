@@ -36,10 +36,10 @@ export function ChordChartsPage() {
               className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden text-left transition-colors group"
             >
               {/* Album Art — black mockup */}
-              <div className="aspect-square w-full bg-black flex items-center justify-center">
+              <div className="aspect-square w-full bg-surface-2 flex items-center justify-center">
                 <div className="text-center">
-                  <p className="text-white/60 text-xs font-mono tracking-widest uppercase mb-2">{chart.style}</p>
-                  <p className="text-white text-2xl font-bold">{chart.key}</p>
+                  <p className="text-text-muted text-xs font-mono tracking-widest uppercase mb-2">{chart.style}</p>
+                  <p className="text-text-primary text-2xl font-bold">{chart.key}</p>
                 </div>
               </div>
               {/* Info */}

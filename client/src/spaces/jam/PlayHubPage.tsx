@@ -66,8 +66,8 @@ export function PlayHubPage() {
 
         {/* ── 1. Hero — search-first ──────────────────────────── */}
         <section>
-          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">Build your AI tone</h1>
-          <p className="text-sm text-text-secondary text-center mb-6">Describe your ideal sound — AI builds the effects chain for you, ready to use in any DAW</p>
+          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">Build your sound in Play Center</h1>
+          <p className="text-sm text-text-secondary text-center mb-6">Describe the tone you want and LAVA AI builds an amp and effects chain you can tweak, save, and use in any DAW.</p>
           <SpaceAgentInput
             ref={inputRef}
             placeholder="Describe the tone you want — e.g. 'warm fingerpicking tone'..."
@@ -104,7 +104,7 @@ export function PlayHubPage() {
             >
               <div className="flex items-center justify-between gap-4 mb-5">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Last effects chain</p>
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Last saved tone</p>
                   <p className="text-2xl font-bold text-text-primary leading-tight truncate">{MY_GEAR.name}</p>
                   <p className="text-sm text-text-secondary mt-1">{MY_GEAR.chain}</p>
                 </div>
@@ -119,7 +119,7 @@ export function PlayHubPage() {
 
         {/* ── 3. Featured Tones ───────────────────────────────── */}
         <section>
-          <p className="text-sm text-text-muted mb-4">Featured Practice Tones</p>
+          <p className="text-sm text-text-muted mb-4">Featured tones</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {FEATURED_TONES.map((tone) => (
               <div
@@ -149,7 +149,7 @@ export function PlayHubPage() {
 
         {/* ── 4. Gear Shop: New Arrivals ──────────────────────── */}
         <section>
-          <p className="text-sm text-text-muted mb-4">Effects Library: New Arrivals</p>
+          <p className="text-sm text-text-muted mb-4">Effects library: new arrivals</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {NEW_ARRIVALS.map((item) => (
               <button

@@ -81,7 +81,7 @@ export function HomePage() {
       {!isAuthenticated && (
         <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
           <p className="text-sm text-text-secondary">
-            Create a free account to save your practice progress and unlock AI features
+            Create a free account to save your progress, get AI guidance, and unlock the full practice center
           </p>
           <Link to="/signup" className="text-sm font-medium text-accent hover:underline shrink-0 ml-4">
             Sign Up Free
@@ -113,8 +113,8 @@ export function HomePage() {
 
         {/* ── 1. Hero — search-first ────────────────────────────── */}
         <section>
-          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to practice?</h1>
-          <p className="text-sm text-text-secondary text-center mb-6">Search for any song — AI breaks it down into chord charts and tabs you can practice</p>
+          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to practice today?</h1>
+          <p className="text-sm text-text-secondary text-center mb-6">Search for any song and LAVA AI turns it into playable chord charts and tabs, so you can start practicing right away.</p>
           <ChatInput ref={chatRef} onSend={handleSend} placeholder="Song name, artist, or paste a link..." />
 
           {/* Suggestion tags */}
@@ -138,19 +138,19 @@ export function HomePage() {
             <QuickStartCard
               icon={Search}
               title="Practice a Song"
-              description="AI breaks it down for you"
+              description="Turn any song into playable charts and tabs"
               onClick={() => chatRef.current?.setValue('')}
             />
             <QuickStartCard
               icon={Mic}
-              title="AI Tools"
-              description="AI amp, effects, and looper"
+              title="Play Center"
+              description="Build tones with amp, effects, and looper tools"
               onClick={() => navigate('/jam')}
             />
             <QuickStartCard
               icon={FilePlus2}
               title="Create Charts"
-              description="Write your own lead sheets"
+              description="Write and edit your own chord charts"
               onClick={() => navigate('/editor')}
             />
           </div>

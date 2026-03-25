@@ -104,7 +104,7 @@ export function MyProjectsPage() {
           <FolderOpen size={48} className="text-text-muted mb-4" />
           <h3 className="text-lg font-semibold text-text-primary mb-2">Your practice library will appear here</h3>
           <p className="text-sm text-text-secondary mb-6 max-w-sm">
-            Sign up for a free account to save your charts, recordings, and practice progress
+            Sign up for a free account to save your charts, recordings, tones, and practice progress
           </p>
           <Button onClick={() => navigate('/signup')}>Sign Up Free</Button>
         </div>

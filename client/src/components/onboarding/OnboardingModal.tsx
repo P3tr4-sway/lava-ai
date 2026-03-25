@@ -15,7 +15,7 @@ const SKILL_OPTIONS: { value: SkillLevel; label: string; icon: typeof Star }[] =
 
 const FIRST_ACTIONS = [
   { label: 'Practice a Song', icon: Music, path: '/' },
-  { label: 'Explore AI Tools', icon: Mic, path: '/jam' },
+  { label: 'Open Play Center', icon: Mic, path: '/jam' },
   { label: 'Create a Chart', icon: FilePlus2, path: '/editor' },
 ] as const
 
@@ -53,8 +53,8 @@ export function OnboardingModal() {
               Welcome to LAVA AI, {userName}!
             </h2>
             <p className="text-sm text-text-secondary">
-              Your AI-powered practice center is ready. Let&apos;s personalize
-              your experience.
+              Your AI-powered practice center is ready. Let&apos;s tailor it to
+              how you play.
             </p>
             <Button size="lg" className="w-full" onClick={handleNext}>
               Next

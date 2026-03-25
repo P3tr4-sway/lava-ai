@@ -18,7 +18,7 @@ export function AuthPromptModal() {
             {action ? `Sign up to use ${action}` : 'Sign up to unlock this feature'}
           </h2>
           <p className="text-sm text-text-secondary">
-            Create a free LAVA account to break down songs, save practice progress, and more
+            Create a free LAVA account to turn songs into charts and tabs, save your progress, and keep practicing across sessions
           </p>
         </div>
         <div className="flex flex-col gap-2.5 w-full">

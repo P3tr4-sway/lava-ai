@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Plus, ChevronDown, Music2, AlignLeft, NotebookPen, FileUp, Upload, Loader2,
+  ArrowLeft, Plus, ChevronDown, Music2, AlignLeft, NotebookPen, FileUp, Upload, Loader2, Eye,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -18,7 +18,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { DawPanel } from '@/components/daw/DawPanel'
 import { ToneEngine } from '@/audio/ToneEngine'
 import { pdfService } from '@/services/pdfService'
-import { ChordGrid, PdfViewer, MetadataBar } from '@/components/score'
+import { ChordGrid, PdfViewer, MetadataBar, FollowView } from '@/components/score'
 
 const SECTION_PRESETS: { type: SectionType; label: string }[] = [
   { type: 'intro', label: 'Intro' },
@@ -67,7 +67,7 @@ export function LeadSheetPage() {
 
   const { requireAuth } = useRequireAuth()
 
-  const [mode, setMode] = useState<'leadsheet' | 'score'>('leadsheet')
+  const [mode, setMode] = useState<'leadsheet' | 'follow' | 'score'>('leadsheet')
   const [addSectionOpen, setAddSectionOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -307,6 +307,18 @@ export function LeadSheetPage() {
             Lead Sheet
           </button>
           <button
+            onClick={() => setMode('follow')}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+              mode === 'follow'
+                ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
+                : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            <Eye size={11} />
+            Follow
+          </button>
+          <button
             onClick={() => setMode('score')}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
@@ -321,7 +333,7 @@ export function LeadSheetPage() {
         </div>
 
         {/* Add section */}
-        <div className={cn('relative', mode === 'score' && 'invisible')}>
+        <div className={cn('relative', mode !== 'leadsheet' && 'invisible')}>
           <button
             onClick={() => setAddSectionOpen(!addSectionOpen)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-3 transition-colors"
@@ -349,6 +361,8 @@ export function LeadSheetPage() {
       {/* ── Content area ─────────────────────────────────────────── */}
       {mode === 'leadsheet' ? (
         <ChordGrid onSeek={handleSeek} />
+      ) : mode === 'follow' ? (
+        <FollowView />
       ) : (
         pdfUrl ? (
           <PdfViewer pdfUrl={pdfUrl} />

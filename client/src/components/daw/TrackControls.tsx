@@ -1,4 +1,4 @@
-import { Square, Circle } from 'lucide-react'
+import { Circle } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { PanKnob } from './PanKnob'
 import type { TrackLane } from '@/stores/dawPanelStore'
@@ -25,17 +25,10 @@ export function TrackControls({
 }: TrackControlsProps) {
   const armTrack = useDawPanelStore((s) => s.armTrack)
 
-  const handleRecordClick = () => {
+  const handleRecordEnableClick = () => {
     if (!showRecordButton) return
-    if (track.recording || track.recordReady) {
-      onRecordStop?.(track.id)
-    } else {
-      if (!track.recArm) {
-        updateTrack(track.id, { recordBlockedReason: 'Arm the track first.' })
-        return
-      }
-      onRecordStart?.(track.id)
-    }
+    // Toggle arm state only — actual recording is triggered from the transport bar
+    armTrack(track.id, !track.recArm)
   }
 
   const height = showRecordButton ? HEIGHT_WITH_REC : TRACK_HEIGHT_PX
@@ -80,25 +73,6 @@ export function TrackControls({
           S
         </button>
 
-        {/* Arm — only in record-capable panels */}
-        {showRecordButton && (
-          <button
-            onClick={() => armTrack(track.id, !track.recArm)}
-            title={track.recArm ? 'Disarm' : 'Arm for recording'}
-            className={cn(
-              'w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-colors',
-              track.recording
-                ? 'border-error bg-error'
-                : track.recArm
-                  ? 'border-error bg-error/20'
-                  : 'border-border hover:border-border-hover',
-            )}
-          >
-            {(track.recArm || track.recording) && (
-              <div className={cn('w-1.5 h-1.5 rounded-full', track.recording ? 'bg-surface-0' : 'bg-error')} />
-            )}
-          </button>
-        )}
       </div>
 
       {/* Row 2 — volume slider + pan */}
@@ -125,27 +99,24 @@ export function TrackControls({
         <PanKnob value={track.pan} onChange={(v) => updateTrack(track.id, { pan: v })} />
       </div>
 
-      {/* Row 3 — record button (only when showRecordButton) */}
+      {/* Row 3 — record enable toggle (only when showRecordButton) */}
       {showRecordButton && (
         <button
-          onClick={handleRecordClick}
-          disabled={!track.recArm && !track.recordReady && !track.recording}
-          title={track.recordBlockedReason ?? undefined}
+          onClick={handleRecordEnableClick}
+          title={track.recording ? 'Recording…' : track.recArm ? 'Disable recording' : 'Enable recording'}
           className={cn(
             'flex items-center justify-center gap-1 w-full h-5 rounded text-[10px] font-medium transition-colors',
             track.recording
               ? 'bg-error/20 text-error'
-              : track.recordReady
-                ? 'bg-warning/20 text-warning'
-                : track.recArm
-                  ? 'bg-text-primary/10 text-text-primary/70 hover:bg-text-primary/15 hover:text-text-primary'
-                  : 'text-text-primary/25 cursor-not-allowed',
+              : track.recArm
+                ? 'bg-error/15 text-error hover:bg-error/10'
+                : 'bg-text-primary/10 text-text-primary/70 hover:bg-text-primary/15 hover:text-text-primary',
           )}
         >
           {track.recording ? (
-            <><Square size={8} /> Stop</>
-          ) : track.recordReady ? (
-            <><Circle size={8} className="text-warning" /> Cancel</>
+            <><Circle size={8} className="fill-current animate-pulse" /> Recording</>
+          ) : track.recArm ? (
+            <><Circle size={8} className="text-error fill-current" /> Enabled</>
           ) : (
             <><Circle size={8} className="text-error/60" /> Record</>
           )}

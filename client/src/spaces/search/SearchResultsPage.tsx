@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Play, Pause, Search, Music2, Sparkles, X, ArrowRight, Headphones, AlertCircle, RotateCcw } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
+import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
 import { youtubeService, type YoutubeSearchResult } from '@/services/youtubeService'
 import type { YoutubeResult } from '@/data/mockSearchResults'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
@@ -42,15 +43,26 @@ export function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const query = searchParams.get('q') ?? ''
-  const [inputValue, setInputValue] = useState(query)
+  const chatRef = useRef<ChatInputRef>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<YoutubeResult[]>([])
   const [error, setError] = useState<string | null>(null)
   const [selectedResult, setSelectedResult] = useState<YoutubeResult | null>(null)
 
+  // Keep ChatInput value in sync with the URL query
+  useEffect(() => {
+    chatRef.current?.setValue(query)
+  }, [query])
+
+  // Focus the input when the user taps Search nav while already on this page
+  useEffect(() => {
+    const handler = () => chatRef.current?.focus()
+    window.addEventListener('focus-search-input', handler)
+    return () => window.removeEventListener('focus-search-input', handler)
+  }, [])
+
   // Fetch real YouTube results when query changes
   useEffect(() => {
-    setInputValue(query)
     if (!query.trim()) {
       setResults([])
       return
@@ -76,10 +88,14 @@ export function SearchResultsPage() {
     return () => { cancelled = true }
   }, [query])
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    const trimmed = inputValue.trim()
-    if (!trimmed || trimmed === query) return
+  const handleSearch = (message: string) => {
+    const trimmed = message.trim()
+    if (!trimmed) return
+    if (trimmed === query) {
+      // Same query — restore value that ChatInput cleared on send
+      chatRef.current?.setValue(query)
+      return
+    }
     setSearchParams({ q: trimmed })
   }
 
@@ -93,32 +109,26 @@ export function SearchResultsPage() {
   return (
     <div className="h-full overflow-y-auto">
 
-      {/* ── Sticky header ─────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-surface-0/90 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
+      {/* ── Search input (same ChatInput as home page) ──────────── */}
+      <div className="max-w-3xl mx-auto px-6 pt-8">
         <button
-          onClick={() => navigate(-1)}
-          className="flex items-center justify-center size-9 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors shrink-0"
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors mb-6"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={16} />
+          Home
         </button>
 
-        <form onSubmit={handleSearch} className="flex-1 relative max-w-xl">
-          <Search
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-          />
-          <input
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className="w-full bg-surface-2 border border-border rounded-full pl-9 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-hover transition-colors"
-            placeholder="Search for a song..."
-          />
-        </form>
+        <ChatInput
+          ref={chatRef}
+          onSend={handleSearch}
+          placeholder="Song name, artist, or paste a link..."
+        />
       </div>
 
-      {/* ── Content ───────────────────────────────────────────────── */}
+      {/* ── Results ─────────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {isLoading ? (
+        {isLoading && results.length === 0 ? (
           <SearchSkeleton />
         ) : error ? (
           <div className="flex flex-col items-center gap-3 py-20 text-text-muted">
@@ -138,7 +148,15 @@ export function SearchResultsPage() {
             <p className="text-sm">No results found for "{query}"</p>
           </div>
         ) : results.length > 0 ? (
-          <div className="flex flex-col gap-10">
+          <div className={cn('flex flex-col gap-10 transition-opacity', isLoading && 'opacity-50')}>
+
+            {/* Loading indicator for re-search */}
+            {isLoading && (
+              <div className="flex items-center justify-center gap-2 text-sm text-text-muted">
+                <div className="size-4 border-2 border-border border-t-text-secondary rounded-full animate-spin" />
+                Updating results…
+              </div>
+            )}
 
             {/* Top Result */}
             {topResult && (

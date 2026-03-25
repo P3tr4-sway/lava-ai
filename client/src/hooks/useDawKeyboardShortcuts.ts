@@ -39,6 +39,19 @@ export function useDawKeyboardShortcuts() {
         }
       }
 
+      // Space — toggle play/stop
+      if (e.key === ' ') {
+        e.preventDefault()
+        const { transportState, setTransportState, currentBar, setTransportOriginBar } =
+          useAudioStore.getState()
+        if (transportState === 'rolling' || transportState === 'recording') {
+          setTransportState('stopped')
+        } else {
+          setTransportOriginBar(currentBar)
+          setTransportState('rolling')
+        }
+      }
+
       // Escape — deselect clip
       if (e.key === 'Escape') {
         const { selectClip } = useDawPanelStore.getState()

@@ -1,7 +1,8 @@
-import { Home, FolderOpen, Music, FilePlus2, Settings } from 'lucide-react'
+import { Home, FolderOpen, Music, FilePlus2, Settings, Search } from 'lucide-react'
 
 export const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
+  { to: '/search', icon: Search, label: 'Search' },
   { to: '/jam', icon: Music, label: 'Play' },
   { to: '/projects', icon: FolderOpen, label: 'My Projects' },
 ]

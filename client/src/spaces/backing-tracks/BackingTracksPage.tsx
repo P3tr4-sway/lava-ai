@@ -34,7 +34,7 @@ export function BackingTracksPage() {
             </div>
             <p className="text-sm text-text-muted">Browse and pick a track, then jump into a practice session.</p>
           </div>
-          <Button onClick={() => navigate('/jam')} className="gap-2">
+          <Button onClick={() => navigate('/play')} className="gap-2">
             <ArrowLeft size={14} />
             Back to AI Tools
           </Button>
@@ -45,7 +45,7 @@ export function BackingTracksPage() {
           {BACKING_TRACKS.map((track) => (
             <button
               key={track.id}
-              onClick={() => navigate('/jam')}
+              onClick={() => navigate('/play')}
               className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden text-left transition-colors group"
             >
               {/* Album Art */}

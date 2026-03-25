@@ -69,7 +69,7 @@ export function JamPage() {
   const { requireAuth } = useRequireAuth()
 
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'jam', projectId: id })
+    setSpaceContext({ currentSpace: 'play', projectId: id })
   }, [id, setSpaceContext])
 
   // Seed default tracks for jam session

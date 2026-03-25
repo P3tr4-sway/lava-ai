@@ -32,7 +32,7 @@ export function ChordChartsPage() {
           {CHORD_CHARTS.map((chart) => (
             <button
               key={chart.id}
-              onClick={() => navigate(`/learn/songs/${chart.id}`)}
+              onClick={() => navigate(`/score/${chart.id}`)}
               className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-lg overflow-hidden text-left transition-colors group"
             >
               {/* Album Art — black mockup */}

@@ -8,14 +8,16 @@ import { cn } from '@/components/ui/utils'
 const SPACE_LABELS: Record<string, string> = {
   '': 'Home',
   learn: 'Practice',
-  jam: 'AI Tools',
+  score: 'Score',
+  play: 'Play',
+  tools: 'Play',
   create: 'Create',
   projects: 'My Library',
 }
 
 const SUB_LABELS: Record<string, string> = {
   songs: 'Songs',
-  jam: 'Session',
+  play: 'Session',
   techniques: 'Techniques',
 }
 

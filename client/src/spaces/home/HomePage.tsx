@@ -145,7 +145,7 @@ export function HomePage() {
               icon={Mic}
               title="Play Center"
               description="Build tones with amp, effects, and looper tools"
-              onClick={() => navigate('/jam')}
+              onClick={() => navigate('/play')}
             />
             <QuickStartCard
               icon={FilePlus2}
@@ -160,7 +160,7 @@ export function HomePage() {
         {isAuthenticated && (
           <section>
             <button
-              onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
+              onClick={() => navigate(`/score/${LAST_PLAYED.id}`)}
               className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
             >
               <div className="flex items-center justify-between gap-4 mb-5">
@@ -193,7 +193,7 @@ export function HomePage() {
               return (
                 <div
                   key={chart.id}
-                  onClick={() => navigate(`/learn/songs/${chart.id}`)}
+                  onClick={() => navigate(`/score/${chart.id}`)}
                   className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
                 >
                   {/* Cover */}

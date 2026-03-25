@@ -3,7 +3,7 @@ import { Home, FolderOpen, Music, FilePlus2, Settings, Search } from 'lucide-rea
 export const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/search', icon: Search, label: 'Search' },
-  { to: '/jam', icon: Music, label: 'AI Tools' },
+  { to: '/tools', icon: Music, label: 'Play' },
   { to: '/projects', icon: FolderOpen, label: 'My Library' },
 ]
 

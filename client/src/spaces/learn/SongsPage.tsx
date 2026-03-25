@@ -27,7 +27,7 @@ const PROGRESS_SECTIONS = [
   { id: 6, label: 'Outro',   type: 'outro',  barCount: 1, status: 'locked'  as const, accuracy: 0  },
 ]
 
-export function SongsPage() {
+export function ScorePage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()

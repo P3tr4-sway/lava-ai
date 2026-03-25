@@ -32,7 +32,7 @@ const MY_GEAR = {
   chain: 'Compressor → Warm OD → Spring Reverb',
   lastUsed: '2 days ago',
   gradient: 'from-amber-700 to-orange-900',
-  route: '/jam',
+  route: '/play',
 }
 
 const NEW_ARRIVALS = [
@@ -50,14 +50,14 @@ const SUGGESTIONS = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export function PlayHubPage() {
+export function PlayPage() {
   const navigate = useNavigate()
   const inputRef = useRef<SpaceAgentInputRef>(null)
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
   const { isAuthenticated } = useRequireAuth()
 
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'jam' })
+    setSpaceContext({ currentSpace: 'play' })
   }, [setSpaceContext])
 
   return (
@@ -88,7 +88,7 @@ export function PlayHubPage() {
 
           {/* Create a Tone CTA */}
           <div className="flex justify-center mt-6">
-            <Button onClick={() => navigate('/jam/new')} className="rounded-full px-6">
+            <Button onClick={() => navigate('/play/new')} className="rounded-full px-6">
               <Plus size={16} className="mr-2" />
               Build a Tone
             </Button>

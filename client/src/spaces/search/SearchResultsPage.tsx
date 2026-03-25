@@ -424,7 +424,7 @@ function SongActionModal({
       // result.id is the YouTube video ID; transcriptionId is server-assigned
       const transcriptionId = await youtubeService.startAnalysis(result.id, result.title)
       addTask(transcriptionId, result.id, result.title)
-      navigate(`/play/${transcriptionId}?generate=1`)
+      navigate(`/score/${transcriptionId}?generate=1`)
       onClose()
     } catch (err) {
       console.error('Failed to start analysis:', err)
@@ -491,7 +491,7 @@ function SongActionModal({
 
           {/* Option B: Backing track only */}
           <button
-            onClick={() => navigate(`/play/${result.id}`)}
+            onClick={() => navigate(`/score/${result.id}`)}
             className="w-full flex items-start gap-4 p-4 bg-surface-0 border border-border hover:border-border-hover rounded-xl transition-colors text-left group"
           >
             <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center shrink-0 group-hover:bg-surface-4 transition-colors mt-0.5">

@@ -131,7 +131,7 @@ export function LearnPage() {
             {RECOMMENDED.map((item) => (
               <div
                 key={item.id}
-                onClick={() => navigate(`/learn/songs/${item.id}`)}
+                onClick={() => navigate(`/score/${item.id}`)}
                 className="bg-surface-2 border border-border rounded-lg overflow-hidden cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-all hover:-translate-y-0.5 group"
               >
                 <div className={`aspect-[16/9] bg-gradient-to-br ${item.gradient}`} />

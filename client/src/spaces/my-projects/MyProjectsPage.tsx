@@ -33,7 +33,7 @@ const FILTER_TABS = [
   { label: 'All', value: 'all' },
   { label: 'Practice Charts', value: 'learn' },
   { label: 'Recordings', value: 'create' },
-  { label: 'Backing Tracks', value: 'jam' },
+  { label: 'Backing Tracks', value: 'play' },
 ] as const
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ function getProjectRoute(project: Project): string {
   if (project.space === 'learn') {
     return `/editor/${project.id}`
   }
-  if (project.space === 'jam') return '/jam'
+  if (project.space === 'jam') return '/play'
   return '/projects'
 }
 

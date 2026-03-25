@@ -59,10 +59,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         onBlur={() => setFocused(false)}
         disabled={disabled}
         placeholder={placeholder}
+        aria-label={placeholder}
         rows={1}
         className={cn(
           'w-full bg-transparent text-sm leading-relaxed outline-none resize-none',
           'text-text-primary placeholder:text-text-muted',
+          'focus-visible:ring-1 focus-visible:ring-border-hover',
           disabled && 'opacity-50',
         )}
         style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
@@ -84,6 +86,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         <button
           onClick={handleSend}
           disabled={disabled || !hasContent}
+          aria-label="Send"
           className={cn(
             'flex items-center justify-center size-9 rounded-full transition-colors shrink-0',
             hasContent
@@ -91,7 +94,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
               : 'bg-surface-3 text-text-muted cursor-default',
           )}
         >
-          <ArrowUp size={16} />
+          <ArrowUp size={16} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -103,9 +106,10 @@ function IconButton({ icon: Icon, label }: { icon: typeof Image; label: string }
     <button
       type="button"
       title={label}
+      aria-label={label}
       className="flex items-center justify-center size-9 rounded-full text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
     >
-      <Icon size={18} />
+      <Icon size={18} aria-hidden="true" />
     </button>
   )
 }

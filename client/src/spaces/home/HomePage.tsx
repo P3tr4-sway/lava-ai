@@ -51,11 +51,11 @@ function QuickStartCard({ icon: Icon, title, description, onClick, className }: 
     <button
       onClick={onClick}
       className={cn(
-        'bg-surface-0 border border-border hover:border-border-hover rounded-xl p-4 cursor-pointer transition-all group text-left',
+        'bg-surface-0 border border-border hover:border-border-hover rounded-xl p-4 cursor-pointer transition-[border-color,color] group text-left',
         className,
       )}
     >
-      <Icon size={20} className="text-text-secondary group-hover:text-text-primary transition-colors mb-2" />
+      <Icon size={20} aria-hidden="true" className="text-text-secondary group-hover:text-text-primary transition-colors mb-2" />
       <p className="text-sm font-medium text-text-primary">{title}</p>
       <p className="text-xs text-text-secondary mt-0.5">{description}</p>
     </button>
@@ -76,6 +76,12 @@ export function HomePage() {
 
   return (
     <div className="h-full overflow-y-auto">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-surface-0 focus:text-text-primary focus:rounded focus:border focus:border-border"
+      >
+        Skip to main content
+      </a>
 
       {/* Guests: sign-up CTA banner */}
       {!isAuthenticated && (
@@ -101,21 +107,22 @@ export function HomePage() {
             </Link>
             <button
               onClick={() => setShowBanner(false)}
+              aria-label="Dismiss"
               className="text-text-muted hover:text-text-secondary transition-colors"
             >
-              <X size={16} />
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10 pb-12">
+      <div id="main-content" className="max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10 pb-12">
 
         {/* ── 1. Hero — search-first ────────────────────────────── */}
         <section>
           <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to play?</h1>
           <p className="text-sm text-text-secondary text-center mb-6">Search for any song — AI generates the score and backing track for you</p>
-          <ChatInput ref={chatRef} onSend={handleSend} placeholder="Song name, artist, or paste a link..." />
+          <ChatInput ref={chatRef} onSend={handleSend} placeholder="Song name, artist, or paste a link…" />
 
           {/* Suggestion tags */}
           <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
@@ -123,7 +130,7 @@ export function HomePage() {
               <button
                 key={s}
                 onClick={() => chatRef.current?.setValue(s)}
-                className="px-3 py-1.5 text-xs text-text-secondary bg-surface-1 border border-border rounded-full hover:border-border-hover hover:text-text-primary transition-colors"
+                className="px-3 py-1.5 text-xs text-text-secondary bg-surface-1 border border-border rounded-full hover:border-border-hover hover:text-text-primary transition-colors focus-visible:ring-2 focus-visible:ring-border-hover focus-visible:outline-none"
               >
                 {s}
               </button>
@@ -133,7 +140,7 @@ export function HomePage() {
 
         {/* ── 2. Quick start ──────────────────────────────────────── */}
         <section>
-          <p className="text-sm text-text-muted mb-4">Quick start</p>
+          <h2 className="text-sm text-text-muted mb-4">Quick start</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <QuickStartCard
               icon={Search}
@@ -161,7 +168,8 @@ export function HomePage() {
           <section>
             <button
               onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
-              className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
+              aria-label={`Continue playing ${LAST_PLAYED.title}`}
+              className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-[border-color] group text-left"
             >
               <div className="flex items-center justify-between gap-4 mb-5">
                 <div className="min-w-0">
@@ -170,7 +178,7 @@ export function HomePage() {
                   <p className="text-sm text-text-secondary mt-1">{LAST_PLAYED.artist} · {LAST_PLAYED.section}</p>
                 </div>
                 <div className="w-14 h-14 rounded-full bg-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <Play size={22} className="text-surface-0 ml-1" fill="currentColor" />
+                  <Play size={22} aria-hidden="true" className="text-surface-0 ml-1" fill="currentColor" />
                 </div>
               </div>
               {/* Progress bar */}
@@ -186,15 +194,16 @@ export function HomePage() {
 
         {/* ── 4. Picked for you ─────────────────────────────────── */}
         <section>
-          <p className="text-sm text-text-muted mb-4">Picked for you</p>
+          <h2 className="text-sm text-text-muted mb-4">Picked for you</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {RECOMMENDED_CHARTS.map((chart) => {
               const diff = DIFFICULTY_MAP[chart.id]
               return (
-                <div
+                <button
                   key={chart.id}
+                  type="button"
                   onClick={() => navigate(`/learn/songs/${chart.id}`)}
-                  className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
+                  className="flex flex-col w-full text-left bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-[border-color,transform] motion-safe:hover:-translate-y-0.5 group focus-visible:ring-2 focus-visible:ring-border-hover"
                 >
                   {/* Cover */}
                   <div className="aspect-square w-full bg-surface-2 relative flex items-center justify-center">
@@ -205,7 +214,7 @@ export function HomePage() {
                     {/* Play overlay */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-surface-0/50 backdrop-blur-sm">
-                        <Play size={18} className="text-text-primary ml-0.5" fill="currentColor" />
+                        <Play size={18} aria-hidden="true" className="text-text-primary ml-0.5" fill="currentColor" />
                       </div>
                     </div>
                   </div>
@@ -219,7 +228,7 @@ export function HomePage() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
@@ -228,7 +237,7 @@ export function HomePage() {
         {/* ── 5. Pricing (guests only) ─────────────────────────── */}
         {!isAuthenticated && (
           <section>
-            <p className="text-sm text-text-muted mb-4">Plans & Pricing</p>
+            <h2 className="text-sm text-text-muted mb-4">Plans & Pricing</h2>
             <PricingCards />
           </section>
         )}

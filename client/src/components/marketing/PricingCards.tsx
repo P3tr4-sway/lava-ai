@@ -103,9 +103,9 @@ export function PricingCards({ className }: PricingCardsProps) {
             {plan.features.map((feature) => (
               <li key={feature.text} className="flex items-start gap-2">
                 {feature.included ? (
-                  <Check size={16} className="text-success shrink-0 mt-0.5" />
+                  <Check size={16} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
                 ) : (
-                  <X size={16} className="text-text-muted shrink-0 mt-0.5" />
+                  <X size={16} className="text-text-muted shrink-0 mt-0.5" aria-hidden="true" />
                 )}
                 <span
                   className={cn(

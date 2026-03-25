@@ -4,6 +4,7 @@ import { HomePage } from '@/spaces/home/HomePage'
 import { SongsPage } from '@/spaces/learn/SongsPage'
 import { JamPage } from '@/spaces/jam/JamPage'
 import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
+import { TonePage } from '@/spaces/jam/TonePage'
 import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
 import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
@@ -28,6 +29,7 @@ const routes: RouteObject[] = [
       { path: 'learn/songs/:id', element: <SongsPage /> },
       // Jam / free play
       { path: 'jam', element: <PlayHubPage /> },
+      { path: 'jam/new', element: <TonePage /> },
       { path: 'jam/:id', element: <JamPage /> },
       // Lead Sheet editor — blank project
       { path: 'editor', element: <LeadSheetPage /> },

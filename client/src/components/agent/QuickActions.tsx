@@ -4,35 +4,35 @@ import { useAgentStore } from '@/stores/agentStore'
 
 const ACTIONS: Record<string, { label: string; prompt: string }[]> = {
   learn: [
-    { label: 'Score analysis', prompt: 'Analyze the current score and highlight key sections' },
+    { label: 'Practice plan', prompt: 'Create a practice plan for this song' },
     { label: 'How to play this', prompt: 'How do I play the current section?' },
     { label: 'Chord breakdown', prompt: 'Break down the chords in this piece' },
     { label: 'Fingering tips', prompt: 'Suggest fingering for this passage' },
-    { label: 'Transcribe audio', prompt: 'Transcribe an audio file to sheet music' },
-    { label: 'Record snippet', prompt: 'Record a quick audio snippet of my playing' },
+    { label: 'Technique tips', prompt: 'What techniques should I focus on here?' },
+    { label: 'Record snippet', prompt: 'Record a quick snippet of my playing for feedback' },
   ],
   jam: [
-    { label: 'Sound presets', prompt: 'Show me sound presets for this jam session' },
+    { label: 'Tone presets', prompt: 'Show me tone presets for this practice session' },
     { label: 'Suggest scale', prompt: 'What scale works over this progression?' },
     { label: 'Effects chain', prompt: 'Set up an effects chain for my tone' },
-    { label: 'Tone generator', prompt: 'Generate a reference tone or drone' },
-    { label: 'Record session', prompt: 'Record this jam session' },
-    { label: 'Add backing track', prompt: 'Generate a backing track for this jam' },
+    { label: 'Metronome drill', prompt: 'Set up a metronome exercise for this tempo' },
+    { label: 'Record session', prompt: 'Record this practice session' },
+    { label: 'Add backing track', prompt: 'Generate a backing track to practice with' },
   ],
   create: [
-    { label: 'Sound presets', prompt: 'Browse sound presets for this project' },
+    { label: 'Tone presets', prompt: 'Browse tone presets for this project' },
     { label: 'Effects chain', prompt: 'Apply effects to this track' },
-    { label: 'Transcribe audio', prompt: 'Transcribe audio to MIDI for this project' },
     { label: 'Chord suggestion', prompt: 'Suggest chords that fit this progression' },
+    { label: 'Practice tips', prompt: 'Give me practice tips for what I just wrote' },
     { label: 'How to mix', prompt: 'How should I mix these tracks?' },
     { label: 'Export', prompt: 'Export this project' },
   ],
 }
 
 const DEFAULT_ACTIONS = [
-  { label: 'Sound presets', prompt: 'Show me available sound presets' },
-  { label: 'Transcribe audio', prompt: 'Transcribe an audio file to sheet music' },
-  { label: 'How to...', prompt: 'How do I get started?' },
+  { label: 'Practice plan', prompt: 'Help me create a practice plan' },
+  { label: 'Song breakdown', prompt: 'Break down a song into something I can practice' },
+  { label: 'Get started', prompt: 'How do I get started practicing?' },
 ]
 
 // ─── Component ───────────────────────────────────────────────────────────────

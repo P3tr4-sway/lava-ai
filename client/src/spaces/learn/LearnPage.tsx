@@ -39,13 +39,13 @@ const SUB_HUBS = [
   {
     key: 'songs',
     label: 'Songs',
-    description: 'Learn your favorite tracks',
+    description: 'Practice your favorite tracks',
     route: '/chord-charts',
   },
   {
     key: 'jam',
-    label: 'Jam',
-    description: 'Play along with backing tracks',
+    label: 'Practice Session',
+    description: 'Practice with backing tracks',
     route: '/learn/jam',
   },
   {

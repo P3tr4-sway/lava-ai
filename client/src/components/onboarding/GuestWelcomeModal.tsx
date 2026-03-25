@@ -10,9 +10,9 @@ const STORAGE_KEY = 'lava-guest-welcomed'
 const SHOW_DELAY_MS = 2000
 
 const FEATURES = [
-  { icon: Music, text: 'Search any song and play along' },
-  { icon: Sparkles, text: 'AI generates scores and backing tracks' },
-  { icon: FileMusic, text: 'Create and export lead sheets' },
+  { icon: Music, text: 'Search any song and practice it' },
+  { icon: Sparkles, text: 'AI breaks songs into chord charts and tabs' },
+  { icon: FileMusic, text: 'Track progress and build practice plans' },
 ] as const
 
 export function GuestWelcomeModal() {
@@ -69,7 +69,7 @@ export function GuestWelcomeModal() {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-surface-0">Welcome to LAVA AI</h2>
-            <p className="text-sm text-surface-0 opacity-70">Your AI-powered music companion</p>
+            <p className="text-sm text-surface-0 opacity-70">Your AI-powered practice partner</p>
           </div>
         </div>
 

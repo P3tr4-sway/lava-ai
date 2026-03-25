@@ -7,15 +7,15 @@ import { cn } from '@/components/ui/utils'
 
 const SPACE_LABELS: Record<string, string> = {
   '': 'Home',
-  learn: 'Learn',
-  jam: 'Play',
+  learn: 'Practice',
+  jam: 'AI Tools',
   create: 'Create',
-  projects: 'My Projects',
+  projects: 'My Library',
 }
 
 const SUB_LABELS: Record<string, string> = {
   songs: 'Songs',
-  jam: 'Jam',
+  jam: 'Session',
   techniques: 'Techniques',
 }
 
@@ -58,7 +58,7 @@ export function TopBar() {
           size="icon"
           onClick={toggleAgentPanel}
           className={cn(agentPanelOpen && 'text-text-primary bg-surface-3')}
-          title="Toggle AI Agent"
+          title="Toggle AI Practice Assistant"
         >
           <Bot size={16} />
         </Button>

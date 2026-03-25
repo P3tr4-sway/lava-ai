@@ -23,7 +23,7 @@ export function MobileHeader() {
       <button
         onClick={toggleAgentPanel}
         className="p-2 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-        aria-label="AI Agent"
+        aria-label="AI Practice Assistant"
       >
         <Bot size={18} />
       </button>

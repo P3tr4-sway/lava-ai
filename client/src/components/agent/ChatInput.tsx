@@ -15,7 +15,7 @@ interface ChatInputProps {
   placeholder?: string
 }
 
-export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'What would you like to know?' }, ref) {
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'Ask anything about your practice...' }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)

@@ -16,7 +16,99 @@ This file governs how AI coding agents implement Figma designs in this repositor
 | Icons | `lucide-react` |
 | State | Zustand |
 | Routing | React Router DOM v6 |
+| Audio synthesis | tone.js |
+| Audio waveforms | wavesurfer.js |
 | Path alias | `@/*` → `client/src/*` |
+
+---
+
+## Commands
+
+```bash
+pnpm dev          # Start client (port 5173) + server (port 3001) concurrently
+pnpm build        # Build all workspaces
+pnpm lint         # Lint all workspaces
+pnpm typecheck    # Type-check all workspaces
+pnpm clean        # Remove all dist/ and node_modules/
+```
+
+> `pnpm dev` runs `scripts/dev.mjs` which kills any processes on ports 3001/5173 then starts both services together.
+
+---
+
+## Monorepo Structure
+
+pnpm workspace with three packages:
+
+```
+client/    @lava/client  — React + Vite frontend (port 5173)
+server/    @lava/server  — Fastify API server (port 3001)
+packages/
+  shared/  @lava/shared  — shared types/utils consumed by both
+```
+
+Import shared code: `import { ... } from '@lava/shared'`
+
+### Spaces (page organization)
+
+Pages live in `client/src/spaces/<folder>/`. Each space maps to a route group:
+
+| Product name | Folder | Route(s) | Pages |
+|---|---|---|---|
+| Home | `home` | `/` | `HomePage` — search-first hero, centered `max-w-3xl pt-[22vh]` layout |
+| Play | `jam` | `/jam`, `/jam/new`, `/jam/:id` | `PlayHubPage` (hub), `TonePage` (effect pedals editor), `JamPage` (free play) |
+| Player | `learn` | `/play/:id` | `SongsPage` — score + accompaniment player |
+| Editor | `editor` | `/editor`, `/editor/:id` | `LeadSheetPage` — blank project editor |
+
+New entrance/hub pages should follow the HomePage pattern: centered hero with `max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10`.
+
+### DAW Panel reuse
+
+`DawPanel` from `@/components/daw/DawPanel` is the shared DAW component. Seed tracks with `useDawPanelStore` + `makeTrack()` on mount, then render at the bottom of a `flex flex-col h-full` layout with `showRecordButton={true} totalBars={16} beatsPerBar={4}`.
+
+### Agent input components
+
+- `ChatInput` — general search input with `forwardRef` and `ChatInputRef.setValue()`
+- `SpaceAgentInput` — wraps `ChatInput` for space-specific agent context, also supports `forwardRef` via `SpaceAgentInputRef`
+- Both support suggestion-tag patterns: `ref.current?.setValue(text)` to prefill the input
+
+---
+
+## Environment Setup
+
+Copy `.env.example` to `.env` at the repo root before running `pnpm dev`:
+
+```bash
+cp .env.example .env
+```
+
+Required variables:
+
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key (`sk-ant-...`) |
+| `LLM_PROVIDER` | `"claude"` or `"openai"` |
+| `OPENAI_API_KEY` | Optional, only if using OpenAI |
+| `DATABASE_URL` | SQLite path, default `./data/lava.db` |
+| `CLIENT_ORIGIN` | CORS origin, default `http://localhost:5173` |
+| `PORT` | Server port, default `3001` |
+
+---
+
+## Server Stack
+
+`server/` runs on **Fastify 4** with the following:
+
+| Layer | Technology |
+|---|---|
+| HTTP framework | Fastify 4 + @fastify/cors, multipart, rate-limit |
+| AI providers | @anthropic-ai/sdk, openai |
+| Database | better-sqlite3 + Drizzle ORM |
+| Schema validation | Zod |
+| Logging | Pino |
+| Runtime | tsx watch (dev), compiled JS (prod) |
+
+Source layout: `server/src/` → `agent/`, `config/`, `db/`, `routes/`, `utils/`
 
 ---
 
@@ -37,7 +129,7 @@ Follow these steps in order for every Figma-driven change. Do not skip steps.
 
 - **Base UI components:** `client/src/components/ui/` — always check here before creating new components
 - **Layout components:** `client/src/components/layout/`
-- **Feature components:** `client/src/components/agent/`, `client/src/components/daw/`, `client/src/components/library/`
+- **Feature components:** `client/src/components/agent/`, `client/src/components/daw/`, `client/src/components/library/`, `client/src/components/auth/`, `client/src/components/marketing/`, `client/src/components/onboarding/`, `client/src/components/score/`, `client/src/components/settings/`
 - **New UI components:** place in `client/src/components/ui/`
 - **New feature components:** place in the closest matching feature subdirectory
 
@@ -57,6 +149,12 @@ import { Input } from '@/components/ui'
 import { Slider } from '@/components/ui'
 import { Toggle } from '@/components/ui'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
+import { Avatar } from '@/components/ui'
+import { Badge } from '@/components/ui'
+import { Dialog } from '@/components/ui'
+import { ToastProvider, useToast } from '@/components/ui'
+import { TaskCard } from '@/components/ui'
+import { TaskNotifications } from '@/components/ui'
 ```
 
 Layout primitives:
@@ -270,6 +368,7 @@ From the design file (`5kHaKzGmOD9Qr74lYmI6p5`):
 
 ## What NOT to do
 
+- Do not place static routes after dynamic `:id` routes — e.g. `/jam/new` must come before `/jam/:id` in `router.tsx`
 - Do not hardcode hex colors — always use Tailwind tokens above
 - Do not install Tailwind (already configured)
 - Do not install Radix UI, Headless UI, or shadcn/ui — components are custom

@@ -73,7 +73,7 @@ export function AppShell() {
           {!isHome && (
             <button
               onClick={toggleAgentPanel}
-              title="AI Agent"
+              title="AI Practice Assistant"
               className={cn(
                 'fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-150',
                 'bg-surface-3 text-text-secondary hover:bg-surface-4 hover:text-text-primary',

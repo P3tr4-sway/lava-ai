@@ -21,9 +21,9 @@ const SPACE_ICONS: Record<SpaceType, React.ElementType> = {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  learn: 'Score',
-  jam: 'Jam',
-  create: 'Create',
+  learn: 'Practice',
+  jam: 'Session',
+  create: 'Charts',
   tools: 'Tools',
   library: 'Library',
   projects: 'Projects',
@@ -31,8 +31,8 @@ const MODULE_LABELS: Record<string, string> = {
 
 const FILTER_TABS = [
   { label: 'All', value: 'all' },
-  { label: 'Scores', value: 'learn' },
-  { label: 'Exported Audio', value: 'create' },
+  { label: 'Practice Charts', value: 'learn' },
+  { label: 'Recordings', value: 'create' },
   { label: 'Backing Tracks', value: 'jam' },
 ] as const
 
@@ -102,9 +102,9 @@ export function MyProjectsPage() {
       <div className="h-full overflow-y-auto">
         <div className="flex flex-col items-center justify-center py-20 text-center px-6">
           <FolderOpen size={48} className="text-text-muted mb-4" />
-          <h3 className="text-lg font-semibold text-text-primary mb-2">Your projects will appear here</h3>
+          <h3 className="text-lg font-semibold text-text-primary mb-2">Your practice library will appear here</h3>
           <p className="text-sm text-text-secondary mb-6 max-w-sm">
-            Sign up for a free account to save your lead sheets, recordings, and more
+            Sign up for a free account to save your charts, recordings, and practice progress
           </p>
           <Button onClick={() => navigate('/signup')}>Sign Up Free</Button>
         </div>
@@ -118,9 +118,9 @@ export function MyProjectsPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <FolderOpen size={20} className="text-text-secondary" />
-            <h1 className="text-xl font-semibold">My Projects</h1>
+            <h1 className="text-xl font-semibold">My Practice Library</h1>
           </div>
-          <p className="text-text-secondary text-sm">All your saved work, across every space.</p>
+          <p className="text-text-secondary text-sm">Your saved charts, recordings, and practice sessions.</p>
         </div>
         <Button>
           <Plus size={14} /> New Project
@@ -204,13 +204,13 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <FolderOpen size={48} className="text-text-muted mb-4" />
-      <h3 className="text-lg font-semibold text-text-primary mb-2">No projects yet</h3>
+      <h3 className="text-lg font-semibold text-text-primary mb-2">Nothing here yet</h3>
       <p className="text-sm text-text-secondary mb-6 max-w-sm">
-        Start by searching for a song or creating a lead sheet
+        Search for a song to practice or create your own charts
       </p>
       <div className="flex gap-3">
-        <Button onClick={() => navigate('/')}>Search Songs</Button>
-        <Button variant="outline" onClick={() => navigate('/editor')}>New Lead Sheet</Button>
+        <Button onClick={() => navigate('/')}>Find a Song</Button>
+        <Button variant="outline" onClick={() => navigate('/editor')}>New Chart</Button>
       </div>
     </div>
   )

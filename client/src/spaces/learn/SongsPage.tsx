@@ -315,7 +315,7 @@ export function SongsPage() {
         <div className="text-center flex flex-col items-center gap-5 max-w-xs">
           <Loader2 size={28} className="text-text-muted animate-spin" />
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-text-primary">Analyzing song...</p>
+            <p className="text-sm font-medium text-text-primary">Breaking down song...</p>
             <p className="text-xs text-text-muted">{STAGE_LABEL[taskStage]}</p>
           </div>
 
@@ -347,7 +347,7 @@ export function SongsPage() {
       <div className="h-full flex items-center justify-center">
         <div className="text-center flex flex-col items-center gap-4">
           <FileMusic size={40} className="text-text-muted" />
-          <p className="text-sm font-medium text-text-primary">Analysis failed</p>
+          <p className="text-sm font-medium text-text-primary">Song breakdown failed</p>
           <p className="text-xs text-text-muted max-w-xs">{analysisError}</p>
           <button
             onClick={() => navigate(-1)}
@@ -398,7 +398,7 @@ export function SongsPage() {
           {chart.artist && <span className="text-xs text-text-muted">— {chart.artist}</span>}
           {analysisChart && (
             <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-success/15 text-success">
-              AI Generated
+              AI Breakdown
             </span>
           )}
         </div>
@@ -479,7 +479,7 @@ export function SongsPage() {
         blocker={blocker}
         onSave={() => void handleDialogSave()}
         saving={saving}
-        message="You have a recording that hasn't been saved to Projects. Save it before leaving?"
+        message="You have a practice recording that hasn't been saved. Save it before leaving?"
       />
     </div>
   )

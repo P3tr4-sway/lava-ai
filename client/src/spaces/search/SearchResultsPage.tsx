@@ -312,7 +312,7 @@ function TopResultCard({
             className="flex items-center gap-2 px-5 py-2.5 bg-text-primary text-surface-0 text-sm font-medium rounded-full hover:opacity-80 transition-opacity"
           >
             <Music2 size={15} />
-            View Sheet Music
+            Practice This Song
           </button>
           <YtButton videoId={result.id} />
         </div>
@@ -481,9 +481,9 @@ function SongActionModal({
               <Sparkles size={18} className="text-surface-0" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-surface-0">AI Score + Backing Track</p>
+              <p className="text-sm font-semibold text-surface-0">AI Breakdown + Practice Track</p>
               <p className="text-xs text-surface-0/60 mt-0.5 leading-relaxed">
-                Auto-detect key & tempo · Generate chord chart · Matched backing track
+                Detects key & tempo · Generates chord chart & tabs · Practice-ready backing track
               </p>
             </div>
             <ArrowRight size={16} className="text-surface-0/50 shrink-0 mt-1" />
@@ -499,7 +499,7 @@ function SongActionModal({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-text-primary">Backing Track Only</p>
-              <p className="text-xs text-text-muted mt-0.5 leading-relaxed">Generate a backing track only · Read your own score while playing along</p>
+              <p className="text-xs text-text-muted mt-0.5 leading-relaxed">Just the backing track · Practice with your own sheet music</p>
             </div>
             <ArrowRight size={16} className="text-text-muted shrink-0 mt-1" />
           </button>
@@ -509,7 +509,7 @@ function SongActionModal({
         {/* Footer hint */}
         <div className="px-5 pb-5 pt-0">
           <p className="text-2xs text-text-muted text-center">
-            3 free AI generations per month · No credit card required
+            3 free AI breakdowns per month · No credit card required
           </p>
         </div>
       </div>

@@ -1,12 +1,14 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { HomePage } from '@/spaces/home/HomePage'
-import { SongsPage } from '@/spaces/learn/SongsPage'
+import { ScorePage } from '@/spaces/learn/SongsPage'
 import { JamPage } from '@/spaces/jam/JamPage'
-import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
+import { PlayPage } from '@/spaces/jam/PlayHubPage'
+import { TonePage } from '@/spaces/jam/TonePage'
 import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
 import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
+import { ToolsPage } from '@/spaces/tools/ToolsPage'
 import { SettingsPage } from '@/spaces/settings/SettingsPage'
 import { PricingPage } from '@/spaces/pricing/PricingPage'
 import { LoginPage } from '@/spaces/auth/LoginPage'
@@ -23,12 +25,13 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       // Player — unified score + accompaniment
-      { path: 'play/:id', element: <SongsPage /> },
-      // Legacy routes → redirect to new player
-      { path: 'learn/songs/:id', element: <SongsPage /> },
-      // Jam / free play
-      { path: 'jam', element: <PlayHubPage /> },
-      { path: 'jam/:id', element: <JamPage /> },
+      { path: 'score/:id', element: <ScorePage /> },
+      // Legacy routes → redirect to score page
+      { path: 'learn/songs/:id', element: <ScorePage /> },
+      // Play hub (was /jam)
+      { path: 'play', element: <PlayPage /> },
+      { path: 'play/new', element: <TonePage /> },
+      { path: 'play/:id', element: <JamPage /> },
       // Lead Sheet editor — blank project
       { path: 'editor', element: <LeadSheetPage /> },
       { path: 'editor/:id', element: <LeadSheetPage /> },
@@ -36,6 +39,8 @@ const routes: RouteObject[] = [
       { path: 'projects', element: <MyProjectsPage /> },
       // Search
       { path: 'search', element: <SearchResultsPage /> },
+      // Tools (Geist experiment)
+      { path: 'tools', element: <ToolsPage /> },
       // Settings & Pricing
       { path: 'settings', element: <SettingsPage /> },
       { path: 'pricing', element: <PricingPage /> },

@@ -59,7 +59,7 @@ export function SignupPage() {
             Create your LAVA account
           </h1>
           <p className="text-sm text-text-secondary">
-            Your AI-powered music companion
+            Your AI-powered practice partner
           </p>
         </div>
 

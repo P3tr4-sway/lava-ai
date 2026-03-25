@@ -1,0 +1,33 @@
+/* ── Geist Design System tokens — scoped to .ds ─────────────── */
+/* Source: vercel.com/geist — dark by default, mirrors tokens.css pattern */
+
+:root .ds,
+[data-theme="dark"] .ds {
+  --ds-background-200: #000000;
+  --ds-background-100: #0a0a0a;
+  --ds-gray-100: #111111;
+  --ds-gray-200: #1a1a1a;
+  --ds-gray-300: #232323;
+  --ds-gray-400: #2e2e2e;
+  --ds-gray-500: #3a3a3a;
+  --ds-gray-600: #636363;
+  --ds-gray-700: #8b8b8b;
+  --ds-gray-800: #a3a3a3;
+  --ds-gray-900: #c7c7c7;
+  --ds-gray-1000: #ededed;
+}
+
+[data-theme="light"] .ds {
+  --ds-background-200: #fafafa;
+  --ds-background-100: #ffffff;
+  --ds-gray-100: #f2f2f2;
+  --ds-gray-200: #ebebeb;
+  --ds-gray-300: #e3e3e3;
+  --ds-gray-400: #d9d9d9;
+  --ds-gray-500: #c3c3c3;
+  --ds-gray-600: #8b8b8b;
+  --ds-gray-700: #6b6b6b;
+  --ds-gray-800: #4b4b4b;
+  --ds-gray-900: #2b2b2b;
+  --ds-gray-1000: #111111;
+}

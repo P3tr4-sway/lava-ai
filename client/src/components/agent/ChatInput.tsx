@@ -1,9 +1,10 @@
-import { useState, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
 import { ArrowUp, Image, Mic } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 
 export interface ChatInputRef {
   setValue: (v: string) => void
+  focus: () => void
 }
 
 interface ChatInputProps {
@@ -14,11 +15,15 @@ interface ChatInputProps {
   placeholder?: string
 }
 
-export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'What would you like to know?' }, ref) {
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'Ask anything about your practice...' }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  useImperativeHandle(ref, () => ({ setValue }), [])
+  useImperativeHandle(ref, () => ({
+    setValue,
+    focus: () => textareaRef.current?.focus(),
+  }), [])
 
   const hasContent = value.trim().length > 0
   const isActive = focused || hasContent
@@ -46,6 +51,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     >
       {/* Text area */}
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}

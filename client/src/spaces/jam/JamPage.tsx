@@ -69,7 +69,7 @@ export function JamPage() {
   const { requireAuth } = useRequireAuth()
 
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'jam', projectId: id })
+    setSpaceContext({ currentSpace: 'play', projectId: id })
   }, [id, setSpaceContext])
 
   // Seed default tracks for jam session
@@ -146,15 +146,15 @@ export function JamPage() {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <Music size={20} className="text-text-secondary" />
-                <h1 className="text-xl font-semibold">Play</h1>
+                <h1 className="text-xl font-semibold">AI Session</h1>
               </div>
               <p className="text-text-secondary text-sm">
-                Free-form play with AI-generated backing tracks.
+                Play with AI-generated backing tracks and a built-in looper.
               </p>
             </div>
             <Button variant="outline" onClick={() => navigate('/backing-tracks')} className="gap-2">
               <Library size={14} />
-              Browse Tracks
+              Browse Backing Tracks
             </Button>
           </div>
 
@@ -300,7 +300,7 @@ export function JamPage() {
                   <>
                     <p className="text-sm text-text-secondary">Browse Library</p>
                     <p className="text-[11px] text-text-muted">
-                      Pick from drum grooves, melodic loops, backing tracks, or AI generations
+                      Drum grooves, loops, backing tracks, and AI-generated accompaniments
                     </p>
                   </>
                 )}
@@ -315,7 +315,7 @@ export function JamPage() {
               <Sparkles size={14} className="text-text-muted shrink-0" />
               <input
                 type="text"
-                placeholder='Describe a backing track... e.g. "chill jazz trio in Dm"'
+                placeholder='Describe a practice backing track — e.g. "chill jazz trio in Dm"'
                 value={trackPrompt}
                 onChange={(e) => setTrackPrompt(e.target.value)}
                 onKeyDown={(e) => {

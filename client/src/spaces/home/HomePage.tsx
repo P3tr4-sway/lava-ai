@@ -16,8 +16,8 @@ const RECOMMENDED_CHARTS = CHORD_CHARTS.filter((c) =>
 const SUGGESTIONS = [
   'Wonderwall by Oasis',
   'Hotel California',
-  'A simple blues in E',
-  'Something easy for beginners',
+  'A simple 12-bar blues in E',
+  'Something easy for a beginner guitarist',
 ]
 
 const DIFFICULTY_MAP: Record<string, { label: string; stars: string }> = {
@@ -81,7 +81,7 @@ export function HomePage() {
       {!isAuthenticated && (
         <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
           <p className="text-sm text-text-secondary">
-            Create a free account to save your progress and unlock AI features
+            Create a free account to save your progress, get AI guidance, and unlock the full practice center
           </p>
           <Link to="/signup" className="text-sm font-medium text-accent hover:underline shrink-0 ml-4">
             Sign Up Free
@@ -93,7 +93,7 @@ export function HomePage() {
       {isAuthenticated && showBanner && (
         <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
           <p className="text-sm text-text-secondary">
-            <span className="font-medium text-text-primary">Free Plan</span> — 3 AI transcriptions per month
+            <span className="font-medium text-text-primary">Free Plan</span> — 3 AI song breakdowns per month
           </p>
           <div className="flex items-center gap-3">
             <Link to="/pricing" className="text-sm font-medium text-accent hover:underline">
@@ -113,8 +113,8 @@ export function HomePage() {
 
         {/* ── 1. Hero — search-first ────────────────────────────── */}
         <section>
-          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to play?</h1>
-          <p className="text-sm text-text-secondary text-center mb-6">Search for any song — AI generates the score and backing track for you</p>
+          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to practice today?</h1>
+          <p className="text-sm text-text-secondary text-center mb-6">Search for any song and LAVA AI turns it into playable chord charts and tabs, so you can start practicing right away.</p>
           <ChatInput ref={chatRef} onSend={handleSend} placeholder="Song name, artist, or paste a link..." />
 
           {/* Suggestion tags */}
@@ -137,20 +137,20 @@ export function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <QuickStartCard
               icon={Search}
-              title="Learn a Song"
-              description="Search and play along"
+              title="Practice a Song"
+              description="Turn any song into playable charts and tabs"
               onClick={() => chatRef.current?.setValue('')}
             />
             <QuickStartCard
               icon={Mic}
-              title="Jam Session"
-              description="Record and loop"
-              onClick={() => navigate('/jam')}
+              title="Play Center"
+              description="Build tones with amp, effects, and looper tools"
+              onClick={() => navigate('/play')}
             />
             <QuickStartCard
               icon={FilePlus2}
-              title="Create Lead Sheet"
-              description="Write your own charts"
+              title="Create Charts"
+              description="Write and edit your own chord charts"
               onClick={() => navigate('/editor')}
             />
           </div>
@@ -160,12 +160,12 @@ export function HomePage() {
         {isAuthenticated && (
           <section>
             <button
-              onClick={() => navigate(`/learn/songs/${LAST_PLAYED.id}`)}
+              onClick={() => navigate(`/score/${LAST_PLAYED.id}`)}
               className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
             >
               <div className="flex items-center justify-between gap-4 mb-5">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Continue playing</p>
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Continue practicing</p>
                   <p className="text-2xl font-bold text-text-primary leading-tight truncate">{LAST_PLAYED.title}</p>
                   <p className="text-sm text-text-secondary mt-1">{LAST_PLAYED.artist} · {LAST_PLAYED.section}</p>
                 </div>
@@ -186,14 +186,14 @@ export function HomePage() {
 
         {/* ── 4. Picked for you ─────────────────────────────────── */}
         <section>
-          <p className="text-sm text-text-muted mb-4">Picked for you</p>
+          <p className="text-sm text-text-muted mb-4">Recommended for practice</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {RECOMMENDED_CHARTS.map((chart) => {
               const diff = DIFFICULTY_MAP[chart.id]
               return (
                 <div
                   key={chart.id}
-                  onClick={() => navigate(`/learn/songs/${chart.id}`)}
+                  onClick={() => navigate(`/score/${chart.id}`)}
                   className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
                 >
                   {/* Cover */}
@@ -235,7 +235,7 @@ export function HomePage() {
 
         {/* ── 6. Free tier note ─────────────────────────────────── */}
         <p className="text-xs text-text-muted text-center">
-          3 free AI transcriptions every month · No credit card required
+          3 free AI song breakdowns every month · No credit card required
         </p>
 
       </div>

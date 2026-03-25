@@ -1,10 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
-import { ArrowRight, ChevronRight, Sparkles, Headphones } from 'lucide-react'
-import { SpaceAgentInput } from '@/components/agent/SpaceAgentInput'
+import { ArrowRight, Play, Sparkles, Headphones, Plus } from 'lucide-react'
+import { SpaceAgentInput, type SpaceAgentInputRef } from '@/components/agent/SpaceAgentInput'
 import { Button } from '@/components/ui/Button'
-import { ModuleDrawer } from '@/components/ModuleDrawer'
+import { PricingCards } from '@/components/marketing/PricingCards'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
 
 const FEATURED_TONES = [
   {
@@ -24,13 +27,12 @@ const FEATURED_TONES = [
   },
 ]
 
-// My Gear — previously saved tone chains
 const MY_GEAR = {
   name: 'Sunday Jazz Warmth',
   chain: 'Compressor → Warm OD → Spring Reverb',
   lastUsed: '2 days ago',
   gradient: 'from-amber-700 to-orange-900',
-  route: '/jam',
+  route: '/play',
 }
 
 const NEW_ARRIVALS = [
@@ -39,136 +41,136 @@ const NEW_ARRIVALS = [
   { name: 'Envelope Filter', description: 'Auto-wah with AI dynamics' },
 ]
 
-const SUB_HUBS = [
-  {
-    key: 'card-1',
-    label: 'AI Effect Pedals',
-    description: 'AI-powered audio effects at your fingertips',
-    route: '/jam',
-  },
-  {
-    key: 'card-2',
-    label: 'AI Sheet Music',
-    description: 'Generate & transcribe sheet music with AI',
-    route: '/jam',
-  },
-  {
-    key: 'card-3',
-    label: 'More AI Tools',
-    description: 'Explore all other AI functions',
-    route: '/jam',
-  },
+const SUGGESTIONS = [
+  'Warm fingerpicking tone',
+  'Heavy distortion for metal',
+  'Clean jazz with reverb',
+  'Lo-fi ambient shimmer',
 ]
 
-export function PlayHubPage() {
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export function PlayPage() {
   const navigate = useNavigate()
+  const inputRef = useRef<SpaceAgentInputRef>(null)
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
+  const { isAuthenticated } = useRequireAuth()
+
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'jam' })
+    setSpaceContext({ currentSpace: 'play' })
   }, [setSpaceContext])
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-6 pt-8 md:pt-12 flex flex-col gap-6 pb-12">
+      <div className="max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10 pb-12">
 
-        {/* ── Space header ─────────────────────────────────────── */}
-        <section className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-text-primary">Play</h1>
-            <p className="text-sm text-text-muted mt-0.5">AI-powered tools for playing and jamming</p>
+        {/* ── 1. Hero — search-first ──────────────────────────── */}
+        <section>
+          <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">Build your sound in Play Center</h1>
+          <p className="text-sm text-text-secondary text-center mb-6">Describe the tone you want and LAVA AI builds an amp and effects chain you can tweak, save, and use in any DAW.</p>
+          <SpaceAgentInput
+            ref={inputRef}
+            placeholder="Describe the tone you want — e.g. 'warm fingerpicking tone'..."
+          />
+
+          {/* Suggestion tags */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => inputRef.current?.setValue(s)}
+                className="px-3 py-1.5 text-xs text-text-secondary bg-surface-1 border border-border rounded-full hover:border-border-hover hover:text-text-primary transition-colors"
+              >
+                {s}
+              </button>
+            ))}
           </div>
-          <ModuleDrawer moduleSpace="jam" label="My Play" />
+
+          {/* Create a Tone CTA */}
+          <div className="flex justify-center mt-6">
+            <Button onClick={() => navigate('/play/new')} className="rounded-full px-6">
+              <Plus size={16} className="mr-2" />
+              Build a Tone
+            </Button>
+          </div>
         </section>
 
-        {/* ── AI prompt bar ───────────────────────────────────── */}
-        <SpaceAgentInput placeholder="Describe the tone you want — e.g. 'warm fingerpicking tone'..." />
-
-        {/* ── Sub-hub entries ──────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {SUB_HUBS.map((hub) => (
-            <div
-              key={hub.key}
-              onClick={() => navigate(hub.route)}
-              className="bg-surface-2 border border-border rounded-lg p-5 cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-colors group flex flex-col gap-2"
+        {/* ── 2. My Gear — continue where you left off ────────── */}
+        {MY_GEAR && (
+          <section>
+            <button
+              onClick={() => navigate(MY_GEAR.route)}
+              className="w-full bg-surface-1 border border-border hover:border-border-hover rounded-2xl p-6 cursor-pointer transition-all group text-left"
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-text-primary">{hub.label}</h2>
-                <ChevronRight size={16} className="text-text-muted group-hover:text-text-primary transition-colors" />
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-widest mb-2">Last saved tone</p>
+                  <p className="text-2xl font-bold text-text-primary leading-tight truncate">{MY_GEAR.name}</p>
+                  <p className="text-sm text-text-secondary mt-1">{MY_GEAR.chain}</p>
+                </div>
+                <div className="w-14 h-14 rounded-full bg-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Play size={22} className="text-surface-0 ml-1" fill="currentColor" />
+                </div>
               </div>
-              <p className="text-sm text-text-secondary">{hub.description}</p>
-            </div>
-          ))}
-        </div>
+              <p className="text-xs text-text-muted">Last used {MY_GEAR.lastUsed}</p>
+            </button>
+          </section>
+        )}
 
-        {/* ── Today's Featured Tones ─────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-text-muted">Today's Featured Tones</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* ── 3. Featured Tones ───────────────────────────────── */}
+        <section>
+          <p className="text-sm text-text-muted mb-4">Featured tones</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {FEATURED_TONES.map((tone) => (
               <div
                 key={tone.name}
-                className="bg-surface-2 border border-border rounded-lg overflow-hidden cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-all hover:-translate-y-0.5 group"
+                className="flex flex-col bg-surface-0 border border-border hover:border-border-hover rounded-xl overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 group"
               >
-                <div className={`aspect-[16/9] bg-gradient-to-br ${tone.gradient} flex items-center justify-center`}>
+                <div className={`aspect-[16/9] bg-gradient-to-br ${tone.gradient} flex items-center justify-center relative`}>
                   <Headphones size={28} className="text-white/30" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-surface-0/50 backdrop-blur-sm">
+                      <Play size={18} className="text-text-primary ml-0.5" fill="currentColor" />
+                    </div>
+                  </div>
                 </div>
-                <div className="p-4">
-                  <p className="text-sm font-semibold text-text-primary">{tone.name}</p>
+                <div className="p-3.5">
+                  <p className="text-sm font-semibold text-text-primary leading-tight">{tone.name}</p>
                   <div className="flex gap-1.5 mt-2">
                     {tone.tags.map((tag) => (
-                      <span key={tag} className="text-2xs px-1.5 py-0.5 rounded bg-surface-3 text-text-secondary">{tag}</span>
+                      <span key={tag} className="text-2xs text-text-secondary bg-surface-2 px-2 py-0.5 rounded-full">{tag}</span>
                     ))}
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* ── My Gear ────────────────────────────────────────── */}
-        {MY_GEAR && (
-          <div className="bg-surface-2 border border-border rounded-lg p-5">
-            <p className="text-xs text-text-muted mb-3">My Gear</p>
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${MY_GEAR.gradient} shrink-0`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-text-primary truncate">{MY_GEAR.name}</p>
-                <p className="text-xs text-text-muted">{MY_GEAR.chain}</p>
-                <p className="text-xs text-text-secondary mt-1">Last used {MY_GEAR.lastUsed}</p>
-              </div>
-              <Button
-                size="sm"
-                className="rounded-full"
-                onClick={() => navigate(MY_GEAR.route)}
-              >
-                Load <ArrowRight size={14} className="ml-1" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Gear Shop: New Arrivals ────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-text-muted">Gear Shop: New Arrivals</p>
+        {/* ── 4. Gear Shop: New Arrivals ──────────────────────── */}
+        <section>
+          <p className="text-sm text-text-muted mb-4">Effects library: new arrivals</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {NEW_ARRIVALS.map((item) => (
-              <div
+              <button
                 key={item.name}
-                className="bg-surface-2 border border-border rounded-lg p-5 cursor-pointer hover:bg-surface-3 hover:border-border-hover transition-all hover:-translate-y-0.5 group"
+                className="bg-surface-0 border border-border hover:border-border-hover rounded-xl p-4 cursor-pointer transition-all group text-left"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-surface-3 flex items-center justify-center shrink-0">
-                    <Sparkles size={18} className="text-text-secondary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-text-primary">{item.name}</p>
-                    <p className="text-xs text-text-secondary">{item.description}</p>
-                  </div>
-                </div>
-              </div>
+                <Sparkles size={20} className="text-text-secondary group-hover:text-text-primary transition-colors mb-2" />
+                <p className="text-sm font-medium text-text-primary">{item.name}</p>
+                <p className="text-xs text-text-secondary mt-0.5">{item.description}</p>
+              </button>
             ))}
           </div>
-        </div>
+        </section>
+
+        {/* ── 5. Pricing (guests only) ─────────────────────────── */}
+        {!isAuthenticated && (
+          <section>
+            <p className="text-sm text-text-muted mb-4">Plans & Pricing</p>
+            <PricingCards />
+          </section>
+        )}
 
       </div>
     </div>

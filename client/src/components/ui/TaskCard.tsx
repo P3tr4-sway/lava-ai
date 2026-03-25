@@ -54,7 +54,7 @@ export function TaskCard({ task, className }: TaskCardProps) {
     : `${Math.floor((Date.now() - task.createdAt) / 60000)}:${String(Math.floor(((Date.now() - task.createdAt) % 60000) / 1000)).padStart(2, '0')}`
 
   const handleViewResults = useCallback(() => {
-    navigate(`/play/${task.id}?generate=1`)
+    navigate(`/score/${task.id}?generate=1`)
     removeTask(task.id)
   }, [navigate, task.id, removeTask])
 
@@ -161,7 +161,7 @@ export function TaskCard({ task, className }: TaskCardProps) {
             {elapsed && <span className="text-text-muted tabular-nums">{elapsed}</span>}
           </div>
           <button
-            onClick={() => navigate(`/play/${task.id}?generate=1`)}
+            onClick={() => navigate(`/score/${task.id}?generate=1`)}
             className="self-end flex items-center gap-1 text-xs font-medium text-text-primary hover:text-accent transition-colors"
           >
             View Page <ChevronRight size={11} />

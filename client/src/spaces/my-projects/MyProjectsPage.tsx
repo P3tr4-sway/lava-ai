@@ -32,8 +32,8 @@ const MODULE_LABELS: Record<string, string> = {
 const FILTER_TABS = [
   { label: 'All', value: 'all' },
   { label: 'Scores', value: 'learn' },
-  { label: 'Jam', value: 'jam' },
-  { label: 'Create', value: 'create' },
+  { label: 'Exported Audio', value: 'create' },
+  { label: 'Backing Tracks', value: 'jam' },
 ] as const
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

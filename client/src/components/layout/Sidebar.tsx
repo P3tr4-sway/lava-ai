@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, Link, useNavigate } from 'react-router-dom'
+import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   Sun,
   Moon,
@@ -26,9 +26,15 @@ const THEME_OPTIONS = [
 ]
 
 function NavItems({ onClose }: { onClose?: () => void }) {
+  const location = useLocation()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const NewSheetIcon = NEW_SHEET_ITEM.icon
   const SettingsIcon = SETTINGS_ITEM.icon
+
+  /** True when the user is already on this route — prevents redundant navigation. */
+  const isOnRoute = (to: string, end?: boolean) =>
+    end ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + '/')
+
   return (
     <>
       {/* Main nav */}
@@ -38,7 +44,13 @@ function NavItems({ onClose }: { onClose?: () => void }) {
             key={to}
             to={to}
             end={'end' in rest}
-            onClick={onClose}
+            onClick={(e) => {
+              if (isOnRoute(to, 'end' in rest)) {
+                e.preventDefault()
+                if (to === '/search') window.dispatchEvent(new Event('focus-search-input'))
+              }
+              onClose?.()
+            }}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',

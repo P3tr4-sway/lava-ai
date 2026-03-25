@@ -19,6 +19,8 @@ interface TrackLaneViewProps {
   onDropAudioFile?: (file: File, atBar: number) => void
   /** Recorder instance — passed only for the track that is actively recording */
   recorder?: Recorder
+  /** Override track lane height to match the controls panel */
+  height?: number
 }
 
 export function TrackLaneView({
@@ -34,14 +36,16 @@ export function TrackLaneView({
   onClipResizeLeft,
   onDropAudioFile,
   recorder,
+  height,
 }: TrackLaneViewProps) {
+  const trackHeight = height ?? TRACK_HEIGHT_PX
   const isRecording = track.recording
   const hasTempClip = track.clips.some((clip) => clip.status === 'temp')
 
   return (
     <div
       className="relative overflow-hidden border-b border-white/[0.05]"
-      style={{ height: TRACK_HEIGHT_PX }}
+      style={{ height: trackHeight }}
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
       onDrop={(e) => {
         e.preventDefault()
@@ -111,7 +115,7 @@ export function TrackLaneView({
           key={clip.id}
           clip={clip}
           barWidthPx={BAR_WIDTH_PX}
-          trackHeight={TRACK_HEIGHT_PX}
+          trackHeight={trackHeight}
           selected={selectedClipId === clip.id}
           snapEnabled={snapEnabled}
           onSelect={onClipSelect}

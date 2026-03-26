@@ -6,6 +6,7 @@ import { PricingCards } from '@/components/marketing/PricingCards'
 import { cn } from '@/components/ui/utils'
 import { CHORD_CHARTS } from '@/data/chordCharts'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
+import { UpcomingPractice } from '@/components/calendar/UpcomingPractice'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,9 @@ export function HomePage() {
             ))}
           </div>
         </section>
+
+        {/* ── 1.5. Upcoming practice ──────────────────────────── */}
+        <UpcomingPractice />
 
         {/* ── 2. Quick start ──────────────────────────────────────── */}
         <section>

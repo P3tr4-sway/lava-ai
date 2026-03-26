@@ -9,6 +9,7 @@ import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
 import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
 import { SettingsPage } from '@/spaces/settings/SettingsPage'
+import { CalendarPage } from '@/spaces/calendar/CalendarPage'
 import { PricingPage } from '@/spaces/pricing/PricingPage'
 import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
@@ -36,6 +37,7 @@ const routes: RouteObject[] = [
       { path: 'editor/:id', element: <LeadSheetPage /> },
       // Projects
       { path: 'projects', element: <MyProjectsPage /> },
+      { path: 'calendar', element: <CalendarPage /> },
       // Search
       { path: 'search', element: <SearchResultsPage /> },
       // Settings & Pricing

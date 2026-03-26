@@ -21,7 +21,7 @@ export function AgentPanel() {
   const messages = useAgentStore((s) => s.messages)
   const isStreaming = useAgentStore((s) => s.isStreaming)
   const streamingContent = useAgentStore((s) => s.streamingContent)
-  const { sendMessage } = useAgent()
+  const { sendMessage, handleChipClick } = useAgent()
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,6 +66,7 @@ export function AgentPanel() {
           <span className="text-sm font-medium flex-1">LAVA AI</span>
           <button
             onClick={() => setOpen(false)}
+            aria-label="Close"
             className="flex items-center justify-center size-6 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"
           >
             <X size={13} />
@@ -77,7 +78,7 @@ export function AgentPanel() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
               {messages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
+                <ChatMessage key={msg.id} message={msg} onChipClick={handleChipClick} />
               ))}
               {isStreaming && streamingContent && (
                 <ChatMessage

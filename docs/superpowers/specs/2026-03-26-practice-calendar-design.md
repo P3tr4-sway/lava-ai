@@ -80,32 +80,42 @@ interface CalendarStore {
 
 New tool definition in `server/src/agent/tools/definitions/calendar.tool.ts`.
 
+The existing `ToolParameter` type only supports flat primitives. To avoid extending the shared schema system, the LLM generates the full session structure as a JSON string, which the handler parses and validates with Zod.
+
 ```
 Tool name: create_practice_plan
 Description: Creates a structured practice plan for a song.
              Generates sessions across multiple days with subtasks and time estimates.
 
-Input schema:
+Input schema (flat parameters only — compatible with existing ToolParameter):
   songTitle: string (required)
   songId?: string
   durationDays: number (default 7, range 1-30)
   minutesPerDay: number (default 30, range 10-120)
   skillLevel?: "beginner" | "intermediate" | "advanced"
-  focusAreas?: string[]
-  sessions: PracticeSession[] (the LLM generates the full structured plan)
+  focusAreas?: string (comma-separated, e.g. "chords,rhythm,melody")
+  sessionsJson: string (JSON string of session array — see schema below)
 
-Output: PracticePlan JSON
+sessionsJson schema (validated by Zod in handler):
+  Array of {
+    title: string,
+    totalMinutes: number,
+    subtasks: Array of { title: string, durationMinutes: number }
+  }
+
+Handler return format (action envelope for client routing):
+  { action: 'practice_plan', plan: PracticePlan }
 ```
 
-The LLM generates the full structured plan as tool input. The handler validates the schema, assigns IDs (nanoid), computes absolute dates from today, and returns clean `PracticePlan` JSON.
+The handler parses `sessionsJson` with Zod, assigns IDs (nanoid), computes absolute dates starting from today, sets `completed: false` on all sessions/subtasks, and wraps the result in the action envelope.
 
 ### Client-side
 
-In `useAgent.ts` tool result handler:
+In `useAgent.ts` tool result handler (alongside existing `action === 'navigate'` check):
 
 ```typescript
 if (action === 'practice_plan') {
-  calendarStore.getState().setActivePlanPreview(toolResult.plan)
+  calendarStore.getState().setActivePlanPreview(result.plan)
 }
 ```
 
@@ -126,7 +136,7 @@ Notion-style minimal modal for previewing a generated plan.
 ```
 ┌─────────────────────────────────────────────┐
 │                                         ✕   │
-│  🎵 Autumn Leaves                           │
+│  [Music icon] Autumn Leaves                 │
 │  Learn to play Autumn Leaves in 7 days      │
 │  7 sessions · ~30 min each                  │
 │                                             │
@@ -161,7 +171,7 @@ Notion-style minimal modal for previewing a generated plan.
 - First 2 sessions expanded, rest collapsed (click to expand)
 - Subtask circles are not interactive in preview mode
 - "Add to Calendar" = primary (`bg-accent`), "Close" = ghost
-- Uses existing `Dialog` from `@/components/ui`
+- Uses existing `Dialog` from `@/components/ui` (pass `className="max-w-lg"` to override default `max-w-md`)
 - `animate-fade-in`, backdrop `bg-black/50`
 - Escape / backdrop click calls `clearActivePlanPreview()`
 - Max width: `max-w-lg`, max height: `max-h-[70vh]` with scroll on session list
@@ -259,19 +269,26 @@ Weekly timeline at `/calendar`.
 - Session cards: `bg-surface-2`, `border-border`, `rounded-lg`
 - Today's sessions expanded, future collapsed (click to expand)
 - Subtask checkboxes are **interactive** — `toggleSubTaskComplete()`
-- All subtasks checked → session auto-marks complete (strikethrough, muted)
+- All subtasks checked → `toggleSubTaskComplete` auto-sets `session.completed = true` in the store (and auto-unsets if a subtask is unchecked)
 - Empty days = thin row with day label only
 - Clicking session title opens full plan dialog
-- Layout: `max-w-3xl mx-auto px-6 pt-8`
+- Layout: `max-w-3xl mx-auto px-6 pt-8` (uses `pt-8` instead of hub-standard `pt-[22vh]` because this is a data-dense timeline, not a search-first hero)
 
 **Header:**
 - Title: `text-2xl font-semibold`
 - Week label + arrows: `text-sm text-text-secondary`, ghost icon buttons
 
 **Navigation:** New sidebar item between "Play" and "My Library":
+```typescript
+// Updated NAV_ITEMS:
+{ to: '/', icon: Home, label: 'Home' },
+{ to: '/search', icon: Search, label: 'Search' },
+{ to: '/jam', icon: Music, label: 'Play' },
+{ to: '/calendar', icon: CalendarDays, label: 'Calendar' },  // NEW
+{ to: '/projects', icon: FolderOpen, label: 'My Library' },
 ```
-{ to: '/calendar', icon: CalendarDays, label: 'Calendar' }
-```
+
+**Mobile bottom nav:** Calendar does not appear in `BottomNav` (limited to 4 items). On mobile, Calendar is accessible via the sidebar overlay and the "View full calendar" link in the Home widget.
 
 ---
 
@@ -281,6 +298,7 @@ Weekly timeline at `/calendar`.
 
 ```
 client/src/stores/calendarStore.ts
+client/src/components/calendar/index.ts              (barrel exports)
 client/src/components/calendar/UpcomingPractice.tsx
 client/src/components/calendar/PracticePlanDialog.tsx
 client/src/components/calendar/WeekView.tsx
@@ -335,3 +353,31 @@ CalendarPage
   → Renders weekly timeline with interactive subtasks
   → toggleSubTaskComplete() / toggleSessionComplete()
 ```
+
+---
+
+## Edge Cases & Behavioral Notes
+
+### Multiple plans / overlapping days
+
+- Sessions from different plans on the same day are sorted by: `timeOfDay` priority (morning < afternoon < evening), then `createdAt` ascending.
+- Each session card already shows the song title as secondary text, which distinguishes plans visually.
+- No limit on concurrent active plans.
+
+### Past sessions
+
+- Past incomplete sessions appear with a subtle `text-warning` color on the date label (overdue indicator).
+- Users can still toggle past sessions/subtasks as complete retroactively.
+- CalendarPage shows all sessions when navigating to past weeks.
+
+### Deduplication
+
+- `addPlan()` deduplicates by `plan.id` — if a plan with the same ID already exists, it is replaced rather than duplicated.
+
+### Session auto-completion
+
+- `toggleSubTaskComplete()` checks if all subtasks in the session are now complete and auto-sets `session.completed = true`. If a subtask is later unchecked, `session.completed` reverts to `false`.
+
+### Remove plan
+
+- CalendarPage header for each plan includes a subtle trash icon (`Trash2`) to remove a plan via `removePlan()`. This is a ghost icon button, only visible on hover.

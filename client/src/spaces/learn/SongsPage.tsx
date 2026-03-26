@@ -4,8 +4,14 @@ import { useAgentStore } from '@/stores/agentStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useTaskStore, STAGE_LABEL } from '@/stores/taskStore'
+import { useCoachStore } from '@/stores/coachStore'
+import { useCalendarStore } from '@/stores/calendarStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useUIStore } from '@/stores'
 import { useDawSetup } from '@/hooks/useDawSetup'
 import { useProjectSave } from '@/hooks/useProjectSave'
+import { useCoachSectionTracker } from '@/hooks/useCoachSectionTracker'
+import { useAgent } from '@/hooks/useAgent'
 import { Music, FileMusic, ArrowLeft, AlignLeft, NotebookPen, Loader2 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { SaveButton } from '@/components/ui/SaveButton'
@@ -13,10 +19,11 @@ import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog'
 import { CHORD_CHARTS, type ChordChart } from '@/data/chordCharts'
 import { DawPanel } from '@/components/daw/DawPanel'
 import type { DawSectionLabel } from '@/components/daw/DawPanel'
-import { ChordGrid, PdfViewer, MetadataBar } from '@/components/score'
+import { ChordGrid, PdfViewer, MetadataBar, CoachBar } from '@/components/score'
 import { youtubeService } from '@/services/youtubeService'
 import { ToneEngine } from '@/audio/ToneEngine'
 import type { Clip } from '@/audio/types'
+import type { CoachContext } from '@lava/shared'
 
 const PROGRESS_SECTIONS = [
   { id: 1, label: 'Intro',   type: 'intro',  barCount: 2, status: 'done'    as const, accuracy: 96 },
@@ -33,6 +40,12 @@ export function SongsPage() {
   const [searchParams] = useSearchParams()
   const isGenerateMode = searchParams.get('generate') === '1'
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
+  const coachStore = useCoachStore()
+  const { sendHiddenMessage } = useAgent()
+  const coachHighlightTarget = useAgentStore((s) => s.coachHighlightTarget)
+  const messages = useAgentStore((s) => s.messages)
+  const [showCoachBar, setShowCoachBar] = useState(false)
+  const [latestCoachTip, setLatestCoachTip] = useState<string | null>(null)
 
   // Audio store — bpm used in buildProjectData
   const bpm = useAudioStore((s) => s.bpm)
@@ -308,6 +321,98 @@ export function SongsPage() {
     setSpaceContext({ currentSpace: 'learn', projectId: id })
   }, [id, setSpaceContext])
 
+  // ── Coach context effect — fires after chart + sections are loaded ──
+  useEffect(() => {
+    if (!chart || leadSheetSections.length === 0) return
+
+    const allChords = leadSheetSections.flatMap((s) =>
+      s.measures.flatMap((m) => m.chords),
+    )
+    const uniqueChords = [...new Set(allChords)].filter(Boolean)
+
+    const visitTier = coachStore.getVisitTier(id ?? '')
+    const calendarPlans = useCalendarStore.getState().plans.filter(
+      (p) => p.songId === id,
+    )
+    const allSessions = calendarPlans.flatMap((p) => p.sessions)
+    const completedSessions = allSessions.filter((s) => s.completed).length
+
+    const coachContext: CoachContext = {
+      songTitle: chart.title,
+      artist: chart.artist,
+      key: chart.key,
+      tempo: chart.tempo ?? 120,
+      timeSignature: chart.timeSignature ?? '4/4',
+      sectionCount: leadSheetSections.length,
+      sectionLabels: leadSheetSections.map((s) => s.label),
+      chordSummary: uniqueChords.join(', '),
+      userSkillLevel: useAuthStore.getState().user?.skillLevel,
+      songSkillAssessment: coachStore.songSkillAssessments[id ?? ''],
+      coachingStyle: coachStore.coachingStyle,
+      visitTier,
+      practiceProgress: allSessions.length > 0
+        ? {
+            totalSessions: allSessions.length,
+            completedSessions,
+            lastSessionTitle: allSessions.filter((s) => s.completed).slice(-1)[0]?.title,
+            nextSessionTitle: allSessions.find((s) => !s.completed)?.title,
+          }
+        : undefined,
+    }
+
+    setSpaceContext({
+      currentSpace: 'learn',
+      projectId: id,
+      coachContext,
+    })
+
+    if (visitTier === 'first') {
+      useUIStore.getState().setAgentPanelOpen(true)
+      void sendHiddenMessage('[Coach init: first visit. Run full onboarding flow.]')
+    } else if (visitTier === 'new_song') {
+      useUIStore.getState().setAgentPanelOpen(true)
+      void sendHiddenMessage('[Coach init: new song. Send light greeting with practice plan offer.]')
+      coachStore.addVisitedSong(id ?? '')
+    } else {
+      void sendHiddenMessage('[Coach init: revisit. Reference progress and offer to continue.]')
+      coachStore.addVisitedSong(id ?? '')
+    }
+
+    setShowCoachBar(visitTier !== 'first')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chart, leadSheetSections.length])
+
+  // ── Watch for latest coaching tip ──
+  useEffect(() => {
+    const lastCoachTip = [...messages]
+      .reverse()
+      .find((m) => m.subtype === 'coachingTip')
+    if (lastCoachTip) {
+      setLatestCoachTip(lastCoachTip.content)
+    }
+  }, [messages])
+
+  // ── Apply highlight pulse ──
+  useEffect(() => {
+    if (!coachHighlightTarget) return
+
+    const el = document.querySelector(
+      `[data-coach-target="${coachHighlightTarget}"]`,
+    ) as HTMLElement | null
+    if (!el) return
+
+    el.classList.add('coach-pulse')
+    const handleEnd = () => el.classList.remove('coach-pulse')
+    el.addEventListener('animationend', handleEnd, { once: true })
+
+    return () => {
+      el.classList.remove('coach-pulse')
+      el.removeEventListener('animationend', handleEnd)
+    }
+  }, [coachHighlightTarget])
+
+  useCoachSectionTracker(sendHiddenMessage)
+
   // Loading state for analysis
   if (loadingAnalysis) {
     return (
@@ -454,6 +559,10 @@ export function SongsPage() {
         )}
 
       </div>
+
+      {showCoachBar && (
+        <CoachBar tip={latestCoachTip} />
+      )}
 
       {/* ── Score area ──────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">

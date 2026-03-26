@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { MobileHeader } from './MobileHeader'
 import { BottomNav } from './BottomNav'
@@ -15,6 +15,7 @@ import { cn } from '@/components/ui/utils'
 import { Bot } from 'lucide-react'
 import { AudioController } from '@/audio/AudioController'
 import { TaskNotifications } from '@/components/ui/TaskNotifications'
+import { PracticePlanDialog } from '@/components/calendar/PracticePlanDialog'
 import { ToastProvider } from '@/components/ui/Toast'
 import { useTaskPoller } from '@/hooks/useTaskPoller'
 
@@ -30,8 +31,6 @@ export function AppShell() {
   }, [])
 
   const isMobile = useIsMobile()
-  const location = useLocation()
-  const isHome = location.pathname === '/'
   const agentPanelOpen = useUIStore((s) => s.agentPanelOpen)
   const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -55,12 +54,13 @@ export function AppShell() {
             </div>
           </main>
           <BottomNav />
-          {!isHome && <AgentPanel />}
+          <AgentPanel />
           <LibraryModal />
           <OnboardingModal />
           <GuestWelcomeModal />
           <AuthPromptModal />
           <TaskNotifications />
+          <PracticePlanDialog />
         </div>
       ) : (
         <div className="flex h-screen w-screen overflow-hidden bg-surface-1">
@@ -70,21 +70,20 @@ export function AppShell() {
               <Outlet />
             </div>
           </main>
-          {!isHome && (
-            <button
-              onClick={toggleAgentPanel}
-              title="AI Practice Assistant"
-              className={cn(
-                'fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-150',
-                'bg-surface-3 text-text-secondary hover:bg-surface-4 hover:text-text-primary',
-                agentPanelOpen && 'opacity-0 pointer-events-none scale-75',
-              )}
-            >
-              <Bot size={20} />
-            </button>
-          )}
-          {!isHome && <AgentPanel />}
+          <button
+            onClick={toggleAgentPanel}
+            title="AI Practice Assistant"
+            className={cn(
+              'fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-150',
+              'bg-surface-3 text-text-secondary hover:bg-surface-4 hover:text-text-primary',
+              agentPanelOpen && 'opacity-0 pointer-events-none scale-75',
+            )}
+          >
+            <Bot size={20} />
+          </button>
+          <AgentPanel />
           <TaskNotifications />
+          <PracticePlanDialog />
           <LibraryModal />
           <OnboardingModal />
           <GuestWelcomeModal />

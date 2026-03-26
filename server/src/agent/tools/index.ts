@@ -105,6 +105,35 @@ function getHandler(name: string) {
       status: 'processing',
     }),
 
+    coach_message: async (input) => {
+      const { content, subtype, targetId, chipsJson } = input as {
+        content: string
+        subtype: string
+        targetId?: string
+        chipsJson?: string
+      }
+
+      const chipSchema = z.array(z.object({
+        label: z.string(),
+        value: z.string(),
+        action: z.enum(['advance', 'expand', 'set_style', 'create_plan', 'navigate']).optional(),
+      }))
+
+      let chips = undefined
+      if (chipsJson) {
+        const parsed = JSON.parse(String(chipsJson))
+        chips = chipSchema.parse(parsed)
+      }
+
+      return {
+        action: 'coach_message',
+        content,
+        subtype,
+        targetId,
+        chips,
+      }
+    },
+
     create_practice_plan: async (input) => {
       const songTitle = String(input.songTitle)
       const goalDescription = String(input.goalDescription ?? `Practice ${songTitle}`)

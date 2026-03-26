@@ -5,6 +5,7 @@ import { startTranscriptionTool, getTranscriptionStatusTool } from './transcript
 import { addTrackTool, aiComposeTool } from './create.tool.js'
 import { uploadAudioTool, processAudioTool } from './audio.tool.js'
 import { createPracticePlanTool } from './calendar.tool.js'
+import { coachMessageTool } from './coach.tool.js'
 import type { ToolDefinition } from '@lava/shared'
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -22,4 +23,5 @@ export const ALL_TOOLS: ToolDefinition[] = [
   uploadAudioTool,
   processAudioTool,
   createPracticePlanTool,
+  coachMessageTool,
 ]

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
+import { useCalendarStore } from '@/stores/calendarStore'
 import { agentService } from '@/services/agentService'
 import type { AgentMessage, StreamEvent } from '@lava/shared'
 import { SPACE_ROUTES } from '@lava/shared'
@@ -56,8 +57,11 @@ export function useAgent() {
         const route = SPACE_ROUTES[result.space as keyof typeof SPACE_ROUTES]
         if (route) navigate(route)
       }
+      if (result.action === 'practice_plan' && result.plan) {
+        useCalendarStore.getState().setActivePlanPreview(result.plan)
+      }
     } catch {
-      // not a JSON navigation result, ignore
+      // not a JSON result, ignore
     }
   }
 

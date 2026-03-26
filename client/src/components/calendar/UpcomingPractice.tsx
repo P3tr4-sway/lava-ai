@@ -16,9 +16,10 @@ function formatDayLabel(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
   const diffDays = Math.round((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Tomorrow'
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const formatted = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  if (diffDays === 0) return `Today \u00b7 ${formatted}`
+  if (diffDays === 1) return `Tomorrow \u00b7 ${formatted}`
+  return formatted
 }
 
 function isToday(dateStr: string): boolean {
@@ -54,7 +55,8 @@ export function UpcomingPractice() {
     if (dateCmp !== 0) return dateCmp
     const aTime = timeOrder[a.session.timeOfDay as keyof typeof timeOrder] ?? 1
     const bTime = timeOrder[b.session.timeOfDay as keyof typeof timeOrder] ?? 1
-    return aTime - bTime
+    if (aTime !== bTime) return aTime - bTime
+    return a.plan.createdAt - b.plan.createdAt
   })
 
   const visible = upcoming.slice(0, 5)

@@ -34,7 +34,7 @@ export function DayRow({ date, sessions, isToday }: DayRowProps) {
       <p className={cn(
         'text-xs font-medium uppercase tracking-wide mb-2',
         isToday ? 'text-text-primary' : 'text-text-muted',
-        isPast && !isToday && 'text-warning',
+        isPast && !isToday && sessions.some(s => !s.session.completed) && 'text-warning',
       )}>
         {formatDayLabel(date)}
         {isToday && <span className="ml-1.5 normal-case">· Today</span>}

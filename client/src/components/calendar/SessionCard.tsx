@@ -94,7 +94,7 @@ export function SessionCard({
           onClick={() => setExpanded(true)}
           className="mt-1 ml-5 text-xs text-text-muted hover:text-text-secondary transition-colors"
         >
-          {session.subtasks.length} subtasks
+          &#x25B8; {session.subtasks.length} subtasks
         </button>
       )}
     </div>

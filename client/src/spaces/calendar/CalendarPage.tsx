@@ -65,7 +65,8 @@ export function CalendarPage() {
             sessionsForDay.sort((a, b) => {
               const aT = timeOrder[a.session.timeOfDay as keyof typeof timeOrder] ?? 1
               const bT = timeOrder[b.session.timeOfDay as keyof typeof timeOrder] ?? 1
-              return aT - bT
+              if (aT !== bT) return aT - bT
+              return a.plan.createdAt - b.plan.createdAt
             })
 
             return (

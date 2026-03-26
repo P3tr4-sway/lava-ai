@@ -5,6 +5,7 @@ import { db } from '../../db/client.js'
 import { projects } from '../../db/schema.js'
 import { v4 as uuidv4 } from 'uuid'
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 
 export function createToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry()
@@ -113,18 +114,26 @@ function getHandler(name: string) {
       const planId = uuidv4()
       const now = Date.now()
 
-      // Parse and validate sessionsJson
-      let rawSessions: Array<{
-        title: string
-        totalMinutes: number
-        timeOfDay?: string
-        subtasks: Array<{ title: string; durationMinutes: number }>
-      }>
+      // Parse and validate sessionsJson with Zod
+      const sessionSchema = z.array(z.object({
+        title: z.string(),
+        totalMinutes: z.number(),
+        timeOfDay: z.enum(['morning', 'afternoon', 'evening']).optional(),
+        subtasks: z.array(z.object({
+          title: z.string(),
+          durationMinutes: z.number(),
+        })).default([]),
+      }))
+
+      let rawSessions: z.infer<typeof sessionSchema>
       try {
-        rawSessions = JSON.parse(String(input.sessionsJson))
-        if (!Array.isArray(rawSessions)) throw new Error('sessionsJson must be an array')
-      } catch {
-        return { error: 'Invalid sessionsJson — must be a JSON array of session objects' }
+        const parsed = JSON.parse(String(input.sessionsJson))
+        rawSessions = sessionSchema.parse(parsed)
+      } catch (err) {
+        const msg = err instanceof z.ZodError
+          ? err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
+          : 'Invalid sessionsJson — must be a JSON array of session objects'
+        return { error: msg }
       }
 
       // Build sessions with IDs and dates starting from today

@@ -15,7 +15,7 @@ const SKILL_OPTIONS: { value: SkillLevel; label: string; icon: typeof Star }[] =
 
 const FIRST_ACTIONS = [
   { label: 'Practice a Song', icon: Music, path: '/' },
-  { label: 'Open Play Center', icon: Mic, path: '/jam' },
+  { label: 'Open Play Center', icon: Mic, path: '/tools' },
   { label: 'Create a Chart', icon: FilePlus2, path: '/editor' },
 ] as const
 
@@ -24,6 +24,7 @@ export function OnboardingModal() {
   const hasCompletedOnboarding = useAuthStore((s) => s.hasCompletedOnboarding)
   const userName = useAuthStore((s) => s.user?.name ?? '')
   const completeOnboarding = useAuthStore((s) => s.completeOnboarding)
+  const persistSkillLevel = useAuthStore((s) => s.setSkillLevel)
   const navigate = useNavigate()
 
   const [step, setStep] = useState(0)
@@ -91,7 +92,10 @@ export function OnboardingModal() {
             <Button
               size="lg"
               className="w-full"
-              onClick={handleNext}
+              onClick={() => {
+                persistSkillLevel(skillLevel!)
+                handleNext()
+              }}
               disabled={!skillLevel}
             >
               Next

@@ -205,6 +205,7 @@ export function ChordGrid({ onSeek, className }: ChordGridProps) {
 
   return (
     <div
+      data-coach-target="chord-grid"
       className={cn('flex-1 overflow-y-auto px-6 py-5', className)}
       onClick={(e) => { if (e.target === e.currentTarget) clearActiveCell() }}
     >

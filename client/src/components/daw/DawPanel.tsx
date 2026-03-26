@@ -491,6 +491,7 @@ export function DawPanel({
 
   return (
     <div
+      data-coach-target="daw-panel"
       className={cn('shrink-0 flex flex-col bg-surface-0 border-t border-border rounded-t-lg overflow-hidden', className)}
       style={{ height }}
     >

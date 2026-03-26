@@ -7,6 +7,16 @@ export interface AgentMessage {
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
   createdAt: number
+  subtype?: 'chat' | 'onboarding' | 'highlight' | 'coachingTip'
+  targetId?: string
+  chips?: MessageChip[]
+  hidden?: boolean
+}
+
+export interface MessageChip {
+  label: string
+  value: string
+  action?: 'advance' | 'expand' | 'set_style' | 'create_plan' | 'navigate'
 }
 
 export interface ToolCall {
@@ -27,6 +37,30 @@ export interface SpaceContext {
   currentSpace: SpaceType
   projectId?: string
   projectName?: string
+  coachContext?: CoachContext
+}
+
+export type CoachingStyle = 'passive' | 'active' | 'checkpoint'
+
+export interface CoachContext {
+  songTitle: string
+  artist?: string
+  key: string
+  tempo: number
+  timeSignature: string
+  sectionCount: number
+  sectionLabels: string[]
+  chordSummary: string
+  userSkillLevel?: string
+  songSkillAssessment?: string
+  coachingStyle: CoachingStyle
+  visitTier: 'first' | 'new_song' | 'revisit'
+  practiceProgress?: {
+    totalSessions: number
+    completedSessions: number
+    lastSessionTitle?: string
+    nextSessionTitle?: string
+  }
 }
 
 export type StreamEventType =

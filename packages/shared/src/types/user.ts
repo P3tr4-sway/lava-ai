@@ -15,5 +15,6 @@ export interface User {
   avatarUrl?: string
   plan: PlanTier
   preferences: UserPreferences
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
   createdAt: number
 }

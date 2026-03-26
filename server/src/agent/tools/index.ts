@@ -103,6 +103,69 @@ function getHandler(name: string) {
       operation: input.operation,
       status: 'processing',
     }),
+
+    create_practice_plan: async (input) => {
+      const songTitle = String(input.songTitle)
+      const goalDescription = String(input.goalDescription ?? `Practice ${songTitle}`)
+      // Note: durationDays, minutesPerDay, skillLevel, focusAreas are LLM-guidance
+      // parameters — they inform how the LLM generates sessionsJson but are not
+      // consumed by this handler directly.
+      const planId = uuidv4()
+      const now = Date.now()
+
+      // Parse and validate sessionsJson
+      let rawSessions: Array<{
+        title: string
+        totalMinutes: number
+        timeOfDay?: string
+        subtasks: Array<{ title: string; durationMinutes: number }>
+      }>
+      try {
+        rawSessions = JSON.parse(String(input.sessionsJson))
+        if (!Array.isArray(rawSessions)) throw new Error('sessionsJson must be an array')
+      } catch {
+        return { error: 'Invalid sessionsJson — must be a JSON array of session objects' }
+      }
+
+      // Build sessions with IDs and dates starting from today
+      // Use local date formatting to avoid UTC timezone mismatch
+      const today = new Date()
+      const toDateStr = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const sessions = rawSessions.map((raw, i) => {
+        const date = new Date(today)
+        date.setDate(today.getDate() + i)
+        const dateStr = toDateStr(date)
+
+        return {
+          id: uuidv4(),
+          planId,
+          date: dateStr,
+          timeOfDay: raw.timeOfDay,
+          title: raw.title,
+          totalMinutes: raw.totalMinutes,
+          completed: false,
+          subtasks: (raw.subtasks ?? []).map((st) => ({
+            id: uuidv4(),
+            title: st.title,
+            durationMinutes: st.durationMinutes,
+            completed: false,
+          })),
+        }
+      })
+
+      return {
+        action: 'practice_plan',
+        plan: {
+          id: planId,
+          songTitle,
+          songId: input.songId ? String(input.songId) : undefined,
+          createdAt: now,
+          goalDescription,
+          sessions,
+        },
+      }
+    },
   }
 
   return handlers[name] ?? (async () => ({ error: `No handler for tool: ${name}` }))

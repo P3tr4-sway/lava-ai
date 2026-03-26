@@ -10,6 +10,7 @@ const ACTIONS: Record<string, { label: string; prompt: string }[]> = {
     { label: 'Fingering tips', prompt: 'Suggest fingering for this passage' },
     { label: 'Technique tips', prompt: 'What techniques should I focus on here?' },
     { label: 'Record snippet', prompt: 'Record a quick snippet of my playing for feedback' },
+    { label: 'Coaching style', prompt: 'I want to change my coaching style' },
   ],
   jam: [
     { label: 'Tone presets', prompt: 'Show me tone presets for this practice session' },

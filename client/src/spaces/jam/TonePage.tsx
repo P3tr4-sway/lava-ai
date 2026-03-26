@@ -389,7 +389,7 @@ export function TonePage() {
             {/* Preset picker area */}
             <div className="border-b border-border px-4 py-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon-sm" onClick={() => navigate('/jam')}>
+                <Button variant="ghost" size="icon-sm" onClick={() => navigate('/tools')}>
                   <ChevronLeft size={16} />
                 </Button>
                 <div className="relative">

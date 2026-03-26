@@ -1,6 +1,7 @@
 import type { AgentMessage, MessageChip } from '@lava/shared'
 import { cn } from '@/components/ui/utils'
 import { Bot, User } from 'lucide-react'
+import { MarkdownContent } from './MarkdownContent'
 
 interface ChatMessageProps {
   message: AgentMessage
@@ -30,15 +31,26 @@ export function ChatMessage({ message, isStreaming, onChipClick }: ChatMessagePr
       <div className={cn('max-w-[80%]', isUser && 'flex flex-col items-end')}>
         <div
           className={cn(
-            'rounded px-3 py-2 text-sm leading-relaxed',
+            'rounded px-3 py-2.5',
             isUser
-              ? 'bg-surface-3 text-text-primary'
+              ? 'bg-surface-3 text-sm text-text-primary leading-relaxed'
               : 'bg-surface-2 text-text-primary border border-border',
           )}
         >
-          {message.content}
-          {isStreaming && (
-            <span className="inline-block w-1 h-3.5 bg-text-primary/60 ml-0.5 animate-pulse align-middle" />
+          {isUser ? (
+            <>
+              {message.content}
+              {isStreaming && (
+                <span className="inline-block w-1 h-3.5 bg-text-primary/60 ml-0.5 animate-pulse align-middle" />
+              )}
+            </>
+          ) : (
+            <>
+              <MarkdownContent content={message.content} />
+              {isStreaming && (
+                <span className="inline-block w-[3px] h-[14px] bg-text-primary/50 ml-0.5 rounded-sm animate-pulse align-middle" />
+              )}
+            </>
           )}
         </div>
         {message.chips && message.chips.length > 0 && onChipClick && (

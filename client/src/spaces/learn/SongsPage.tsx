@@ -367,6 +367,8 @@ export function SongsPage() {
     })
 
     if (visitTier === 'first') {
+      coachStore.markOnboardingSeen()
+      coachStore.addVisitedSong(id ?? '')
       useUIStore.getState().setAgentPanelOpen(true)
       void sendHiddenMessage('[Coach init: first visit. Run full onboarding flow.]')
     } else if (visitTier === 'new_song') {

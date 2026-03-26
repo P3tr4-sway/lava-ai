@@ -29,9 +29,9 @@ const routes: RouteObject[] = [
       // Legacy routes → redirect to new player
       { path: 'learn/songs/:id', element: <SongsPage /> },
       // Jam / free play
-      { path: 'jam', element: <PlayHubPage /> },
-      { path: 'jam/new', element: <TonePage /> },
-      { path: 'jam/:id', element: <JamPage /> },
+      { path: 'tools', element: <PlayHubPage /> },
+      { path: 'tools/new', element: <TonePage /> },
+      { path: 'tools/:id', element: <JamPage /> },
       // Lead Sheet editor — blank project
       { path: 'editor', element: <LeadSheetPage /> },
       { path: 'editor/:id', element: <LeadSheetPage /> },

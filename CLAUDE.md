@@ -89,6 +89,10 @@ Required variables:
 | `ANTHROPIC_API_KEY` | Anthropic API key (`sk-ant-...`) |
 | `LLM_PROVIDER` | `"claude"` or `"openai"` |
 | `OPENAI_API_KEY` | Optional, only if using OpenAI |
+| `TENCENT_VOD_SECRET_ID` | Tencent Cloud SecretId — enables VOD AIGC mode when set |
+| `TENCENT_VOD_SECRET_KEY` | Tencent Cloud SecretKey |
+| `TENCENT_VOD_SUB_APP_ID` | Tencent VOD SubAppId (integer) |
+| `TENCENT_VOD_CHAT_BASE_URL` | VOD chat endpoint, default `https://text-aigc.vod-qcloud.com/v1` |
 | `DATABASE_URL` | SQLite path, default `./data/lava.db` |
 | `CLIENT_ORIGIN` | CORS origin, default `http://localhost:5173` |
 | `PORT` | Server port, default `3001` |
@@ -109,6 +113,15 @@ Required variables:
 | Runtime | tsx watch (dev), compiled JS (prod) |
 
 Source layout: `server/src/` → `agent/`, `config/`, `db/`, `routes/`, `utils/`
+
+### AI Provider routing
+
+- `LLM_PROVIDER=claude` → `ClaudeProvider` (Anthropic SDK)
+- `LLM_PROVIDER=openai` → `OpenAIProvider` (OpenAI Node SDK)
+  - If `TENCENT_VOD_*` vars are set, auto-exchanges them for an `ApiToken` via `CreateAigcApiToken` (TC3-HMAC-SHA256) then calls the VOD OpenAI-compatible endpoint
+  - Freshly issued tokens take ~35 s to activate — first request after server start will be slow; subsequent requests reuse the cached token
+  - `stream_options: { include_usage: true }` is incompatible with the Tencent endpoint and is automatically omitted in VOD mode
+- `AgentOrchestrator` is a singleton (instantiated once at route registration, not per-request) — token state persists across requests
 
 ---
 

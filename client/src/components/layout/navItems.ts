@@ -3,7 +3,7 @@ import { Home, FolderOpen, Music, FilePlus2, Settings, Search, CalendarDays } fr
 export const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/search', icon: Search, label: 'Search' },
-  { to: '/jam', icon: Music, label: 'Play' },
+  { to: '/tools', icon: Music, label: 'Tools' },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/projects', icon: FolderOpen, label: 'My Library' },
 ]

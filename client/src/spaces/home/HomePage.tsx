@@ -82,7 +82,7 @@ export function HomePage() {
       {!isAuthenticated && (
         <div className="bg-surface-2 border-b border-border px-6 py-3 flex items-center justify-between">
           <p className="text-sm text-text-secondary">
-            Create a free account to save your progress, get AI guidance, and unlock the full practice center
+            Sign up free to save progress and get AI-powered guidance
           </p>
           <Link to="/signup" className="text-sm font-medium text-accent hover:underline shrink-0 ml-4">
             Sign Up Free
@@ -115,7 +115,7 @@ export function HomePage() {
         {/* ── 1. Hero — search-first ────────────────────────────── */}
         <section>
           <h1 className="text-3xl font-bold text-text-primary mb-2 text-center">What do you want to practice today?</h1>
-          <p className="text-sm text-text-secondary text-center mb-6">Search for any song and LAVA AI turns it into playable chord charts and tabs, so you can start practicing right away.</p>
+          <p className="text-sm text-text-secondary text-center mb-6">Search any song — get instant chord charts and tabs.</p>
           <ChatInput ref={chatRef} onSend={handleSend} placeholder="Song name, artist, or paste a link..." />
 
           {/* Suggestion tags */}
@@ -149,7 +149,7 @@ export function HomePage() {
               icon={Mic}
               title="Play Center"
               description="Build tones with amp, effects, and looper tools"
-              onClick={() => navigate('/jam')}
+              onClick={() => navigate('/tools')}
             />
             <QuickStartCard
               icon={FilePlus2}

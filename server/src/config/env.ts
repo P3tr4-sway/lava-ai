@@ -6,6 +6,12 @@ const envSchema = z.object({
   LLM_PROVIDER: z.enum(['claude', 'openai']).default('claude'),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-5.1'),
+  OPENAI_BASE_URL: z.string().optional(),
+  TENCENT_VOD_SECRET_ID: z.string().optional(),
+  TENCENT_VOD_SECRET_KEY: z.string().optional(),
+  TENCENT_VOD_SUB_APP_ID: z.coerce.number().int().positive().optional(),
+  TENCENT_VOD_CHAT_BASE_URL: z.string().default('https://text-aigc.vod-qcloud.com/v1'),
   DATABASE_URL: z.string().default('./data/lava.db'),
   CLIENT_ORIGIN: z.string().default('http://localhost:5173'),
 })

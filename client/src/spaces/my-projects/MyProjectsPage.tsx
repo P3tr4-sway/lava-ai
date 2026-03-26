@@ -54,7 +54,7 @@ function getProjectRoute(project: Project): string {
   if (project.space === 'learn') {
     return `/editor/${project.id}`
   }
-  if (project.space === 'jam') return '/jam'
+  if (project.space === 'jam') return '/tools'
   return '/projects'
 }
 

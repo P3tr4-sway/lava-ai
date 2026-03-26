@@ -30,6 +30,7 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     // Coaching rules — only included when coachContext is present
     prompt += `\n\n## Coaching Rules`
     prompt += `\n- Use the coach_message tool for ALL coaching and onboarding messages. Never send plain text during coaching.`
+    prompt += `\n- NEVER call navigate_to_space during coaching. The user is already in the correct space. Only use coach_message for all interactions.`
     prompt += `\n- Be concise. One idea per message. No filler words.`
     prompt += `\n- No markdown formatting in message content. Plain speech only.`
     prompt += `\n- Reference actual chords and sections from the song.`

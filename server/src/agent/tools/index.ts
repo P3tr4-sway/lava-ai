@@ -25,6 +25,24 @@ function getHandler(name: string) {
       reason: input.reason,
     }),
 
+    open_search_results: async (input) => {
+      const songTitle = String(input.songTitle ?? '').trim()
+      const artist = String(input.artist ?? '').trim()
+      const selectionReason = String(input.selectionReason ?? '').trim()
+      const fallbackQuery = String(input.query ?? '').trim()
+      const query = songTitle
+        ? [songTitle, artist].filter(Boolean).join(' ')
+        : fallbackQuery
+
+      return {
+        action: 'open_search_results',
+        query,
+        songTitle: songTitle || undefined,
+        artist: artist || undefined,
+        selectionReason: selectionReason || undefined,
+      }
+    },
+
     create_project: async (input) => {
       const now = Date.now()
       const id = uuidv4()

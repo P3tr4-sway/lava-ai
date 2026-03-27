@@ -7,16 +7,18 @@ export interface AgentMessage {
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
   createdAt: number
-  subtype?: 'chat' | 'onboarding' | 'highlight' | 'coachingTip'
+  subtype?: 'chat' | 'onboarding' | 'highlight' | 'coachingTip' | 'practiceStatus' | 'practiceNudge' | 'practiceSummary'
   targetId?: string
   chips?: MessageChip[]
   hidden?: boolean
+  localOnly?: boolean
+  toneAction?: ToneAction
 }
 
 export interface MessageChip {
   label: string
   value: string
-  action?: 'advance' | 'expand' | 'set_style' | 'create_plan' | 'navigate'
+  action?: 'advance' | 'expand' | 'set_style' | 'create_plan' | 'navigate' | 'select_arrangement' | 'set_score_view'
 }
 
 export interface ToolCall {
@@ -31,13 +33,56 @@ export interface ToolResult {
   isError?: boolean
 }
 
-export type SpaceType = 'learn' | 'jam' | 'create' | 'tools' | 'library' | 'projects'
+export interface ToneKnobValue {
+  id: string
+  label: string
+  value: number
+}
+
+export interface ToneChainSlotSnapshot {
+  id: string
+  pedalId: string | null
+}
+
+export interface ToneProjectSnapshot {
+  selectedPreset: string
+  selectedSlotId: string
+  activeCategory: string
+  chain: ToneChainSlotSnapshot[]
+  pedalKnobs: Record<string, ToneKnobValue[]>
+}
+
+export interface ToneContext {
+  selectedPreset: string
+  selectedPresetName: string
+  selectedSlotId: string
+  selectedPedalId?: string | null
+  selectedPedalName?: string | null
+  activeCategory: string
+  chainSummary: string[]
+  knobSummary: string[]
+}
+
+export interface ToneAction {
+  kind: 'preview'
+  prompt: string
+  summary: string
+  changes: string[]
+  before: ToneProjectSnapshot
+  after: ToneProjectSnapshot
+  state?: 'pending' | 'applied'
+}
+
+export type SpaceType = 'home' | 'learn' | 'jam' | 'tone' | 'create' | 'tools' | 'library' | 'projects'
+export type HomeMode = 'discovery' | 'agent'
 
 export interface SpaceContext {
   currentSpace: SpaceType
+  homeMode?: HomeMode
   projectId?: string
   projectName?: string
   coachContext?: CoachContext
+  toneContext?: ToneContext
 }
 
 export type CoachingStyle = 'passive' | 'active' | 'checkpoint'

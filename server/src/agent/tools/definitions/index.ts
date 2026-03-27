@@ -1,4 +1,4 @@
-import { navigateToSpaceTool } from './navigation.tool.js'
+import { navigateToSpaceTool, openSearchResultsTool } from './navigation.tool.js'
 import { createProjectTool, listProjectsTool, loadProjectTool } from './project.tool.js'
 import { startJamTool, setTempoTool, setKeyTool } from './jam.tool.js'
 import { startTranscriptionTool, getTranscriptionStatusTool } from './transcription.tool.js'
@@ -10,6 +10,7 @@ import type { ToolDefinition } from '@lava/shared'
 
 export const ALL_TOOLS: ToolDefinition[] = [
   navigateToSpaceTool,
+  openSearchResultsTool,
   createProjectTool,
   listProjectsTool,
   loadProjectTool,

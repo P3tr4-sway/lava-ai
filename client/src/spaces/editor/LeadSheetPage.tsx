@@ -15,10 +15,15 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useDawPanelStore, makeTrack } from '@/stores/dawPanelStore'
 import { projectService } from '@/services/projectService'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
-import { DawPanel } from '@/components/daw/DawPanel'
 import { ToneEngine } from '@/audio/ToneEngine'
 import { pdfService } from '@/services/pdfService'
-import { ChordGrid, PdfViewer, MetadataBar, FollowView } from '@/components/score'
+import {
+  ChordGrid,
+  PdfViewer,
+  MetadataBar,
+  FollowView,
+  LeadSheetPlaybackBar,
+} from '@/components/score'
 
 const SECTION_PRESETS: { type: SectionType; label: string }[] = [
   { type: 'intro', label: 'Intro' },
@@ -54,7 +59,7 @@ export function LeadSheetPage() {
   const pdfUrl = useLeadSheetStore((s) => s.pdfUrl)
   const setPdfUrl = useLeadSheetStore((s) => s.setPdfUrl)
 
-  const { tracks, addTrack, updateTrack, committedClipIds } = useDawSetup({
+  const { tracks, committedClipIds } = useDawSetup({
     initTrackName: 'Lead Sheet',
     initDuration: 240,
   })
@@ -64,6 +69,7 @@ export function LeadSheetPage() {
   const setAudioKey = useAudioStore((s) => s.setKey)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
+  const setDuration = useAudioStore((s) => s.setDuration)
 
   const { requireAuth } = useRequireAuth()
 
@@ -184,8 +190,8 @@ export function LeadSheetPage() {
   }, [id])
 
   useEffect(() => {
-    setSpaceContext({ currentSpace: 'learn' })
-  }, [setSpaceContext])
+    setSpaceContext({ currentSpace: 'create', projectId: id })
+  }, [id, setSpaceContext])
 
   useEffect(() => { setAudioTempo(tempo) }, [tempo, setAudioTempo])
   useEffect(() => { setAudioKey(key) }, [key, setAudioKey])
@@ -196,6 +202,15 @@ export function LeadSheetPage() {
 
   const beatsPerBar = parseInt(timeSignature.split('/')[0])
   const barDuration = beatsPerBar * (60 / tempo)
+  const totalBars = useMemo(
+    () => sections.reduce((sum, section) => sum + section.measures.length, 0),
+    [sections],
+  )
+
+  useEffect(() => {
+    const nextDuration = totalBars > 0 ? totalBars * barDuration : 240
+    setDuration(nextDuration)
+  }, [barDuration, setDuration, totalBars])
 
   const handleSeek = useCallback((globalBarIndex: number) => {
     setCurrentTime(globalBarIndex * barDuration)
@@ -410,14 +425,11 @@ export function LeadSheetPage() {
         )
       )}
 
-      {/* ── DAW Panel ───────────────────────────────────────────── */}
-      <DawPanel
-        tracks={tracks}
-        onUpdateTrack={updateTrack}
-        onAddTrack={() => addTrack()}
-        showRecordButton={true}
+      <LeadSheetPlaybackBar
+        totalBars={totalBars}
+        beatsPerBar={beatsPerBar}
         sections={dawSections}
-        onBarClick={handleBarClick}
+        onBarSelect={handleBarClick}
       />
 
       {/* ── Unsaved-changes dialog ───────────────────────────────── */}

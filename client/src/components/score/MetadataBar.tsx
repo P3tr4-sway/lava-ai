@@ -7,6 +7,11 @@ interface MetadataBarProps {
   keyValue: string
   timeSignature: string
   tempo: number
+  difficulty?: string
+  bestFor?: string
+  capoFret?: number
+  fretRange?: string
+  shapeKey?: string
   editable?: boolean
   onKeyChange?: (key: string) => void
   onTimeSignatureChange?: (ts: string) => void
@@ -18,14 +23,27 @@ export function MetadataBar({
   keyValue,
   timeSignature,
   tempo,
+  difficulty,
+  bestFor,
+  capoFret,
+  fretRange,
+  shapeKey,
   editable = false,
   onKeyChange,
   onTimeSignatureChange,
   onTempoChange,
   className,
 }: MetadataBarProps) {
+  const detailChips = [
+    difficulty ? { label: 'Difficulty', value: difficulty } : null,
+    bestFor ? { label: 'Best For', value: bestFor } : null,
+    typeof capoFret === 'number' ? { label: 'Capo', value: String(capoFret) } : null,
+    fretRange ? { label: 'Frets', value: fretRange } : null,
+    shapeKey && shapeKey !== keyValue ? { label: 'Shape Key', value: shapeKey } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>
+
   return (
-    <div data-coach-target="metadata-bar" className={cn('flex items-center gap-1.5', className)}>
+    <div data-coach-target="metadata-bar" className={cn('flex flex-wrap items-center gap-1.5', className)}>
       <span className="text-xs text-text-muted">Key</span>
       {editable ? (
         <select
@@ -71,6 +89,15 @@ export function MetadataBar({
           {tempo ?? '—'}
         </span>
       )}
+
+      {detailChips.map((chip) => (
+        <span
+          key={`${chip.label}-${chip.value}`}
+          className="text-xs bg-surface-2 border border-border rounded px-1.5 py-1 text-text-secondary"
+        >
+          {chip.label}: {chip.value}
+        </span>
+      ))}
     </div>
   )
 }

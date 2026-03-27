@@ -1,7 +1,8 @@
 import { Bot, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useCoachStore } from '@/stores/coachStore'
-import { useUIStore } from '@/stores'
+import { useAgentPanelControls } from '@/hooks/useAgentPanelControls'
+import { usePracticeAssistStore } from '@/stores/practiceAssistStore'
 
 interface CoachBarProps {
   className?: string
@@ -10,14 +11,23 @@ interface CoachBarProps {
 
 export function CoachBar({ className, tip }: CoachBarProps) {
   const { coachBarCollapsed, setCoachBarCollapsed, coachingStyle } = useCoachStore()
-  const setAgentPanelOpen = useUIStore((s) => s.setAgentPanelOpen)
+  const practiceStatus = usePracticeAssistStore((s) => s.status)
+  const { showPanel } = useAgentPanelControls()
 
   const displayText =
-    tip ?? (coachingStyle === 'passive'
-      ? 'Ask me anything about this song.'
-      : coachingStyle === 'checkpoint'
-        ? 'Working on your current goal...'
-        : 'Following along...')
+    (practiceStatus === 'permission'
+      ? 'Mic access needed'
+      : practiceStatus === 'arming'
+        ? 'Getting ready...'
+        : practiceStatus === 'summary'
+          ? 'Summary ready'
+          : practiceStatus === 'listening'
+            ? 'Review in progress'
+            : tip ?? (coachingStyle === 'passive'
+              ? 'AI practice ready.'
+              : coachingStyle === 'checkpoint'
+                ? 'Working on your current goal...'
+                : 'AI practice ready.'))
 
   if (coachBarCollapsed) {
     return (
@@ -40,7 +50,7 @@ export function CoachBar({ className, tip }: CoachBarProps) {
     // Only if the click wasn't on an interactive child (button)
     const target = e.target as HTMLElement
     if (target.closest('button')) return
-    setAgentPanelOpen(true)
+    showPanel()
   }
 
   return (
@@ -56,7 +66,7 @@ export function CoachBar({ className, tip }: CoachBarProps) {
         {displayText}
       </span>
       <button
-        onClick={() => setAgentPanelOpen(true)}
+        onClick={showPanel}
         aria-label="Open chat"
         className="hidden md:flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-text-secondary bg-surface-2 border border-border rounded-full hover:bg-surface-3 hover:text-text-primary transition-colors"
       >

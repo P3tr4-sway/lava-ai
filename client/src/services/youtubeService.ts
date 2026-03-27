@@ -1,3 +1,5 @@
+import type { AnalysisScore } from '@lava/shared'
+
 const API = '/api/youtube'
 
 export interface YoutubeSearchResult {
@@ -19,21 +21,6 @@ export type AnalysisStatus =
   | 'processing'
   | 'completed'
   | 'error'
-
-export interface AnalysisScore {
-  key: string
-  tempo: number
-  timeSignature: string
-  title: string
-  videoId: string
-  duration: number
-  sections: Array<{
-    id: string
-    label: string
-    type: string
-    measures: Array<{ id: string; chords: string[] }>
-  }>
-}
 
 export interface AnalysisPollResult {
   id: string

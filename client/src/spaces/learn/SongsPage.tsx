@@ -7,23 +7,32 @@ import { useTaskStore, STAGE_LABEL } from '@/stores/taskStore'
 import { useCoachStore } from '@/stores/coachStore'
 import { useCalendarStore } from '@/stores/calendarStore'
 import { useAuthStore } from '@/stores/authStore'
-import { useUIStore } from '@/stores'
 import { useDawSetup } from '@/hooks/useDawSetup'
 import { useProjectSave } from '@/hooks/useProjectSave'
 import { useCoachSectionTracker } from '@/hooks/useCoachSectionTracker'
+import { usePracticeAssist } from '@/hooks/usePracticeAssist'
 import { useAgent } from '@/hooks/useAgent'
-import { Music, FileMusic, ArrowLeft, AlignLeft, NotebookPen, Loader2 } from 'lucide-react'
-import { cn } from '@/components/ui/utils'
+import { useAgentPanelControls } from '@/hooks/useAgentPanelControls'
+import { useAgentThreadPersistence } from '@/hooks/useAgentThreadPersistence'
+import { Music, FileMusic, ArrowLeft, Loader2 } from 'lucide-react'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog'
 import { CHORD_CHARTS, type ChordChart } from '@/data/chordCharts'
-import { DawPanel } from '@/components/daw/DawPanel'
-import type { DawSectionLabel } from '@/components/daw/DawPanel'
-import { ChordGrid, PdfViewer, MetadataBar, CoachBar } from '@/components/score'
+import {
+  ChordGrid,
+  PdfViewer,
+  MetadataBar,
+  LeadSheetPlaybackBar,
+  ScorePickerDrawer,
+  PlaybackStylePickerDrawer,
+  type PlaybackStyleOption,
+} from '@/components/score'
 import { youtubeService } from '@/services/youtubeService'
 import { ToneEngine } from '@/audio/ToneEngine'
 import type { Clip } from '@/audio/types'
-import type { CoachContext } from '@lava/shared'
+import type { CoachContext, ArrangementId } from '@lava/shared'
+
+const issuedCoachInitKeys = new Set<string>()
 
 const PROGRESS_SECTIONS = [
   { id: 1, label: 'Intro',   type: 'intro',  barCount: 2, status: 'done'    as const, accuracy: 96 },
@@ -34,23 +43,102 @@ const PROGRESS_SECTIONS = [
   { id: 6, label: 'Outro',   type: 'outro',  barCount: 1, status: 'locked'  as const, accuracy: 0  },
 ]
 
+const PLAYBACK_STYLE_OPTIONS: PlaybackStyleOption[] = [
+  {
+    id: 'studio-clean',
+    label: 'Studio Clean',
+    subtitle: 'Default',
+    description: 'Clean guitar.',
+    category: 'acoustic',
+  },
+  {
+    id: 'warm-nylon',
+    label: 'Warm Nylon',
+    subtitle: 'Soft',
+    description: 'Soft nylon tone.',
+    category: 'acoustic',
+  },
+  {
+    id: 'bright-piano',
+    label: 'Bright Piano',
+    subtitle: 'Clear',
+    description: 'Clear piano.',
+    category: 'keys',
+  },
+  {
+    id: 'dream-keys',
+    label: 'Dream Keys',
+    subtitle: 'Airy',
+    description: 'Airy keys.',
+    category: 'keys',
+  },
+  {
+    id: 'full-band',
+    label: 'Full Band',
+    subtitle: 'Demo',
+    description: 'Band feel.',
+    category: 'ensemble',
+  },
+  {
+    id: 'fingerstyle-glow',
+    label: 'Fingerstyle Glow',
+    subtitle: 'Rich',
+    description: 'Rich fingerstyle.',
+    category: 'ensemble',
+  },
+  {
+    id: 'practice-guide',
+    label: 'Practice Guide',
+    subtitle: 'Focus',
+    description: 'Practice focus.',
+    category: 'practice',
+  },
+  {
+    id: 'metronome-support',
+    label: 'Metronome Support',
+    subtitle: 'Tight',
+    description: 'Tight timing.',
+    category: 'practice',
+  },
+]
+
+interface ToolbarActionButtonProps {
+  label: string
+  onClick: () => void
+}
+
+function ToolbarActionButton({ label, onClick }: ToolbarActionButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex h-8 items-center rounded-full bg-[#111111] px-3 text-xs font-semibold text-white transition-opacity hover:opacity-88"
+    >
+      <span>{label}</span>
+    </button>
+  )
+}
+
 export function SongsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isGenerateMode = searchParams.get('generate') === '1'
+  const requestedView = searchParams.get('view')
+  const requestedArrangement = searchParams.get('arrangement')
   const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
+  const agentMessages = useAgentStore((s) => s.messages)
   const coachStore = useCoachStore()
   const { sendHiddenMessage } = useAgent()
+  const { showPanel } = useAgentPanelControls()
+  const { hasPersistedThread } = useAgentThreadPersistence(id)
   const coachHighlightTarget = useAgentStore((s) => s.coachHighlightTarget)
-  const messages = useAgentStore((s) => s.messages)
-  const [showCoachBar, setShowCoachBar] = useState(false)
-  const [latestCoachTip, setLatestCoachTip] = useState<string | null>(null)
 
   // Audio store — bpm used in buildProjectData
   const bpm = useAudioStore((s) => s.bpm)
   const setBpm = useAudioStore((s) => s.setBpm)
   const setDuration = useAudioStore((s) => s.setDuration)
+  const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
+  const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
 
   // Static chart lookup
   const staticChart = CHORD_CHARTS.find((c) => c.id === id)
@@ -69,6 +157,10 @@ export function SongsPage() {
     setAt: number  // timestamp to detect stale tracks
   } | null>(null)
   const [analysisTotalBars, setAnalysisTotalBars] = useState(16)
+  const [playbackStylePickerOpen, setPlaybackStylePickerOpen] = useState(false)
+  const [selectedPlaybackStyleId, setSelectedPlaybackStyleId] = useState(PLAYBACK_STYLE_OPTIONS[0].id)
+  const hasAppliedRequestedArrangementRef = useRef(false)
+  const hasAppliedRequestedViewRef = useRef(false)
 
   // Fetch / poll analysis result when navigating with ?generate=1 and no static chart
   const [analysisError, setAnalysisError] = useState<string | null>(null)
@@ -88,6 +180,8 @@ export function SongsPage() {
       key: score.key,
       tempo: score.tempo,
       timeSignature: score.timeSignature,
+      arrangements: score.arrangements,
+      defaultArrangementId: score.defaultArrangementId,
     })
     loadFromAnalysis({
       projectName: score.title || 'Untitled',
@@ -98,6 +192,8 @@ export function SongsPage() {
         ...s,
         type: s.type as 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom',
       })),
+      arrangements: score.arrangements,
+      defaultArrangementId: score.defaultArrangementId,
     })
     setBpm(score.tempo)
     if (result.audioFileId) {
@@ -116,18 +212,18 @@ export function SongsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, loadFromAnalysis, setBpm])
 
-  const getTask = useTaskStore((s) => s.getTask)
+  // 直接订阅当前任务，避免只拿到 getTask 函数本身导致进度更新后页面不重渲染。
+  const task = useTaskStore((s) => (id ? s.tasks.find((item) => item.id === id) : undefined))
   const addTask = useTaskStore((s) => s.addTask)
 
   // Derive task data reactively
-  const task = id ? getTask(id) : undefined
   const taskProgress = task?.progress ?? 0
   const taskStage = task?.stage ?? 'downloading'
 
   useEffect(() => {
     if (!isGenerateMode || !id || staticChart) return
 
-    const existingTask = getTask(id)
+    const existingTask = useTaskStore.getState().getTask(id)
 
     if (existingTask?.status === 'completed' && existingTask.result) {
       // Already done — load immediately from store
@@ -175,7 +271,7 @@ export function SongsPage() {
   const chart = staticChart ?? analysisChart
 
   // DAW setup — handles track seeding, duration, and committed clip tracking
-  const { tracks, addTrack, updateTrack, committedClipIds, hasCommittedClips } = useDawSetup({
+  const { tracks, updateTrack, committedClipIds, hasCommittedClips } = useDawSetup({
     initTrackName: chart?.title ?? '',
     initDuration: chart?.tempo ? (16 * 4 * 60) / chart.tempo : 240,
     resetKey: chart?.id,
@@ -186,18 +282,28 @@ export function SongsPage() {
   const setLeadSheetKey = useLeadSheetStore((s) => s.setKey)
   const setLeadSheetTempo = useLeadSheetStore((s) => s.setTempo)
   const setLeadSheetTimeSig = useLeadSheetStore((s) => s.setTimeSignature)
+  const arrangements = useLeadSheetStore((s) => s.arrangements)
+  const selectedArrangementId = useLeadSheetStore((s) => s.selectedArrangementId)
+  const selectArrangement = useLeadSheetStore((s) => s.selectArrangement)
+  const scoreView = useLeadSheetStore((s) => s.scoreView)
+  const setScoreView = useLeadSheetStore((s) => s.setScoreView)
+  const arrangementPickerOpen = useLeadSheetStore((s) => s.arrangementPickerOpen)
+  const openArrangementPicker = useLeadSheetStore((s) => s.openArrangementPicker)
+  const closeArrangementPicker = useLeadSheetStore((s) => s.closeArrangementPicker)
 
   useEffect(() => {
     if (!staticChart) return // Skip for analysis charts — already loaded via loadFromAnalysis
 
-    // If the static chart has predefined sections with chords, load them directly
-    if (staticChart.sections?.length) {
+    // 优先走 arrangement-aware 数据；旧的静态谱仍兼容到单版 original。
+    if (staticChart.arrangements?.length || staticChart.sections?.length) {
       loadFromAnalysis({
         projectName: staticChart.title,
         key: staticChart.key,
         tempo: staticChart.tempo ?? 120,
         timeSignature: staticChart.timeSignature ?? '4/4',
-        sections: staticChart.sections,
+        sections: staticChart.sections ?? [],
+        arrangements: staticChart.arrangements,
+        defaultArrangementId: staticChart.defaultArrangementId,
       })
     } else {
       resetLeadSheet()
@@ -252,13 +358,6 @@ export function SongsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAudioImport, tracks])
 
-  // View mode — default to 'pdf' when a pdfUrl is present, else 'leadsheet'
-  const [mode, setMode] = useState<'leadsheet' | 'pdf'>(() => chart?.pdfUrl ? 'pdf' : 'leadsheet')
-
-  useEffect(() => {
-    setMode(chart?.pdfUrl ? 'pdf' : 'leadsheet')
-  }, [chart?.id])
-
   // Shared save logic
   const buildProjectData = useCallback(() => {
     const serializedTracks = tracks.map((t) => ({
@@ -297,7 +396,19 @@ export function SongsPage() {
 
   // DAW timeline section labels — derived from analysis, static chart, or fallback
   const leadSheetSections = useLeadSheetStore((s) => s.sections)
-  const dawSections = useMemo<DawSectionLabel[]>(() => {
+  const leadSheetTimeSignature = useLeadSheetStore((s) => s.timeSignature)
+  const setActiveCell = useLeadSheetStore((s) => s.setActiveCell)
+  const selectedArrangement = useMemo(
+    () => arrangements.find((arrangement) => arrangement.id === selectedArrangementId) ?? arrangements[0],
+    [arrangements, selectedArrangementId],
+  )
+  useEffect(() => {
+    if (selectedArrangement?.tempo) {
+      setBpm(selectedArrangement.tempo)
+    }
+  }, [selectedArrangement?.id, selectedArrangement?.tempo, setBpm])
+
+  const dawSections = useMemo(() => {
     // Use lead sheet store sections (populated from analysis or static chart data)
     if (leadSheetSections?.length) {
       let barStart = 0
@@ -316,10 +427,58 @@ export function SongsPage() {
       return section
     })
   }, [leadSheetSections])
+  const totalBars = useMemo(() => {
+    if (leadSheetSections.length > 0) {
+      return leadSheetSections.reduce((sum, section) => sum + section.measures.length, 0)
+    }
+    return Math.max(
+      analysisTotalBars,
+      PROGRESS_SECTIONS.reduce((sum, section) => sum + section.barCount, 0),
+    )
+  }, [analysisTotalBars, leadSheetSections])
+  const beatsPerBar = parseInt(leadSheetTimeSignature?.split('/')[0] ?? chart?.timeSignature?.split('/')[0] ?? '4', 10) || 4
+  const barDuration = beatsPerBar * (60 / (bpm || chart?.tempo || 120))
+
+  const handleSeek = useCallback((globalBarIndex: number) => {
+    setCurrentTime(globalBarIndex * barDuration)
+    setCurrentBar(globalBarIndex)
+  }, [barDuration, setCurrentBar, setCurrentTime])
+
+  const handleBarSelect = useCallback((bar: number) => {
+    handleSeek(bar)
+
+    let remaining = bar
+    for (const section of leadSheetSections) {
+      if (remaining < section.measures.length) {
+        const measure = section.measures[remaining]
+        if (measure) setActiveCell(section.id, measure.id)
+        break
+      }
+      remaining -= section.measures.length
+    }
+  }, [handleSeek, leadSheetSections, setActiveCell])
+
+  usePracticeAssist(id, leadSheetSections)
 
   useEffect(() => {
     setSpaceContext({ currentSpace: 'learn', projectId: id })
   }, [id, setSpaceContext])
+
+  useEffect(() => {
+    if (hasAppliedRequestedArrangementRef.current || arrangements.length === 0) return
+    if (requestedArrangement && arrangements.some((arrangement) => arrangement.id === requestedArrangement)) {
+      hasAppliedRequestedArrangementRef.current = true
+      selectArrangement(requestedArrangement as ArrangementId)
+    }
+  }, [arrangements, requestedArrangement, selectArrangement])
+
+  useEffect(() => {
+    if (hasAppliedRequestedViewRef.current || !requestedView) return
+    if (requestedView === 'lead_sheet' || requestedView === 'staff' || requestedView === 'tab') {
+      hasAppliedRequestedViewRef.current = true
+      setScoreView(requestedView)
+    }
+  }, [requestedView, setScoreView])
 
   // ── Coach context effect — fires after chart + sections are loaded ──
   useEffect(() => {
@@ -366,33 +525,40 @@ export function SongsPage() {
       coachContext,
     })
 
+    const coachInitKey = `${id ?? 'unknown'}:${visitTier}`
+    const hasExistingCoachConversation = agentMessages.some((message) =>
+      (message.role === 'user' && message.hidden && message.content.startsWith('[Coach init:')) ||
+      (message.role === 'assistant' && (
+        message.subtype === 'onboarding' ||
+        message.subtype === 'highlight' ||
+        message.subtype === 'coachingTip'
+      )),
+    )
+
+    // 这些场景都不应该再次自动注入欢迎/回访消息：
+    // 1. 已从本地恢复 thread
+    // 2. 当前 thread 已经有 coach 对话
+    // 3. 同一浏览器会话内该歌曲的同一 visit tier 已触发过一次（防 StrictMode / 重挂载）
+    if (hasPersistedThread || hasExistingCoachConversation || issuedCoachInitKeys.has(coachInitKey)) {
+      return
+    }
+    issuedCoachInitKeys.add(coachInitKey)
+
     if (visitTier === 'first') {
       coachStore.markOnboardingSeen()
       coachStore.addVisitedSong(id ?? '')
-      useUIStore.getState().setAgentPanelOpen(true)
+      showPanel()
       void sendHiddenMessage('[Coach init: first visit. Run full onboarding flow.]')
     } else if (visitTier === 'new_song') {
-      useUIStore.getState().setAgentPanelOpen(true)
+      showPanel()
       void sendHiddenMessage('[Coach init: new song. Send light greeting with practice plan offer.]')
       coachStore.addVisitedSong(id ?? '')
     } else {
       void sendHiddenMessage('[Coach init: revisit. Reference progress and offer to continue.]')
       coachStore.addVisitedSong(id ?? '')
     }
-
-    setShowCoachBar(visitTier !== 'first')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chart, leadSheetSections.length])
-
-  // ── Watch for latest coaching tip ──
-  useEffect(() => {
-    const lastCoachTip = [...messages]
-      .reverse()
-      .find((m) => m.subtype === 'coachingTip')
-    if (lastCoachTip) {
-      setLatestCoachTip(lastCoachTip.content)
-    }
-  }, [messages])
+  }, [agentMessages, chart, hasPersistedThread, id, leadSheetSections.length, showPanel])
 
   // ── Apply highlight pulse ──
   useEffect(() => {
@@ -490,99 +656,108 @@ export function SongsPage() {
     <div className="h-full flex flex-col">
 
       {/* ── Header toolbar ──────────────────────────────────────── */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-border bg-surface-0/90 backdrop-blur-sm">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center justify-center size-7 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors shrink-0"
-        >
-          <ArrowLeft size={15} />
-        </button>
+      <div className="shrink-0 border-b border-border bg-surface-0/90 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-2.5 px-4 py-2 md:flex-nowrap">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface-0 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+          >
+            <ArrowLeft size={14} />
+          </button>
 
-        {/* Title */}
-        <div className="flex items-center gap-1.5">
-          <Music size={15} className="text-text-muted shrink-0" />
-          <span className="text-sm font-semibold text-text-primary">{chart.title}</span>
-          {chart.artist && <span className="text-xs text-text-muted">— {chart.artist}</span>}
-          {analysisChart && (
-            <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-success/15 text-success">
-              AI Breakdown
+          <div className="min-w-0 flex items-center gap-1.5 shrink">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-muted">
+              <Music size={13} />
             </span>
-          )}
-        </div>
-
-        <div className="h-4 w-px bg-border shrink-0" />
-
-        {/* Key / Time / Tempo metadata */}
-        <MetadataBar
-          keyValue={chart.key}
-          timeSignature={chart.timeSignature ?? '4/4'}
-          tempo={chart.tempo ?? 120}
-        />
-
-        <div className="flex-1" />
-
-        {/* Save button */}
-        <SaveButton
-          saving={saving}
-          hasContent={hasCommittedClips}
-          isSaved={isSaved}
-          showSavedBadge={showSavedBadge}
-          onSave={() => void handleSave()}
-        />
-
-        {/* View mode toggle — only when a PDF score is available */}
-        {chart.pdfUrl && (
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-2 border border-border">
-            <button
-              onClick={() => setMode('leadsheet')}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
-                mode === 'leadsheet'
-                  ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
-                  : 'text-text-muted hover:text-text-secondary',
-              )}
-            >
-              <AlignLeft size={11} />
-              Lead Sheet
-            </button>
-            <button
-              onClick={() => setMode('pdf')}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
-                mode === 'pdf'
-                  ? 'bg-surface-0 text-text-primary shadow-sm border border-border'
-                  : 'text-text-muted hover:text-text-secondary',
-              )}
-            >
-              <NotebookPen size={11} />
-              Score
-            </button>
+            <span className="truncate text-sm font-semibold text-text-primary">{chart.title}</span>
+            {chart.artist && <span className="truncate text-xs text-text-muted">— {chart.artist}</span>}
+            {analysisChart && (
+              <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-success">
+                AI Breakdown
+              </span>
+            )}
           </div>
-        )}
 
+          <div className="hidden h-4 w-px bg-border lg:block" />
+
+          <MetadataBar
+            keyValue={selectedArrangement?.concertKey ?? chart.key}
+            timeSignature={selectedArrangement?.timeSignature ?? chart.timeSignature ?? '4/4'}
+            tempo={selectedArrangement?.tempo ?? chart.tempo ?? 120}
+            capoFret={selectedArrangement?.capoFret}
+            fretRange={selectedArrangement?.fretRange}
+            shapeKey={selectedArrangement?.displayKey}
+            className="min-w-0 flex-1 gap-1 md:flex-nowrap"
+          />
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <SaveButton
+              saving={saving}
+              hasContent={hasCommittedClips}
+              isSaved={isSaved}
+              showSavedBadge={showSavedBadge}
+              onSave={() => void handleSave()}
+              className="h-8 rounded-full px-3 text-xs font-semibold"
+            />
+
+            <ToolbarActionButton
+              label="Score Styles"
+              onClick={openArrangementPicker}
+            />
+
+            <ToolbarActionButton
+              label="Playback Styles"
+              onClick={() => setPlaybackStylePickerOpen(true)}
+            />
+          </div>
+        </div>
       </div>
-
-      {showCoachBar && (
-        <CoachBar tip={latestCoachTip} />
-      )}
-
       {/* ── Score area ──────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {mode === 'pdf' && chart.pdfUrl ? (
+        {scoreView === 'staff' && chart.pdfUrl && selectedArrangementId === 'original' ? (
           <PdfViewer pdfUrl={chart.pdfUrl} />
+        ) : scoreView === 'staff' ? (
+          <div className="flex flex-1 items-center justify-center px-6">
+            <p className="text-sm text-text-muted">No staff.</p>
+          </div>
+        ) : scoreView === 'tab' ? (
+          <div className="flex flex-1 items-center justify-center px-6">
+            <p className="text-sm text-text-muted">No tab yet.</p>
+          </div>
         ) : (
-          <ChordGrid />
+          <ChordGrid onSeek={handleSeek} />
         )}
       </div>
 
-      {/* ── DAW Panel ───────────────────────────────────────────── */}
-      <DawPanel
-        tracks={tracks}
-        onUpdateTrack={updateTrack}
-        onAddTrack={() => addTrack()}
-        showRecordButton={true}
+      <ScorePickerDrawer
+        open={arrangementPickerOpen}
+        onClose={closeArrangementPicker}
+        arrangements={arrangements}
+        selectedArrangementId={selectedArrangementId}
+        onSelectArrangement={(nextId) => {
+          selectArrangement(nextId)
+          closeArrangementPicker()
+        }}
+        scoreView={scoreView}
+        onSelectScoreView={(nextView) => {
+          setScoreView(nextView)
+          closeArrangementPicker()
+        }}
+      />
+
+      <PlaybackStylePickerDrawer
+        open={playbackStylePickerOpen}
+        onClose={() => setPlaybackStylePickerOpen(false)}
+        options={PLAYBACK_STYLE_OPTIONS}
+        selectedPlaybackStyleId={selectedPlaybackStyleId}
+        onSelectPlaybackStyle={setSelectedPlaybackStyleId}
+      />
+
+      <LeadSheetPlaybackBar
+        totalBars={totalBars}
+        beatsPerBar={beatsPerBar}
         sections={dawSections}
-        totalBars={analysisTotalBars}
+        onBarSelect={handleBarSelect}
       />
 
       {/* ── Unsaved-changes dialog ───────────────────────────────── */}

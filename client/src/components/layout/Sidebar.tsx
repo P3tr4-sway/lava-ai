@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
-  Sun,
-  Moon,
-  Monitor,
+  ArrowRight,
   LogOut,
   Settings,
   CreditCard,
@@ -14,43 +12,131 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
-import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { NAV_ITEMS, NEW_SHEET_ITEM, SETTINGS_ITEM } from './navItems'
+import {
+  DEFAULT_HOME_SECTION,
+  getHomeSectionFromSearch,
+  HOME_NAV_RESET_EVENT,
+  HOME_SECTION_ITEMS,
+  NAV_ITEMS,
+  SETTINGS_ITEM,
+} from './navItems'
 import { LavaLogo } from './LavaLogo'
 
-const THEME_OPTIONS = [
-  { value: 'system' as const, icon: Monitor, label: 'System' },
-  { value: 'light' as const, icon: Sun, label: 'Light' },
-  { value: 'dark' as const, icon: Moon, label: 'Dark' },
-]
+function AITonesEntry({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="px-2">
+      <button
+        type="button"
+        onClick={onClick}
+        className="group w-full rounded-[20px] p-2.5 text-left transition-all duration-200 hover:-translate-y-0.5"
+        style={{
+          border: '1px solid color-mix(in srgb, #d9ff3f 68%, var(--border))',
+          background: 'color-mix(in srgb, #f4ff9c 26%, var(--surface-0))',
+        }}
+      >
+        <div className="grid grid-cols-[56px_1fr_auto] items-center gap-3">
+          <div
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px]"
+            style={{
+              border: '1px solid color-mix(in srgb, #c7f000 72%, var(--border))',
+              background: '#e6ff3b',
+            }}
+          >
+            <div className="absolute left-2.5 right-2.5 top-2.5 flex items-center justify-between">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <span
+                  key={index}
+                  className="size-1.5 rounded-full"
+                  style={{ background: 'rgba(17, 24, 39, 0.22)' }}
+                />
+              ))}
+            </div>
+            <div
+              className="absolute inset-x-2.5 bottom-2.5 top-5 rounded-[0.85rem]"
+              style={{
+                background:
+                  'repeating-linear-gradient(0deg, rgba(17, 24, 39, 0.14) 0px, rgba(17, 24, 39, 0.14) 1px, transparent 1px, transparent 4px), rgba(255,255,255,0.72)',
+                border: '1px solid rgba(17, 24, 39, 0.12)',
+              }}
+            />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.26em]"
+              style={{ color: 'rgba(17, 24, 39, 0.52)' }}
+            >
+              AI Tones
+            </p>
+            <p className="mt-1 text-sm font-semibold tracking-tight text-[#111827]">Amp & FX</p>
+          </div>
+
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform group-hover:translate-x-0.5"
+            style={{
+              background: '#111827',
+              color: '#e6ff3b',
+            }}
+          >
+            <ArrowRight size={15} />
+          </div>
+        </div>
+      </button>
+    </div>
+  )
+}
 
 function NavItems({ onClose }: { onClose?: () => void }) {
   const location = useLocation()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const NewSheetIcon = NEW_SHEET_ITEM.icon
+  const libraryItem = NAV_ITEMS.find((item) => item.to === '/files')
   const SettingsIcon = SETTINGS_ITEM.icon
-
-  /** True when the user is already on this route — prevents redundant navigation. */
-  const isOnRoute = (to: string, end?: boolean) =>
-    end ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + '/')
+  const activeHomeSection =
+    location.pathname === '/' ? getHomeSectionFromSearch(location.search) : null
 
   return (
     <>
       {/* Main nav */}
-      <div className="flex flex-col gap-0.5 px-2">
-        {NAV_ITEMS.map(({ to, icon: Icon, label, ...rest }) => (
+      <div className="flex flex-col gap-1 px-2">
+        {HOME_SECTION_ITEMS.map(({ id, to, label }) => {
+          const isActive = activeHomeSection === id
+
+          return (
+            <Link
+              key={id}
+              to={to}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={(e) => {
+                if (isActive) {
+                  e.preventDefault()
+                  window.dispatchEvent(
+                    new CustomEvent(HOME_NAV_RESET_EVENT, {
+                      detail: { section: id },
+                    }),
+                  )
+                }
+                onClose?.()
+              }}
+            className={cn(
+                'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-surface-3 text-text-primary'
+                  : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
+              )}
+            >
+              <span>{label}</span>
+            </Link>
+          )
+        })}
+      </div>
+
+      <div className="px-2 mt-2">
+        <div className="h-px bg-border mb-2" />
+        {libraryItem && (
           <NavLink
-            key={to}
-            to={to}
-            end={'end' in rest}
-            onClick={(e) => {
-              if (isOnRoute(to, 'end' in rest)) {
-                e.preventDefault()
-                if (to === '/search') window.dispatchEvent(new Event('focus-search-input'))
-              }
-              onClose?.()
-            }}
+            to={libraryItem.to}
+            onClick={onClose}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
@@ -60,30 +146,10 @@ function NavItems({ onClose }: { onClose?: () => void }) {
               )
             }
           >
-            <Icon size={17} className="shrink-0" />
-            <span>{label}</span>
+            <libraryItem.icon size={17} className="shrink-0" />
+            <span>{libraryItem.label}</span>
           </NavLink>
-        ))}
-      </div>
-
-      {/* Divider + New Sheet action */}
-      <div className="px-2 mt-2">
-        <div className="h-px bg-border mb-2" />
-        <NavLink
-          to={NEW_SHEET_ITEM.to}
-          onClick={onClose}
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 py-2 px-2 rounded-md text-sm transition-colors',
-              isActive
-                ? 'text-text-primary bg-surface-3'
-                : 'text-text-secondary hover:text-text-primary hover:bg-surface-2',
-            )
-          }
-        >
-          <NewSheetIcon size={17} className="shrink-0" />
-          <span>{NEW_SHEET_ITEM.label}</span>
-        </NavLink>
+        )}
         {isAuthenticated && (
           <NavLink
             to={SETTINGS_ITEM.to}
@@ -230,14 +296,23 @@ function UserInfoSection() {
 export function Sidebar() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen)
-  const { theme, setTheme } = useTheme()
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const currentHomeSection =
+    location.pathname === '/' ? getHomeSectionFromSearch(location.search) : null
+
+  const handleOpenAiTones = () => {
+    const from = `${location.pathname}${location.search}${location.hash}`
+    navigate('/tools/new', { state: { from } })
+    if (isMobile) setSidebarOpen(false)
+  }
 
   if (isMobile) {
     return (
       <nav
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-60 bg-surface-0 border-r border-border flex flex-col transition-transform duration-200',
+          'fixed inset-y-0 left-0 z-40 w-64 bg-surface-0 border-r border-border flex flex-col transition-transform duration-200',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -260,43 +335,28 @@ export function Sidebar() {
           <NavItems onClose={() => setSidebarOpen(false)} />
         </div>
 
-        {/* Bottom: user info + theme picker */}
+        {/* Bottom: AI tones + user info */}
         <div className="shrink-0 border-t border-border py-3 px-0 flex flex-col gap-2">
+          <AITonesEntry onClick={handleOpenAiTones} />
           <UserInfoSection />
-          <div className="px-2">
-            <p className="text-2xs text-text-muted uppercase tracking-wider px-2 mb-1.5">Theme</p>
-            <div className="flex gap-1">
-              {THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setTheme(value)}
-                  title={label}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs transition-colors',
-                    theme === value
-                      ? 'bg-surface-3 text-text-primary'
-                      : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-                  )}
-                >
-                  <Icon size={13} />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </nav>
     )
   }
 
   return (
-    <nav className="flex flex-col h-full w-60 bg-surface-0 border-r border-border shrink-0 overflow-hidden">
+    <nav className="flex flex-col h-full w-64 bg-surface-0 border-r border-border shrink-0 overflow-hidden">
       {/* Logo */}
       <div className="flex items-center h-14 px-4 shrink-0">
-        <Link
-          to="/"
-          className="flex items-center gap-2.5 flex-1 min-w-0 group"
-        >
+          <Link
+            to="/"
+            onClick={() => {
+              if (location.pathname === '/' && currentHomeSection === DEFAULT_HOME_SECTION) {
+                window.dispatchEvent(new Event(HOME_NAV_RESET_EVENT))
+              }
+            }}
+            className="flex items-center gap-2.5 flex-1 min-w-0 group"
+          >
           <LavaLogo />
           <span className="text-base font-semibold tracking-wide text-text-primary group-hover:opacity-80 transition-opacity">
             LAVA
@@ -309,30 +369,10 @@ export function Sidebar() {
         <NavItems />
       </div>
 
-      {/* Bottom: user info + theme picker */}
+      {/* Bottom: AI tones + user info */}
       <div className="shrink-0 border-t border-border py-3 px-0 flex flex-col gap-2">
+        <AITonesEntry onClick={handleOpenAiTones} />
         <UserInfoSection />
-        <div className="px-2">
-          <p className="text-2xs text-text-muted uppercase tracking-wider px-2 mb-1.5">Theme</p>
-          <div className="flex gap-1">
-            {THEME_OPTIONS.map(({ value, icon: Icon, label }) => (
-              <button
-                key={value}
-                onClick={() => setTheme(value)}
-                title={label}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs transition-colors',
-                  theme === value
-                    ? 'bg-surface-3 text-text-primary'
-                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-2',
-                )}
-              >
-                <Icon size={13} />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </nav>
   )

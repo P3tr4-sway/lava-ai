@@ -1,16 +1,28 @@
 import { useAgentStore } from '@/stores/agentStore'
+import { usePracticeAssistStore } from '@/stores/practiceAssistStore'
 
 // ─── Quick actions per space ─────────────────────────────────────────────────
 
-const ACTIONS: Record<string, { label: string; prompt: string }[]> = {
+export interface QuickActionDefinition {
+  label: string
+  prompt: string
+  kind?: 'prompt' | 'start_review' | 'end_review'
+}
+
+const HOME_ACTIONS: QuickActionDefinition[] = [
+  { label: 'Find a song to practice', prompt: 'Find a song to practice' },
+  { label: 'Beginner recommendations', prompt: 'Give me beginner recommendations' },
+  { label: 'Break down a song', prompt: 'Break down a song' },
+  { label: 'Start a practice plan', prompt: 'Start a practice plan' },
+]
+
+const ACTIONS: Record<string, QuickActionDefinition[]> = {
+  home: HOME_ACTIONS,
   learn: [
     { label: 'Practice plan', prompt: 'Create a practice plan for this song' },
     { label: 'How to play this', prompt: 'How do I play the current section?' },
     { label: 'Chord breakdown', prompt: 'Break down the chords in this piece' },
     { label: 'Fingering tips', prompt: 'Suggest fingering for this passage' },
-    { label: 'Technique tips', prompt: 'What techniques should I focus on here?' },
-    { label: 'Record snippet', prompt: 'Record a quick snippet of my playing for feedback' },
-    { label: 'Coaching style', prompt: 'I want to change my coaching style' },
   ],
   jam: [
     { label: 'Tone presets', prompt: 'Show me tone presets for this practice session' },
@@ -20,41 +32,58 @@ const ACTIONS: Record<string, { label: string; prompt: string }[]> = {
     { label: 'Record session', prompt: 'Record this practice session' },
     { label: 'Add backing track', prompt: 'Generate a backing track to practice with' },
   ],
+  tone: [
+    { label: 'Make it cleaner', prompt: 'Make it cleaner' },
+    { label: 'Add gain', prompt: 'Add gain' },
+    { label: 'Explain this chain', prompt: 'Explain this chain' },
+    { label: 'Match Mayer clean', prompt: 'Match John Mayer clean' },
+    { label: 'Add ambience', prompt: 'Add ambience' },
+    { label: 'Tighten low end', prompt: 'Tighten low end' },
+  ],
   create: [
-    { label: 'Tone presets', prompt: 'Browse tone presets for this project' },
-    { label: 'Effects chain', prompt: 'Apply effects to this track' },
-    { label: 'Chord suggestion', prompt: 'Suggest chords that fit this progression' },
-    { label: 'Practice tips', prompt: 'Give me practice tips for what I just wrote' },
-    { label: 'How to mix', prompt: 'How should I mix these tracks?' },
-    { label: 'Export', prompt: 'Export this project' },
+    { label: 'Chord progression', prompt: 'Help me write a chord progression for this song' },
+    { label: 'Section structure', prompt: 'Suggest a clear section structure for this lead sheet' },
+    { label: 'Bridge idea', prompt: 'Suggest a bridge or contrasting section for this arrangement' },
+    { label: 'Arrangement notes', prompt: 'Give me arrangement notes for what I have so far' },
+    { label: 'Lyric rhythm', prompt: 'Help me shape the lyric rhythm and phrasing for this section' },
+    { label: 'Export lead sheet', prompt: 'Help me prepare this lead sheet for export' },
   ],
 }
 
-const DEFAULT_ACTIONS = [
-  { label: 'Practice plan', prompt: 'Help me create a practice plan' },
-  { label: 'Song breakdown', prompt: 'Break down a song into something I can practice' },
-  { label: 'Get started', prompt: 'How do I get started practicing?' },
-]
+export function getQuickActionsForSpace(currentSpace?: string): QuickActionDefinition[] {
+  if (currentSpace === 'learn') {
+    const { mode, status } = usePracticeAssistStore.getState()
+    const actions = [...ACTIONS.learn]
+
+    if (mode === 'review' && status === 'listening') {
+      actions.push({ label: 'End Review', prompt: 'End review', kind: 'end_review' })
+    }
+
+    return actions
+  }
+
+  return ACTIONS[currentSpace ?? ''] ?? HOME_ACTIONS
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface QuickActionsProps {
-  onSend: (message: string) => void
+  onAction: (action: QuickActionDefinition) => void
   disabled?: boolean
 }
 
-export function QuickActions({ onSend, disabled }: QuickActionsProps) {
+export function QuickActions({ onAction, disabled }: QuickActionsProps) {
   const currentSpace = useAgentStore((s) => s.spaceContext.currentSpace)
-  const actions = ACTIONS[currentSpace ?? ''] ?? DEFAULT_ACTIONS
+  const actions = getQuickActionsForSpace(currentSpace)
 
   return (
     <div className="flex flex-wrap gap-1.5">
       {actions.map((action) => (
         <button
           key={action.label}
-          onClick={() => !disabled && onSend(action.prompt)}
+          onClick={() => !disabled && onAction(action)}
           disabled={disabled}
-          className="px-2.5 py-1 text-2xs font-medium text-text-secondary bg-surface-2 border border-border rounded-full hover:bg-surface-3 hover:border-border-hover hover:text-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+          className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-border-hover hover:bg-surface-3 hover:text-text-primary disabled:pointer-events-none disabled:opacity-40"
         >
           {action.label}
         </button>

@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Play, Pause, Search, Music2, Sparkles, X, ArrowRight, Headphones, AlertCircle, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Play, Pause, Search, Music2, AlertCircle, RotateCcw } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
+import { SongActionModal } from '@/components/score'
 import { youtubeService, type YoutubeSearchResult } from '@/services/youtubeService'
 import type { YoutubeResult } from '@/data/mockSearchResults'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { useTaskStore } from '@/stores/taskStore'
+import { useAgentStore } from '@/stores/agentStore'
 
 // Gradient palette for results without thumbnails
 const GRADIENTS = [
@@ -42,14 +44,23 @@ function toYoutubeResult(r: YoutubeSearchResult, idx: number): YoutubeResult {
 export function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { requireAuth } = useRequireAuth()
+  const addTask = useTaskStore((s) => s.addTask)
+  const setSpaceContext = useAgentStore((s) => s.setSpaceContext)
   const query = searchParams.get('q') ?? ''
+  const shouldAutoOpenRandomResult = searchParams.get('open') === 'random'
   const chatRef = useRef<ChatInputRef>(null)
+  const hasAutoOpenedRandomRef = useRef(false)
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<YoutubeResult[]>([])
   const [error, setError] = useState<string | null>(null)
   const [selectedResult, setSelectedResult] = useState<YoutubeResult | null>(null)
 
   // Keep ChatInput value in sync with the URL query
+  useEffect(() => {
+    setSpaceContext({ currentSpace: 'home' })
+  }, [setSpaceContext])
+
   useEffect(() => {
     chatRef.current?.setValue(query)
   }, [query])
@@ -67,6 +78,8 @@ export function SearchResultsPage() {
       setResults([])
       return
     }
+
+    hasAutoOpenedRandomRef.current = false
 
     let cancelled = false
     setIsLoading(true)
@@ -87,6 +100,18 @@ export function SearchResultsPage() {
 
     return () => { cancelled = true }
   }, [query])
+
+  useEffect(() => {
+    if (!shouldAutoOpenRandomResult || hasAutoOpenedRandomRef.current) return
+    if (isLoading || results.length === 0) return
+
+    hasAutoOpenedRandomRef.current = true
+    setSelectedResult(results[0])
+
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.delete('open')
+    setSearchParams(nextSearchParams, { replace: true })
+  }, [isLoading, results, searchParams, setSearchParams, shouldAutoOpenRandomResult])
 
   const handleSearch = (message: string) => {
     const trimmed = message.trim()
@@ -110,7 +135,7 @@ export function SearchResultsPage() {
     <div className="h-full overflow-y-auto">
 
       {/* ── Search input (same ChatInput as home page) ──────────── */}
-      <div className="max-w-3xl mx-auto px-6 pt-8">
+      <div className="mx-auto max-w-4xl px-6 pt-10 md:px-8 md:pt-12">
         <button
           onClick={() => navigate('/')}
           className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors mb-6"
@@ -122,12 +147,13 @@ export function SearchResultsPage() {
         <ChatInput
           ref={chatRef}
           onSend={handleSearch}
+          density="roomy"
           placeholder="Song name, artist, or paste a link..."
         />
       </div>
 
       {/* ── Results ─────────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="mx-auto max-w-6xl px-6 py-10 md:px-8 md:py-12">
         {isLoading && results.length === 0 ? (
           <SearchSkeleton />
         ) : error ? (
@@ -195,8 +221,27 @@ export function SearchResultsPage() {
       {/* ── Song Action Modal ─────────────────────────────────────── */}
       {selectedResult && (
         <SongActionModal
-          result={selectedResult}
+          open={Boolean(selectedResult)}
+          title={selectedResult.title}
+          subtitle={selectedResult.channel}
+          cover={<Thumbnail result={selectedResult} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg" />}
           onClose={() => setSelectedResult(null)}
+          onGenerate={async ({ view, arrangement }) => {
+            if (!requireAuth('AI Score Generation')) return
+
+            try {
+              const transcriptionId = await youtubeService.startAnalysis(selectedResult.id, selectedResult.title)
+              addTask(transcriptionId, selectedResult.id, selectedResult.title)
+              navigate(`/play/${transcriptionId}?generate=1&view=${view}&arrangement=${arrangement}`)
+              setSelectedResult(null)
+            } catch (err) {
+              console.error('Failed to start analysis:', err)
+            }
+          }}
+          onTrackOnly={() => {
+            navigate(`/play/${selectedResult.id}`)
+            setSelectedResult(null)
+          }}
         />
       )}
     </div>
@@ -393,127 +438,6 @@ function YtButton({ videoId }: { videoId: string }) {
       <YtIcon />
       YouTube
     </a>
-  )
-}
-
-// ─── Song Action Modal ────────────────────────────────────────────────────
-
-function SongActionModal({
-  result,
-  onClose,
-}: {
-  result: YoutubeResult
-  onClose: () => void
-}) {
-  const backdropRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
-  const { requireAuth } = useRequireAuth()
-  const addTask = useTaskStore((s) => s.addTask)
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  const handleGenerate = useCallback(async () => {
-    if (!requireAuth('AI Score Generation')) return
-    try {
-      // result.id is the YouTube video ID; transcriptionId is server-assigned
-      const transcriptionId = await youtubeService.startAnalysis(result.id, result.title)
-      addTask(transcriptionId, result.id, result.title)
-      navigate(`/play/${transcriptionId}?generate=1`)
-      onClose()
-    } catch (err) {
-      console.error('Failed to start analysis:', err)
-    }
-  }, [result.id, result.title, navigate, requireAuth, addTask, onClose])
-
-  return (
-    <div
-      ref={backdropRef}
-      onClick={(e) => e.target === backdropRef.current && onClose()}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
-    >
-      <div className="w-full sm:max-w-md bg-surface-1 border border-border rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-bottom-4 duration-200">
-
-        {/* Header — song info */}
-        <div className="relative px-5 pt-5 pb-4">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
-          >
-            <X size={16} />
-          </button>
-
-          <div className="flex items-start gap-4">
-            {result.thumbnail ? (
-              <img
-                src={result.thumbnail}
-                alt=""
-                className="w-14 h-14 rounded-lg object-cover shrink-0"
-              />
-            ) : (
-              <div className={cn('w-14 h-14 rounded-lg bg-gradient-to-br shrink-0 flex items-center justify-center', result.gradient)}>
-                <Music2 size={22} className="text-surface-0/80" />
-              </div>
-            )}
-            <div className="flex-1 min-w-0 pr-6">
-              <p className="text-base font-semibold text-text-primary leading-snug line-clamp-2">{result.title}</p>
-              <p className="text-sm text-text-muted mt-0.5">{result.channel}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="w-full h-px bg-border" />
-
-        {/* Action buttons */}
-        <div className="px-5 py-4 flex flex-col gap-3">
-
-          {/* Option A: AI Score + Backing Track — primary */}
-          <button
-            onClick={handleGenerate}
-            className="w-full flex items-start gap-4 p-4 bg-text-primary rounded-xl transition-opacity text-left hover:opacity-90"
-          >
-            <div className="w-10 h-10 rounded-full bg-surface-0/15 flex items-center justify-center shrink-0 mt-0.5">
-              <Sparkles size={18} className="text-surface-0" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-surface-0">AI Breakdown + Practice Track</p>
-              <p className="text-xs text-surface-0/60 mt-0.5 leading-relaxed">
-                Detects key & tempo · Generates chord chart & tabs · Practice-ready backing track
-              </p>
-            </div>
-            <ArrowRight size={16} className="text-surface-0/50 shrink-0 mt-1" />
-          </button>
-
-          {/* Option B: Backing track only */}
-          <button
-            onClick={() => navigate(`/play/${result.id}`)}
-            className="w-full flex items-start gap-4 p-4 bg-surface-0 border border-border hover:border-border-hover rounded-xl transition-colors text-left group"
-          >
-            <div className="w-10 h-10 rounded-full bg-surface-3 flex items-center justify-center shrink-0 group-hover:bg-surface-4 transition-colors mt-0.5">
-              <Headphones size={18} className="text-text-secondary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">Backing Track Only</p>
-              <p className="text-xs text-text-muted mt-0.5 leading-relaxed">Just the backing track · Practice with your own sheet music</p>
-            </div>
-            <ArrowRight size={16} className="text-text-muted shrink-0 mt-1" />
-          </button>
-
-        </div>
-
-        {/* Footer hint */}
-        <div className="px-5 pb-5 pt-0">
-          <p className="text-2xs text-text-muted text-center">
-            3 free AI breakdowns per month · No credit card required
-          </p>
-        </div>
-      </div>
-    </div>
   )
 }
 

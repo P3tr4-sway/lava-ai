@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { MobileHeader } from './MobileHeader'
 import { BottomNav } from './BottomNav'
@@ -11,17 +11,19 @@ import { AuthPromptModal } from '@/components/auth/AuthPromptModal'
 import { useUIStore } from '@/stores/uiStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useAgentPanelControls } from '@/hooks/useAgentPanelControls'
 import { cn } from '@/components/ui/utils'
-import { Bot } from 'lucide-react'
 import { AudioController } from '@/audio/AudioController'
 import { TaskNotifications } from '@/components/ui/TaskNotifications'
 import { PracticePlanDialog } from '@/components/calendar/PracticePlanDialog'
 import { ToastProvider } from '@/components/ui/Toast'
 import { useTaskPoller } from '@/hooks/useTaskPoller'
+import { isAgentWorkspaceEmbedded } from '@/utils/agentWorkspace'
 
 export function AppShell() {
   useTheme()
   useTaskPoller()
+  const location = useLocation()
 
   // Initialize AudioController once on mount — bridges Zustand stores → ToneEngine
   useEffect(() => {
@@ -31,10 +33,23 @@ export function AppShell() {
   }, [])
 
   const isMobile = useIsMobile()
-  const agentPanelOpen = useUIStore((s) => s.agentPanelOpen)
-  const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
+  const { canShowPanel } = useAgentPanelControls()
+  const agentPanelDesktopMode = useUIStore((s) => s.agentPanelDesktopMode)
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen)
+  const isEmbeddedWorkspace = isAgentWorkspaceEmbedded(location.search)
+
+  if (isEmbeddedWorkspace) {
+    return (
+      <ToastProvider>
+        <main className="h-screen w-screen overflow-hidden bg-surface-1">
+          <div className="h-full overflow-y-auto">
+            <Outlet />
+          </div>
+        </main>
+      </ToastProvider>
+    )
+  }
 
   return (
     <ToastProvider>
@@ -54,7 +69,7 @@ export function AppShell() {
             </div>
           </main>
           <BottomNav />
-          <AgentPanel />
+          {canShowPanel && <AgentPanel />}
           <LibraryModal />
           <OnboardingModal />
           <GuestWelcomeModal />
@@ -70,18 +85,18 @@ export function AppShell() {
               <Outlet />
             </div>
           </main>
-          <button
-            onClick={toggleAgentPanel}
-            title="AI Practice Assistant"
-            className={cn(
-              'fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-150',
-              'bg-surface-3 text-text-secondary hover:bg-surface-4 hover:text-text-primary',
-              agentPanelOpen && 'opacity-0 pointer-events-none scale-75',
-            )}
-          >
-            <Bot size={20} />
-          </button>
-          <AgentPanel />
+          {canShowPanel && (
+            <aside
+              className={cn(
+                'shrink-0 h-full overflow-hidden border-l border-border bg-surface-0 transition-[width] duration-200 ease-out',
+                agentPanelDesktopMode === 'expanded'
+                  ? 'w-[var(--agent-panel-expanded-width)]'
+                  : 'w-[var(--agent-panel-collapsed-width)]',
+              )}
+            >
+              <AgentPanel />
+            </aside>
+          )}
           <TaskNotifications />
           <PracticePlanDialog />
           <LibraryModal />

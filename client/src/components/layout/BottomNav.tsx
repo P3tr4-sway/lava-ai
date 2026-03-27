@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { User, LogIn } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useAuthStore } from '@/stores/authStore'
-import { NAV_ITEMS } from './navItems'
+import { HOME_NAV_RESET_EVENT, NAV_ITEMS } from './navItems'
 
 export function BottomNav() {
   const location = useLocation()
@@ -31,6 +31,7 @@ export function BottomNav() {
               onClick={(e) => {
                 if (isOnRoute) {
                   e.preventDefault()
+                  if (to === '/') window.dispatchEvent(new Event(HOME_NAV_RESET_EVENT))
                   if (to === '/search') window.dispatchEvent(new Event('focus-search-input'))
                 }
               }}

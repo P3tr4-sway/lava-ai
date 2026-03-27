@@ -12,10 +12,19 @@ interface ChatInputProps {
   disabled?: boolean
   /** Compact mode hides the icon toolbar (used inside the agent panel when messages exist) */
   compact?: boolean
+  density?: 'default' | 'roomy'
   placeholder?: string
+  className?: string
 }
 
-export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'Ask anything about your practice...' }, ref) {
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({
+  onSend,
+  disabled,
+  compact,
+  density = 'default',
+  placeholder = 'Ask anything about your practice...',
+  className,
+}, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -27,6 +36,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
 
   const hasContent = value.trim().length > 0
   const isActive = focused || hasContent
+  const isRoomy = density === 'roomy'
 
   const handleSend = () => {
     const trimmed = value.trim()
@@ -45,8 +55,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   return (
     <div
       className={cn(
-        'flex flex-col gap-4 bg-surface-0 border border-border rounded-2xl p-4 min-h-[80px] transition-colors',
+        'flex flex-col bg-surface-0 border border-border rounded-2xl transition-colors',
+        isRoomy ? 'gap-5 rounded-[26px] p-5 min-h-[104px]' : 'gap-4 p-4 min-h-[80px]',
         isActive && 'border-border-hover',
+        className,
       )}
     >
       {/* Text area */}
@@ -61,11 +73,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         placeholder={placeholder}
         rows={1}
         className={cn(
-          'w-full bg-transparent text-sm leading-relaxed outline-none resize-none',
+          'w-full bg-transparent outline-none resize-none',
+          isRoomy ? 'text-[15px] leading-7' : 'text-sm leading-relaxed',
           'text-text-primary placeholder:text-text-muted',
           disabled && 'opacity-50',
         )}
-        style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
+        style={{ fieldSizing: 'content', maxHeight: isRoomy ? '144px' : '120px' } as React.CSSProperties}
       />
 
       {/* Toolbar */}
@@ -85,13 +98,14 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
           onClick={handleSend}
           disabled={disabled || !hasContent}
           className={cn(
-            'flex items-center justify-center size-9 rounded-full transition-colors shrink-0',
+            'flex items-center justify-center rounded-full transition-colors shrink-0',
+            isRoomy ? 'size-11' : 'size-9',
             hasContent
               ? 'bg-text-primary text-surface-0 hover:opacity-80'
               : 'bg-surface-3 text-text-muted cursor-default',
           )}
         >
-          <ArrowUp size={16} />
+          <ArrowUp size={isRoomy ? 18 : 16} />
         </button>
       </div>
     </div>

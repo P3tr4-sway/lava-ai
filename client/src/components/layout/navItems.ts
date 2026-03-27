@@ -1,14 +1,37 @@
-import { Home, FolderOpen, Music, FilePlus2, Settings, Search, CalendarDays } from 'lucide-react'
+import { Home, FolderOpen, Settings, Search } from 'lucide-react'
+
+export const HOME_NAV_RESET_EVENT = 'lava:home-nav-reset'
+export const HOME_SECTION_QUERY_PARAM = 'tab'
+export const DEFAULT_HOME_SECTION = 'songs'
+
+export type HomeSectionId = 'songs' | 'playlists' | 'tools' | 'agent'
+
+interface HomeSectionItem {
+  id: HomeSectionId
+  label: string
+  to: string
+}
+
+export const HOME_SECTION_ITEMS: HomeSectionItem[] = [
+  { id: 'songs', label: 'Songs', to: '/?tab=songs' },
+  { id: 'tools', label: 'Tools', to: '/?tab=tools' },
+  { id: 'agent', label: 'Agent', to: '/?tab=agent' },
+]
+
+export function isHomeSectionId(value: string | null): value is HomeSectionId {
+  return value === 'songs' || value === 'playlists' || value === 'tools' || value === 'agent'
+}
+
+export function getHomeSectionFromSearch(search: string | URLSearchParams): HomeSectionId {
+  const searchParams = typeof search === 'string' ? new URLSearchParams(search) : search
+  const section = searchParams.get(HOME_SECTION_QUERY_PARAM)
+  return isHomeSectionId(section) ? section : DEFAULT_HOME_SECTION
+}
 
 export const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/search', icon: Search, label: 'Search' },
-  { to: '/tools', icon: Music, label: 'Tools' },
-  { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
-  { to: '/projects', icon: FolderOpen, label: 'My Library' },
+  { to: '/files', icon: FolderOpen, label: 'Files' },
 ]
-
-// Separate action entry — displayed below a divider in the sidebar
-export const NEW_SHEET_ITEM = { to: '/editor', icon: FilePlus2, label: 'New Chart' }
 
 export const SETTINGS_ITEM = { to: '/settings', icon: Settings, label: 'Settings' }

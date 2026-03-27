@@ -34,7 +34,7 @@ export function LibraryModal() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <Library size={18} className="text-text-secondary" />
-            <h2 className="text-base font-semibold">Library</h2>
+            <h2 className="text-base font-semibold">Files</h2>
           </div>
           <button
             onClick={closeModal}

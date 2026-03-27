@@ -7,12 +7,34 @@ interface ChatMessageProps {
   message: AgentMessage
   isStreaming?: boolean
   onChipClick?: (chip: MessageChip) => void
+  onApplyToneAction?: (messageId: string) => void
+  onUndoToneAction?: (messageId: string) => void
+  onRetryToneAction?: (messageId: string) => void
 }
 
-export function ChatMessage({ message, isStreaming, onChipClick }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  isStreaming,
+  onChipClick,
+  onApplyToneAction,
+  onUndoToneAction,
+  onRetryToneAction,
+}: ChatMessageProps) {
   const isUser = message.role === 'user'
+  const isPracticeStatus = message.subtype === 'practiceStatus'
+  const isPracticeNudge = message.subtype === 'practiceNudge'
 
   if (message.hidden) return null
+
+  if (isPracticeStatus) {
+    return (
+      <div className="flex justify-start">
+        <div className="rounded-full border border-border bg-surface-1 px-2.5 py-1 text-[11px] font-medium text-text-secondary">
+          {message.content}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={cn('flex gap-2', isUser && 'flex-row-reverse')}>
@@ -31,10 +53,12 @@ export function ChatMessage({ message, isStreaming, onChipClick }: ChatMessagePr
       <div className={cn('max-w-[80%]', isUser && 'flex flex-col items-end')}>
         <div
           className={cn(
-            'rounded px-3 py-2.5',
+            'rounded-2xl px-3 py-2.5',
             isUser
               ? 'bg-surface-3 text-sm text-text-primary leading-relaxed'
-              : 'bg-surface-2 text-text-primary border border-border',
+              : isPracticeNudge
+                ? 'bg-surface-1 text-sm text-text-primary border border-border'
+                : 'bg-surface-2 text-text-primary border border-border',
           )}
         >
           {isUser ? (
@@ -54,16 +78,52 @@ export function ChatMessage({ message, isStreaming, onChipClick }: ChatMessagePr
           )}
         </div>
         {message.chips && message.chips.length > 0 && onChipClick && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             {message.chips.map((chip) => (
               <button
                 key={chip.value}
                 onClick={() => onChipClick(chip)}
-                className="px-2.5 py-1 text-xs font-medium text-text-secondary bg-surface-2 border border-border rounded-full hover:bg-surface-3 hover:border-border-hover hover:text-text-primary transition-colors"
+                className="rounded-full border border-border bg-surface-1 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-border-hover hover:bg-surface-3 hover:text-text-primary"
               >
                 {chip.label}
               </button>
             ))}
+          </div>
+        )}
+        {message.toneAction && (
+          <div className="mt-2 rounded-2xl border border-border bg-surface-1 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Tone Preview</p>
+            <p className="mt-2 text-sm font-medium text-text-primary">{message.toneAction.summary}</p>
+            <div className="mt-2 flex flex-col gap-1">
+              {message.toneAction.changes.map((change) => (
+                <p key={change} className="text-xs text-text-secondary">
+                  {change}
+                </p>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onApplyToneAction?.(message.id)}
+                className="rounded-full bg-text-primary px-3 py-1.5 text-[11px] font-medium text-surface-0 transition-opacity hover:opacity-80"
+              >
+                {message.toneAction.state === 'applied' ? 'Applied' : 'Apply'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onUndoToneAction?.(message.id)}
+                className="rounded-full border border-border bg-surface-0 px-3 py-1.5 text-[11px] font-medium text-text-primary transition-colors hover:border-border-hover hover:bg-surface-2"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={() => onRetryToneAction?.(message.id)}
+                className="rounded-full border border-border bg-surface-0 px-3 py-1.5 text-[11px] font-medium text-text-secondary transition-colors hover:border-border-hover hover:bg-surface-2 hover:text-text-primary"
+              >
+                Try another
+              </button>
+            </div>
           </div>
         )}
       </div>

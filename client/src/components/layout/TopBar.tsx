@@ -1,9 +1,9 @@
 import { useLocation } from 'react-router-dom'
 import { Bot, ChevronRight } from 'lucide-react'
-import { useUIStore } from '@/stores/uiStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/components/ui/utils'
+import { useAgentPanelControls } from '@/hooks/useAgentPanelControls'
 
 const SPACE_LABELS: Record<string, string> = {
   '': 'Home',
@@ -21,8 +21,7 @@ const SUB_LABELS: Record<string, string> = {
 
 export function TopBar() {
   const location = useLocation()
-  const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
-  const agentPanelOpen = useUIStore((s) => s.agentPanelOpen)
+  const { canShowPanel, togglePanel, isPanelVisible } = useAgentPanelControls()
   const bpm = useAudioStore((s) => s.bpm)
   const key = useAudioStore((s) => s.key)
 
@@ -52,12 +51,12 @@ export function TopBar() {
       )}
 
       {/* Agent toggle — hidden on home page (chat is inline there) */}
-      {space && (
+      {space && canShowPanel && (
         <Button
           variant="ghost"
           size="icon"
-          onClick={toggleAgentPanel}
-          className={cn(agentPanelOpen && 'text-text-primary bg-surface-3')}
+          onClick={togglePanel}
+          className={cn(isPanelVisible && 'text-text-primary bg-surface-3')}
           title="Toggle AI Practice Assistant"
         >
           <Bot size={16} />

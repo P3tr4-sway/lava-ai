@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 type Theme = 'system' | 'light' | 'dark'
+type AgentPanelDesktopMode = 'expanded' | 'collapsed'
 
 function readTheme(): Theme {
   try {
@@ -19,8 +20,17 @@ function readSidebarCollapsed(): boolean {
   return false
 }
 
+function readAgentPanelDesktopMode(): AgentPanelDesktopMode {
+  try {
+    const v = localStorage.getItem('lava-agent-panel-mode')
+    if (v === 'expanded' || v === 'collapsed') return v
+  } catch {}
+  return 'expanded'
+}
+
 interface UIStore {
-  agentPanelOpen: boolean
+  agentPanelDesktopMode: AgentPanelDesktopMode
+  agentPanelMobileOpen: boolean
   sidebarCollapsed: boolean
   sidebarOpen: boolean
   activeModal: string | null
@@ -28,8 +38,11 @@ interface UIStore {
   authPromptOpen: boolean
   authPromptAction: string | null
 
-  toggleAgentPanel: () => void
-  setAgentPanelOpen: (open: boolean) => void
+  expandAgentPanel: () => void
+  collapseAgentPanel: () => void
+  toggleDesktopAgentPanel: () => void
+  openMobileAgentPanel: () => void
+  closeMobileAgentPanel: () => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   openModal: (id: string) => void
@@ -40,14 +53,30 @@ interface UIStore {
 }
 
 export const useUIStore = create<UIStore>((set) => ({
-  agentPanelOpen: false,
+  agentPanelDesktopMode: readAgentPanelDesktopMode(),
+  agentPanelMobileOpen: false,
   sidebarCollapsed: readSidebarCollapsed(),
   sidebarOpen: false,
   activeModal: null,
   theme: readTheme(),
 
-  toggleAgentPanel: () => set((state) => ({ agentPanelOpen: !state.agentPanelOpen })),
-  setAgentPanelOpen: (open) => set({ agentPanelOpen: open }),
+  expandAgentPanel: () => {
+    try { localStorage.setItem('lava-agent-panel-mode', 'expanded') } catch {}
+    set({ agentPanelDesktopMode: 'expanded' })
+  },
+  collapseAgentPanel: () => {
+    try { localStorage.setItem('lava-agent-panel-mode', 'collapsed') } catch {}
+    set({ agentPanelDesktopMode: 'collapsed' })
+  },
+  toggleDesktopAgentPanel: () =>
+    set((state) => {
+      const next = state.agentPanelDesktopMode === 'expanded' ? 'collapsed' : 'expanded'
+      // 桌面端记住用户的展开/缩小选择，跨页面保持一致。
+      try { localStorage.setItem('lava-agent-panel-mode', next) } catch {}
+      return { agentPanelDesktopMode: next }
+    }),
+  openMobileAgentPanel: () => set({ agentPanelMobileOpen: true }),
+  closeMobileAgentPanel: () => set({ agentPanelMobileOpen: false }),
   toggleSidebar: () =>
     set((state) => {
       const next = !state.sidebarCollapsed
@@ -67,3 +96,5 @@ export const useUIStore = create<UIStore>((set) => ({
   openAuthPrompt: (action) => set({ authPromptOpen: true, authPromptAction: action ?? null }),
   closeAuthPrompt: () => set({ authPromptOpen: false, authPromptAction: null }),
 }))
+
+export type { AgentPanelDesktopMode }

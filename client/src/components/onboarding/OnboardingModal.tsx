@@ -15,7 +15,7 @@ const SKILL_OPTIONS: { value: SkillLevel; label: string; icon: typeof Star }[] =
 
 const FIRST_ACTIONS = [
   { label: 'Practice a Song', icon: Music, path: '/' },
-  { label: 'Open Play Center', icon: Mic, path: '/tools' },
+  { label: 'Open Play Center', icon: Mic, path: '/?tab=tools' },
   { label: 'Create a Chart', icon: FilePlus2, path: '/editor' },
 ] as const
 

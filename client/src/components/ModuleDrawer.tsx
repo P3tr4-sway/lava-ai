@@ -7,7 +7,7 @@ import type { SpaceType } from '@lava/shared'
 
 const MODULE_ROUTES: Partial<Record<SpaceType, string>> = {
   learn: '/learn',
-  jam: '/tools',
+  jam: '/?tab=tools',
   create: '/create',
 }
 

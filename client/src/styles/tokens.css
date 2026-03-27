@@ -25,6 +25,8 @@
   --sidebar-collapsed-width: 56px;
   --topbar-height: 48px;
   --agent-panel-width: 360px;
+  --agent-panel-expanded-width: 380px;
+  --agent-panel-collapsed-width: 144px;
 
   --bottom-nav-height: 56px;
 

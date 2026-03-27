@@ -76,7 +76,10 @@ export function CreatePage() {
               <p className="text-xs text-text-muted mb-4">
                 Add tracks or ask LAVA AI to generate musical ideas
               </p>
-              <SpaceAgentInput placeholder="Describe what you want to create, or ask anything..." />
+              <SpaceAgentInput
+                density="roomy"
+                placeholder="Describe what you want to create, or ask anything..."
+              />
             </Card>
           </div>
         </div>

@@ -3,7 +3,6 @@ import { AppShell } from '@/components/layout/AppShell'
 import { HomePage } from '@/spaces/home/HomePage'
 import { SongsPage } from '@/spaces/learn/SongsPage'
 import { JamPage } from '@/spaces/jam/JamPage'
-import { PlayHubPage } from '@/spaces/jam/PlayHubPage'
 import { TonePage } from '@/spaces/jam/TonePage'
 import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
 import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
@@ -13,6 +12,7 @@ import { CalendarPage } from '@/spaces/calendar/CalendarPage'
 import { PricingPage } from '@/spaces/pricing/PricingPage'
 import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
+import { LibraryPage } from '@/spaces/library/LibraryPage'
 
 const routes: RouteObject[] = [
   // Auth pages — outside AppShell
@@ -29,7 +29,7 @@ const routes: RouteObject[] = [
       // Legacy routes → redirect to new player
       { path: 'learn/songs/:id', element: <SongsPage /> },
       // Jam / free play
-      { path: 'tools', element: <PlayHubPage /> },
+      { path: 'tools', element: <Navigate to="/?tab=tools" replace /> },
       { path: 'tools/new', element: <TonePage /> },
       { path: 'tools/:id', element: <JamPage /> },
       // Lead Sheet editor — blank project
@@ -37,6 +37,7 @@ const routes: RouteObject[] = [
       { path: 'editor/:id', element: <LeadSheetPage /> },
       // Projects
       { path: 'projects', element: <MyProjectsPage /> },
+      { path: 'files', element: <LibraryPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       // Search
       { path: 'search', element: <SearchResultsPage /> },
@@ -46,7 +47,8 @@ const routes: RouteObject[] = [
       // Redirects for removed pages
       { path: 'learn', element: <Navigate to="/" replace /> },
       { path: 'create', element: <Navigate to="/" replace /> },
-      { path: 'library', element: <Navigate to="/projects" replace /> },
+      { path: 'library', element: <Navigate to="/files" replace /> },
+      { path: 'chord-charts', element: <Navigate to="/files" replace /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

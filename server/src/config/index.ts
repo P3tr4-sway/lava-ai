@@ -16,4 +16,5 @@ export const config = {
   tencentVodChatBaseUrl: env.TENCENT_VOD_CHAT_BASE_URL,
   databaseUrl: env.DATABASE_URL,
   clientOrigin: env.CLIENT_ORIGIN,
+  chordMiniAppUrl: env.CHORD_MINI_APP_URL,
 } as const

@@ -4,9 +4,9 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
 import { HomePage } from '@/spaces/home/HomePage'
+import { PackPage } from '@/spaces/pack/PackPage'
 
 // Lazy placeholders — will be replaced in later tasks
-const PackPageStub = () => <div className="p-8 text-text-primary">Pack page stub</div>
 const MySongsPageStub = () => <div className="p-8 text-text-primary">My Songs stub</div>
 const ProfilePageStub = () => <div className="p-8 text-text-primary">Profile stub</div>
 
@@ -17,14 +17,13 @@ const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: 'pack/:id', element: <PackPageStub /> },
+      { path: 'pack/:id', element: <PackPage /> },
       { path: 'songs', element: <MySongsPageStub /> },
       { path: 'profile', element: <ProfilePageStub /> },
       // Redirects for removed routes
       { path: 'settings', element: <Navigate to="/profile" replace /> },
-      // play/:id needs a component to read the param and redirect to /pack/:id
+      // play/:id redirects to /pack/:id
       { path: 'play/:id', lazy: async () => {
-        // @ts-expect-error — PlayRedirect does not exist yet; will be created in a later task
         const { PlayRedirect } = await import('@/spaces/pack/PlayRedirect')
         return { Component: PlayRedirect }
       }},

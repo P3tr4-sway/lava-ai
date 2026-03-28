@@ -91,9 +91,9 @@ export function EditorToolbar({
       />
       <span
         className="min-w-[3rem] px-1.5 text-center text-xs font-mono text-text-secondary"
-        title="Tempo"
+        title="Tempo (BPM)"
       >
-        {bpm}
+        {bpm} BPM
       </span>
 
       <Divider />

@@ -29,9 +29,6 @@ interface EditorStore {
   pushUndo: (snapshot: string) => void
   undo: () => string | null
   redo: () => string | null
-  canUndo: () => boolean
-  canRedo: () => boolean
-
   // Panels
   chatPanelWidth: number
   setChatPanelWidth: (width: number) => void
@@ -103,9 +100,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })
     return snapshot
   },
-  canUndo: () => get().undoStack.length > 0,
-  canRedo: () => get().redoStack.length > 0,
-
   // Panels
   chatPanelWidth: 380,
   setChatPanelWidth: (width) =>

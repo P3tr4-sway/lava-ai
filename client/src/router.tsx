@@ -1,54 +1,35 @@
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import type { RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
-import { HomePage } from '@/spaces/home/HomePage'
-import { SongsPage } from '@/spaces/learn/SongsPage'
-import { JamPage } from '@/spaces/jam/JamPage'
-import { TonePage } from '@/spaces/jam/TonePage'
-import { MyProjectsPage } from '@/spaces/my-projects/MyProjectsPage'
-import { SearchResultsPage } from '@/spaces/search/SearchResultsPage'
-import { LeadSheetPage } from '@/spaces/editor/LeadSheetPage'
-import { SettingsPage } from '@/spaces/settings/SettingsPage'
-import { CalendarPage } from '@/spaces/calendar/CalendarPage'
-import { PricingPage } from '@/spaces/pricing/PricingPage'
 import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
-import { LibraryPage } from '@/spaces/library/LibraryPage'
+import { HomePage } from '@/spaces/home/HomePage'
+
+// Lazy placeholders — will be replaced in later tasks
+const PackPageStub = () => <div className="p-8 text-text-primary">Pack page stub</div>
+const MySongsPageStub = () => <div className="p-8 text-text-primary">My Songs stub</div>
+const ProfilePageStub = () => <div className="p-8 text-text-primary">Profile stub</div>
 
 const routes: RouteObject[] = [
-  // Auth pages — outside AppShell
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
-  // App — inside AppShell (auth-gated)
   {
-    path: '/',
     element: <AppShell />,
     children: [
       { index: true, element: <HomePage /> },
-      // Player — unified score + accompaniment
-      { path: 'play/:id', element: <SongsPage /> },
-      // Legacy routes → redirect to new player
-      { path: 'learn/songs/:id', element: <SongsPage /> },
-      // Jam / free play
-      { path: 'tools', element: <Navigate to="/?tab=tools" replace /> },
-      { path: 'tools/new', element: <TonePage /> },
-      { path: 'tools/:id', element: <JamPage /> },
-      // Lead Sheet editor — blank project
-      { path: 'editor', element: <LeadSheetPage /> },
-      { path: 'editor/:id', element: <LeadSheetPage /> },
-      // Projects
-      { path: 'projects', element: <MyProjectsPage /> },
-      { path: 'files', element: <LibraryPage /> },
-      { path: 'calendar', element: <CalendarPage /> },
-      // Search
-      { path: 'search', element: <SearchResultsPage /> },
-      // Settings & Pricing
-      { path: 'settings', element: <SettingsPage /> },
-      { path: 'pricing', element: <PricingPage /> },
-      // Redirects for removed pages
-      { path: 'learn', element: <Navigate to="/" replace /> },
-      { path: 'create', element: <Navigate to="/" replace /> },
-      { path: 'library', element: <Navigate to="/files" replace /> },
-      { path: 'chord-charts', element: <Navigate to="/files" replace /> },
+      { path: 'pack/:id', element: <PackPageStub /> },
+      { path: 'songs', element: <MySongsPageStub /> },
+      { path: 'profile', element: <ProfilePageStub /> },
+      // Redirects for removed routes
+      { path: 'settings', element: <Navigate to="/profile" replace /> },
+      // play/:id needs a component to read the param and redirect to /pack/:id
+      { path: 'play/:id', lazy: async () => {
+        // @ts-expect-error — PlayRedirect does not exist yet; will be created in a later task
+        const { PlayRedirect } = await import('@/spaces/pack/PlayRedirect')
+        return { Component: PlayRedirect }
+      }},
+      { path: 'projects', element: <Navigate to="/songs" replace /> },
+      { path: 'files', element: <Navigate to="/songs" replace /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

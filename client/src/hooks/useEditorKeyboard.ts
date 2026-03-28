@@ -1,13 +1,8 @@
 import { useEffect } from 'react'
+import { useAudioStore } from '@/stores/audioStore'
 import { useEditorStore } from '@/stores/editorStore'
 
-interface UseEditorKeyboardOptions {
-  onPlayPause: () => void
-  onDeleteBars: () => void
-  enabled?: boolean
-}
-
-export function useEditorKeyboard({ onPlayPause, onDeleteBars, enabled = true }: UseEditorKeyboardOptions) {
+export function useEditorKeyboard(enabled = true): void {
   useEffect(() => {
     if (!enabled) return
 
@@ -20,7 +15,12 @@ export function useEditorKeyboard({ onPlayPause, onDeleteBars, enabled = true }:
 
       if (e.key === ' ') {
         e.preventDefault()
-        onPlayPause()
+        const { playbackState, setPlaybackState } = useAudioStore.getState()
+        if (playbackState === 'playing') {
+          setPlaybackState('paused')
+        } else {
+          setPlaybackState('playing')
+        }
         return
       }
 
@@ -51,7 +51,7 @@ export function useEditorKeyboard({ onPlayPause, onDeleteBars, enabled = true }:
         const selected = useEditorStore.getState().selectedBars
         if (selected.length > 0) {
           e.preventDefault()
-          onDeleteBars()
+          useEditorStore.getState().clearSelection()
         }
         return
       }
@@ -74,5 +74,5 @@ export function useEditorKeyboard({ onPlayPause, onDeleteBars, enabled = true }:
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [enabled, onPlayPause, onDeleteBars])
+  }, [enabled])
 }

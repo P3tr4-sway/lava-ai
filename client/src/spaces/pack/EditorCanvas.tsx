@@ -44,16 +44,13 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const selectBar = useEditorStore((s) => s.selectBar)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
-  const setKey = useLeadSheetStore((s) => s.setKey)
-  const setTimeSignature = useLeadSheetStore((s) => s.setTimeSignature)
-
   const [popover, setPopover] = useState<PopoverState | null>(null)
 
   // Initialize OSMD
   useEffect(() => {
     if (!containerRef.current) return
     const osmd = new OpenSheetMusicDisplay(containerRef.current, {
-      autoResize: true,
+      autoResize: false,
       drawTitle: false,
       drawComposer: false,
       drawCredits: false,
@@ -63,6 +60,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       osmd.render()
     })
     return () => {
+      osmdRef.current?.clear()
       osmdRef.current = null
     }
   }, [])
@@ -119,21 +117,30 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     [toolMode, selectBar, clearSelection],
   )
 
-  function handleChordSelect(_chord: { root: string; quality: string }) {
-    // TODO: Apply chord to selected bar in MusicXML via leadSheetStore
-    setPopover(null)
-  }
+  const handleChordSelect = useCallback(
+    (_chord: { root: string; quality: string }) => {
+      // TODO: Apply chord to selected bar in MusicXML via leadSheetStore
+      setPopover(null)
+    },
+    [],
+  )
 
-  function handleKeySigSelect(keySig: { key: string; mode: 'major' | 'minor'; timeSig: string }) {
-    setKey(keySig.key)
-    setTimeSignature(keySig.timeSig)
-    setPopover(null)
-  }
+  const handleKeySigSelect = useCallback(
+    (keySig: { key: string; mode: 'major' | 'minor'; timeSig: string }) => {
+      useLeadSheetStore.getState().setKey(keySig.key)
+      useLeadSheetStore.getState().setTimeSignature(keySig.timeSig)
+      setPopover(null)
+    },
+    [],
+  )
 
-  function handleTextSubmit(_text: string) {
-    // TODO: Attach annotation to selected bar
-    setPopover(null)
-  }
+  const handleTextSubmit = useCallback(
+    (_text: string) => {
+      // TODO: Attach annotation to selected bar
+      setPopover(null)
+    },
+    [],
+  )
 
   return (
     <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>
@@ -141,7 +148,6 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         ref={containerRef}
         onClick={handleCanvasClick}
         className="min-h-full p-6"
-        style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }}
       />
 
       {popover?.type === 'chord' && (

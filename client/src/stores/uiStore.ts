@@ -16,7 +16,7 @@ function readSidebarCollapsed(): boolean {
     if (v === 'true') return true
     if (v === 'false') return false
   } catch {}
-  return false
+  return true // default: icon-only collapsed
 }
 
 interface UIStore {

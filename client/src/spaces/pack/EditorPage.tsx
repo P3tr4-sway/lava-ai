@@ -33,7 +33,7 @@ export function EditorPage() {
     })
   }, [id, projectName])
 
-  // Seed DAW tracks on mount if empty
+  // Re-seed DAW tracks whenever the store is empty (also covers mount)
   useEffect(() => {
     if (tracks.length === 0) {
       useDawPanelStore.getState().addTrack()

@@ -19,7 +19,7 @@ export function ChordPopover({ position, currentChord, onSelect, onClose, classN
 
   useEffect(() => {
     if (!currentChord) return
-    const roots = ['C♯', 'D♯', 'F♯', 'G♯', 'A♯', 'D♭', 'E♭', 'A♭', 'B♭', 'C', 'D', 'E', 'F', 'G', 'A', 'B']
+    const roots = [...ROOTS].sort((a, b) => b.length - a.length)
     const foundRoot = roots.find((r) => currentChord.startsWith(r))
     if (foundRoot) {
       setSelectedRoot(foundRoot)

@@ -3,7 +3,7 @@ import { cn } from '@/components/ui/utils'
 
 interface TextAnnotationInputProps {
   position: { x: number; y: number }
-  defaultValue?: string
+  initialValue?: string
   onSubmit: (text: string) => void
   onCancel: () => void
   className?: string
@@ -11,7 +11,7 @@ interface TextAnnotationInputProps {
 
 export function TextAnnotationInput({
   position,
-  defaultValue = '',
+  initialValue = '',
   onSubmit,
   onCancel,
   className,
@@ -25,9 +25,8 @@ export function TextAnnotationInput({
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') {
-      const val = inputRef.current?.value.trim()
-      if (val) onSubmit(val)
-      else onCancel()
+      const val = inputRef.current?.value.trim() ?? ''
+      onSubmit(val)
     }
     if (e.key === 'Escape') onCancel()
   }
@@ -42,7 +41,7 @@ export function TextAnnotationInput({
     >
       <input
         ref={inputRef}
-        defaultValue={defaultValue}
+        defaultValue={initialValue}
         onKeyDown={handleKeyDown}
         onBlur={onCancel}
         className="h-7 w-48 rounded border border-border bg-surface-0 px-2 text-sm text-text-primary shadow-lg outline-none focus:border-border-hover"

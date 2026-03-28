@@ -5,9 +5,9 @@ const ROOTS = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A�
 const QUALITIES = ['maj', 'min', '7', 'maj7', 'min7', 'dim', 'aug', 'sus2', 'sus4'] as const
 
 interface ChordPopoverProps {
-  position: { x: number; y: number }
+  position?: { x: number; y: number }
   currentChord?: string
-  onSelect: (chord: string) => void
+  onSelect: (chord: { root: string; quality: string }) => void
   onClose: () => void
   className?: string
 }
@@ -15,6 +15,7 @@ interface ChordPopoverProps {
 export function ChordPopover({ position, currentChord, onSelect, onClose, className }: ChordPopoverProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [selectedRoot, setSelectedRoot] = useState('')
+  const [selectedQuality, setSelectedQuality] = useState('')
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -36,9 +37,9 @@ export function ChordPopover({ position, currentChord, onSelect, onClose, classN
   }
 
   function handleQualityClick(quality: string) {
+    setSelectedQuality(quality)
     const root = selectedRoot || 'C'
-    const chord = quality === 'maj' ? root : `${root}${quality}`
-    onSelect(chord)
+    onSelect({ root, quality })
   }
 
   return (
@@ -48,7 +49,7 @@ export function ChordPopover({ position, currentChord, onSelect, onClose, classN
         'absolute z-50 rounded-lg border border-border bg-surface-0 p-3 shadow-lg animate-fade-in',
         className,
       )}
-      style={{ left: position.x, top: position.y }}
+      style={position ? { left: position.x, top: position.y } : undefined}
     >
       <div className="mb-2 text-xs font-medium text-text-muted">Root</div>
       <div className="mb-3 grid grid-cols-6 gap-1">
@@ -74,7 +75,12 @@ export function ChordPopover({ position, currentChord, onSelect, onClose, classN
           <button
             key={q}
             onClick={() => handleQualityClick(q)}
-            className="rounded px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+            className={cn(
+              'rounded px-2 py-1 text-xs font-medium transition-colors',
+              selectedQuality === q
+                ? 'bg-surface-3 text-accent'
+                : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
+            )}
           >
             {q}
           </button>

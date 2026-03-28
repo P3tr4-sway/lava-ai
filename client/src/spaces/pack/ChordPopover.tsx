@@ -14,8 +14,19 @@ interface ChordPopoverProps {
 
 export function ChordPopover({ position, currentChord, onSelect, onClose, className }: ChordPopoverProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const [selectedRoot, setSelectedRoot] = useState('')
+  const [selectedRoot, setSelectedRoot] = useState('C')
   const [selectedQuality, setSelectedQuality] = useState('')
+
+  useEffect(() => {
+    if (!currentChord) return
+    const roots = ['C♯', 'D♯', 'F♯', 'G♯', 'A♯', 'D♭', 'E♭', 'A♭', 'B♭', 'C', 'D', 'E', 'F', 'G', 'A', 'B']
+    const foundRoot = roots.find((r) => currentChord.startsWith(r))
+    if (foundRoot) {
+      setSelectedRoot(foundRoot)
+      const rest = currentChord.slice(foundRoot.length)
+      if (rest) setSelectedQuality(rest)
+    }
+  }, [currentChord])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -38,8 +49,7 @@ export function ChordPopover({ position, currentChord, onSelect, onClose, classN
 
   function handleQualityClick(quality: string) {
     setSelectedQuality(quality)
-    const root = selectedRoot || 'C'
-    onSelect({ root, quality })
+    onSelect({ root: selectedRoot, quality })
   }
 
   return (

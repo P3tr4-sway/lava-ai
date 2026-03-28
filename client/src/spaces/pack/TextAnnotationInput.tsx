@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+
 import { cn } from '@/components/ui/utils'
 
 interface TextAnnotationInputProps {
@@ -17,6 +18,7 @@ export function TextAnnotationInput({
   className,
 }: TextAnnotationInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const submittedRef = useRef(false)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -25,10 +27,19 @@ export function TextAnnotationInput({
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') {
+      e.preventDefault()
+      submittedRef.current = true
       const val = inputRef.current?.value.trim() ?? ''
       onSubmit(val)
+    } else if (e.key === 'Escape') {
+      onCancel()
     }
-    if (e.key === 'Escape') onCancel()
+  }
+
+  function handleBlur() {
+    if (!submittedRef.current) {
+      onCancel()
+    }
   }
 
   return (
@@ -43,7 +54,7 @@ export function TextAnnotationInput({
         ref={inputRef}
         defaultValue={initialValue}
         onKeyDown={handleKeyDown}
-        onBlur={onCancel}
+        onBlur={handleBlur}
         className="h-7 w-48 rounded border border-border bg-surface-0 px-2 text-sm text-text-primary shadow-lg outline-none focus:border-border-hover"
         placeholder="Add annotation..."
       />

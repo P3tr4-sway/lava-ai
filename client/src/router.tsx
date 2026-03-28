@@ -4,7 +4,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
 import { HomePage } from '@/spaces/home/HomePage'
-import { PackPage } from '@/spaces/pack/PackPage'
+import { EditorPage } from '@/spaces/pack/EditorPage'
 import { MySongsPage } from '@/spaces/songs/MySongsPage'
 import { ProfilePage } from '@/spaces/profile/ProfilePage'
 
@@ -15,7 +15,7 @@ const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: 'pack/:id', element: <PackPage /> },
+      { path: 'pack/:id', element: <EditorPage /> },
       { path: 'songs', element: <MySongsPage /> },
       { path: 'profile', element: <ProfilePage /> },
       // Redirects for removed routes

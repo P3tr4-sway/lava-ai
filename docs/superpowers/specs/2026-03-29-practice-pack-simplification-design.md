@@ -23,14 +23,16 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
 
 ## Pages
 
-4 pages total. Down from 13 spaces / 20+ routes.
+4 pages total (plus auth pages preserved as-is). Down from 11 spaces / 20+ routes.
 
 | Page | Route | Purpose |
 |------|-------|---------|
 | Home | `/` | Centered hero with chat input + file upload |
-| New (Practice Pack) | `/new/:id` | View, play, edit a completed pack |
+| Practice Pack | `/pack/:id` | View, play, edit a completed pack |
 | My Songs | `/songs` | List of saved packs |
 | Profile | `/profile` | Account + preferences |
+| Login | `/login` | Auth — preserved as-is |
+| Signup | `/signup` | Auth — preserved as-is |
 
 ---
 
@@ -79,10 +81,10 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
    - Tapping prefills the input using existing `ref.current?.setValue()` pattern
 5. **Loading state** — after submit, input area transforms into progress indicator
    - Animated states: "Analyzing your song..." → "Creating arrangement..." → "Building practice pack..."
-   - Auto-redirects to `/new/:id` when complete
+   - Auto-redirects to `/pack/:id` when complete
 6. **Recent packs** — "Recent" heading with horizontal row of pack cards
    - Each card: thumbnail + song title + style badge
-   - Click → `/new/:id`
+   - Click → `/pack/:id`
    - Empty state: "Your practice packs will appear here."
 
 ### What gets removed from current HomePage
@@ -93,11 +95,13 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
 
 ---
 
-## 3. Practice Pack View ("New" page)
+## 3. Practice Pack View
 
-**Route:** `/new/:id`
+**Route:** `/pack/:id`
 
 **The core of the product.** Users spend most of their time here.
+
+**Starting point:** The existing `spaces/learn/SongsPage.tsx` (currently at `/play/:id`) is the closest analog — it already has score rendering + accompaniment playback. This page is **replaced** by the new Practice Pack view (SongsPage is removed, its useful patterns are absorbed into the new composition).
 
 ### Layout — two-zone vertical split
 
@@ -121,15 +125,18 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
 - Stacks vertically: score on top (scrollable), playback controls fixed, AI chat in collapsible bottom sheet (swipe up to chat, swipe down to minimize).
 
 ### What gets reused
-- `MetadataBar`, `PdfViewer`/score rendering, `FollowView`, `LeadSheetPlaybackBar`, `ScoreVersionRail`
+- `MetadataBar`, `PdfViewer`/score rendering, `LeadSheetPlaybackBar`
 - Agent streaming (`agentService.ts`, `useAgent` hook, `ChatInput`, `ChatMessage`)
 - `projectStore`, `leadSheetStore` for state
 
-### What's new
-- Two-zone layout composition
+### What needs new integration (not just drop-in reuse)
+- `FollowView` — exists in `LeadSheetPage` but must be wired into the new layout
+- `ScoreVersionRail` — component exists with working API (`arrangements`, `selectedArrangementId`, `onSelect`) but is not currently rendered in any page; needs integration
+- Two-zone layout composition itself
 - Export/share functionality
-- File attachment flow (upload → transcription → score)
+- File attachment flow (connecting upload → transcription → score pipeline)
 - Loading/redirect bridge from Home
+- `ChatInput` attachment button exists in UI but file upload pipeline needs client-side wiring to existing `/api/audio/upload` server route
 
 ---
 
@@ -144,7 +151,7 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
   - Song title (primary text)
   - Style badge(s) — "Simplified", "Fingerpicking", etc.
   - Date created (secondary text)
-  - Click → `/new/:id`
+  - Click → `/pack/:id`
 - **Empty state:** "No songs yet. Head home to create your first practice pack." + button to `/`
 - **Delete** — swipe on mobile, hover menu on desktop. Confirmation dialog.
 
@@ -177,14 +184,20 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
 
 ## 6. Removal Scope
 
-### Pages/Spaces removed (9 of 13)
+### Pages/Spaces removed (9 of 11)
 - `spaces/jam/` — JamPage, TonePage, tone assistant/model
 - `spaces/editor/` — LeadSheetPage (editing capability lives in Practice Pack view now)
+- `spaces/learn/` — SongsPage (replaced by Practice Pack view; useful patterns absorbed)
 - `spaces/library/` — LibraryPage
 - `spaces/calendar/` — CalendarPage
 - `spaces/search/` — SearchResultsPage
 - `spaces/my-projects/` — MyProjectsPage (replaced by My Songs)
+- `spaces/settings/` — SettingsPage (replaced by Profile page at `/profile`; `/settings` redirects to `/profile`)
 - `spaces/pricing/` — PricingPage
+
+### Pages/Spaces preserved
+- `spaces/home/` — rebuilt as new Home page
+- `spaces/auth/` — LoginPage + SignupPage preserved as-is at `/login` and `/signup`
 
 ### Components removed
 - `components/calendar/` — all 5 components
@@ -193,7 +206,8 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
 - `components/agent/HomeAgentSurface`
 - `components/agent/QuickActions`
 - `TopBar`
-- `components/onboarding/` — simplified or removed for v1
+- `components/onboarding/` — all 3 components removed for v1 (`OnboardingModal`, `GuestWelcomeModal`, `AuthPromptModal`)
+- `components/calendar/PracticePlanDialog` — currently rendered in AppShell, remove from shell
 
 ### Stores removed
 - `calendarStore`
@@ -201,10 +215,13 @@ Turn any song a user brings in into a playable, shareable Practice Pack within 3
 - `jamStore`
 - `toneStore` (unless needed for playback — evaluate during implementation)
 - `coachStore` (coaching merges into AI chat)
+- `practiceAssistStore` (practice assist merges into AI chat)
 
 ### Routes removed
 - `/tools/*`, `/editor/*`, `/files`, `/calendar`, `/search`, `/pricing`, `/projects`
-- All legacy redirects
+- `/play/:id` — replaced by `/pack/:id`
+- `/settings` — redirects to `/profile`
+- All legacy redirects (`/learn`, `/create`, `/library`, `/chord-charts`, `/learn/songs/:id`)
 
 ### Data files removed
 - `chordCharts.ts`, `backingTracks.ts`, `effectsPresets.ts`, `mockSearchResults.ts`
@@ -260,4 +277,18 @@ White bg, `border-border`, `rounded-lg`, `px-4 py-3`. Placeholder in `text-text-
 White bg, 1px `border-border`, `rounded-lg`, `p-6` internal padding.
 
 ### Key change
-**Light mode becomes the default.** Current app defaults to dark. The Simple Design System is light-first, matching the Lovart reference.
+**Light mode becomes the default.** Current app defaults to dark (via `'system'` which defers to OS). Change the initial value in `readTheme()` / `uiStore` from `'system'` to `'light'`, and ensure the CSS `:root` applies light tokens when no theme class is set. Users can still toggle to dark in Profile preferences.
+
+---
+
+## 8. Implementation Order
+
+Suggested phasing to avoid circular dependencies:
+
+1. **Router + Shell** — strip routes, rebuild AppShell with icon sidebar, wire 4 pages as stubs
+2. **Home Page** — centered hero, ChatInput with attachment, chips, loading state
+3. **Practice Pack View** — two-zone layout composing score/playback/agent components
+4. **My Songs** — list page with project CRUD
+5. **Profile** — simplified settings
+6. **Cleanup** — delete removed spaces/components/stores/data files, remove dead imports
+7. **Design system polish** — light mode default, rounded-lg, button/input/card restyling

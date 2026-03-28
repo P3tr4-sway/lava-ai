@@ -35,5 +35,4 @@ const routes: RouteObject[] = [
   },
 ]
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const router: any = createBrowserRouter(routes)
+export const router: ReturnType<typeof createBrowserRouter> = createBrowserRouter(routes)

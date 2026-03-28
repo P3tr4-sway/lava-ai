@@ -13,11 +13,11 @@ function getOutboundMessages(messages: AgentMessage[]) {
 
 function getProjectRoute(space: unknown, projectId: unknown) {
   const id = String(projectId ?? '')
-  if (!id) return '/projects'
+  if (!id) return '/songs'
 
-  if (space === 'create') return `/editor/${id}`
-  if (space === 'learn') return `/play/${id}`
-  return '/projects'
+  // All project types now open at /pack/:id
+  if (space === 'create' || space === 'learn') return `/pack/${id}`
+  return '/songs'
 }
 
 function buildWorkspacePreview(route: string, title: string, description: string, action: string): AgentWorkspacePreview {

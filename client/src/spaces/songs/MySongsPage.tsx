@@ -38,11 +38,11 @@ export function MySongsPage() {
           {filtered.map((pack) => (
             <div
               key={pack.id}
-              className="flex items-center justify-between p-4 rounded-lg border border-border bg-surface-0 hover:bg-surface-1 transition-colors group cursor-pointer"
+              className="relative flex items-center rounded-lg border border-border bg-surface-0 hover:bg-surface-1 transition-colors group"
             >
-              <div
-                className="flex flex-col gap-1 flex-1 min-w-0"
+              <button
                 onClick={() => navigate(`/pack/${pack.id}`)}
+                className="flex flex-col gap-1 flex-1 min-w-0 p-4 text-left"
               >
                 <span className="text-base font-medium text-text-primary truncate">
                   {pack.name}
@@ -50,10 +50,10 @@ export function MySongsPage() {
                 <span className="text-sm text-text-muted">
                   {new Date(pack.createdAt).toLocaleDateString()}
                 </span>
-              </div>
+              </button>
               <button
                 onClick={() => setDeleteId(pack.id)}
-                className="opacity-0 group-hover:opacity-100 p-2 text-text-muted hover:text-error transition-all flex-shrink-0"
+                className="opacity-0 group-hover:opacity-100 p-3 text-text-muted hover:text-error transition-all flex-shrink-0"
                 title="Delete"
               >
                 <Trash2 className="size-4" />

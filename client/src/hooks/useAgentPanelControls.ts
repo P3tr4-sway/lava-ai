@@ -1,22 +1,16 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { matchPath, useLocation } from 'react-router-dom'
-import { useUIStore } from '@/stores/uiStore'
 import { useIsMobile } from './useIsMobile'
 
 export function useAgentPanelControls() {
   const isMobile = useIsMobile()
   const { pathname } = useLocation()
-  const desktopMode = useUIStore((s) => s.agentPanelDesktopMode)
-  const mobileOpen = useUIStore((s) => s.agentPanelMobileOpen)
-  const expandAgentPanel = useUIStore((s) => s.expandAgentPanel)
-  const collapseAgentPanel = useUIStore((s) => s.collapseAgentPanel)
-  const toggleDesktopAgentPanel = useUIStore((s) => s.toggleDesktopAgentPanel)
-  const openMobileAgentPanel = useUIStore((s) => s.openMobileAgentPanel)
-  const closeMobileAgentPanel = useUIStore((s) => s.closeMobileAgentPanel)
+  const [desktopMode, setDesktopMode] = useState<'expanded' | 'collapsed'>('expanded')
+  const [mobileOpen, setMobileOpen] = useState(false)
+
   const canShowPanel = Boolean(
+    matchPath('/pack/:id', pathname) ||
     matchPath('/play/:id', pathname) ||
-    matchPath('/learn/songs/:id', pathname) ||
-    matchPath('/tools/new', pathname) ||
     matchPath('/editor', pathname) ||
     matchPath('/editor/:id', pathname),
   )
@@ -24,33 +18,29 @@ export function useAgentPanelControls() {
   const showPanel = useCallback(() => {
     if (!canShowPanel) return
     if (isMobile) {
-      openMobileAgentPanel()
+      setMobileOpen(true)
       return
     }
-    expandAgentPanel()
-  }, [canShowPanel, expandAgentPanel, isMobile, openMobileAgentPanel])
+    setDesktopMode('expanded')
+  }, [canShowPanel, isMobile])
 
   const hidePanel = useCallback(() => {
     if (!canShowPanel) return
     if (isMobile) {
-      closeMobileAgentPanel()
+      setMobileOpen(false)
       return
     }
-    collapseAgentPanel()
-  }, [canShowPanel, closeMobileAgentPanel, collapseAgentPanel, isMobile])
+    setDesktopMode('collapsed')
+  }, [canShowPanel, isMobile])
 
   const togglePanel = useCallback(() => {
     if (!canShowPanel) return
     if (isMobile) {
-      if (mobileOpen) {
-        closeMobileAgentPanel()
-        return
-      }
-      openMobileAgentPanel()
+      setMobileOpen((prev) => !prev)
       return
     }
-    toggleDesktopAgentPanel()
-  }, [canShowPanel, closeMobileAgentPanel, isMobile, mobileOpen, openMobileAgentPanel, toggleDesktopAgentPanel])
+    setDesktopMode((prev) => (prev === 'expanded' ? 'collapsed' : 'expanded'))
+  }, [canShowPanel, isMobile])
 
   return {
     canShowPanel,

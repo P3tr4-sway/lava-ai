@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Download, Share2, ArrowLeft } from 'lucide-react'
 import { MetadataBar, LeadSheetPlaybackBar, ScoreVersionRail, FollowView } from '@/components/score'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
@@ -9,11 +9,27 @@ import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useAgent } from '@/hooks/useAgent'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useProjectStore } from '@/stores/projectStore'
+import { projectService } from '@/services/projectService'
 import { cn } from '@/components/ui/utils'
 
 export function PackPage() {
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const isMobile = useIsMobile()
+  const setActiveProject = useProjectStore((s) => s.setActiveProject)
+  const loadFromProject = useLeadSheetStore((s) => s.loadFromProject)
+
+  useEffect(() => {
+    if (!id) return
+    projectService.get(id).then((project) => {
+      setActiveProject(project)
+      loadFromProject(project)
+    }).catch(() => {
+      // Project not found — navigate back to safety
+      navigate('/songs', { replace: true })
+    })
+  }, [id, setActiveProject, loadFromProject, navigate])
   const chatRef = useRef<ChatInputRef>(null)
 
   // Score state — leadSheetStore has individual fields, not a metadata object

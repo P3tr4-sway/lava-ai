@@ -95,6 +95,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
           barIndex,
         })
       }
+      // TODO: 'range' tool — click+drag selection; wire selectRange from editorStore
     },
     [toolMode, selectBar, clearSelection],
   )
@@ -111,6 +112,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     (keySig: { key: string; mode: 'major' | 'minor'; timeSig: string }) => {
       useLeadSheetStore.getState().setKey(keySig.key)
       useLeadSheetStore.getState().setTimeSignature(keySig.timeSig)
+      // TODO: persist keySig.mode (major/minor) once leadSheetStore exposes setMode
       setPopover(null)
     },
     [],

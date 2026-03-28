@@ -1,7 +1,7 @@
 import {
   Play, Pause, MousePointer2, BoxSelect,
   Hash, Music, Type, Undo2, Redo2,
-  Plus, Trash2, Disc3, ZoomOut, ZoomIn,
+  Plus, Trash2, Disc3, ZoomOut, ZoomIn, Layers,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore, type ToolMode, type ViewMode } from '@/stores/editorStore'
@@ -84,7 +84,7 @@ export function EditorToolbar({
   return (
     <div
       className={cn(
-        'flex items-center gap-0.5 rounded-full border border-border bg-surface-0 px-2 py-1.5 shadow-lg',
+        'absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-0.5 rounded-full border border-border bg-surface-0 px-2 py-1.5 shadow-lg',
         className,
       )}
     >
@@ -172,19 +172,16 @@ export function EditorToolbar({
 
       <Divider />
 
-      {/* View mode dropdown */}
-      <select
-        value={viewMode}
-        onChange={(e) => setViewMode(e.target.value as ViewMode)}
-        className="h-7 rounded-lg border-none bg-transparent px-1.5 text-xs text-text-secondary outline-none hover:text-text-primary"
-        aria-label="View mode"
-      >
-        {(Object.entries(VIEW_LABELS) as [ViewMode, string][]).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
+      {/* View mode */}
+      <ToolButton
+        icon={Layers}
+        label="View mode"
+        onClick={() => {
+          const modes: ViewMode[] = ['staff', 'leadSheet', 'tab']
+          const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
+          setViewMode(next)
+        }}
+      />
     </div>
   )
 }

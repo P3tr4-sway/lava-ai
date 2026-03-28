@@ -1,5 +1,5 @@
 import { useState, useRef, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
-import { ArrowUp, Image, Mic } from 'lucide-react'
+import { ArrowUp, Plus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 
 export interface ChatInputRef {
@@ -15,6 +15,7 @@ interface ChatInputProps {
   density?: 'default' | 'roomy'
   placeholder?: string
   className?: string
+  onAttachClick?: () => void
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({
@@ -24,6 +25,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   density = 'default',
   placeholder = 'Ask anything about your practice...',
   className,
+  onAttachClick,
 }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -55,13 +57,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   return (
     <div
       className={cn(
-        'flex flex-col bg-surface-0 border border-border rounded-2xl transition-colors',
-        isRoomy ? 'gap-5 rounded-[26px] p-5 min-h-[104px]' : 'gap-4 p-4 min-h-[80px]',
-        isActive && 'border-border-hover',
+        'flex flex-col bg-surface-0 border border-border shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-colors',
+        isRoomy ? 'gap-6 rounded-[28px] p-5 min-h-[132px]' : 'gap-5 rounded-[18px] p-4 min-h-[88px]',
+        isActive && 'border-[#bdbdbd]',
         className,
       )}
     >
-      {/* Text area */}
       <textarea
         ref={textareaRef}
         value={value}
@@ -73,36 +74,34 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         placeholder={placeholder}
         rows={1}
         className={cn(
-          'w-full bg-transparent outline-none resize-none',
-          isRoomy ? 'text-[15px] leading-7' : 'text-sm leading-relaxed',
-          'text-text-primary placeholder:text-text-muted',
+          'w-full resize-none bg-transparent outline-none',
+          isRoomy ? 'text-[1.18rem] leading-8' : 'text-base leading-7',
+          'text-text-primary placeholder:text-[#b4b4b4]',
           disabled && 'opacity-50',
         )}
-        style={{ fieldSizing: 'content', maxHeight: isRoomy ? '144px' : '120px' } as React.CSSProperties}
+        style={{ fieldSizing: 'content', maxHeight: isRoomy ? '176px' : '120px' } as React.CSSProperties}
       />
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        {/* Left icons */}
+      <div className="flex items-center justify-between gap-3">
         {!compact ? (
-          <div className="flex items-center gap-1">
-            <IconButton icon={Image} label="Attach image" />
-            <IconButton icon={Mic} label="Voice" />
+          <div className="flex items-center gap-1.5">
+            <IconButton icon={Plus} label="Add attachment" onClick={() => onAttachClick?.()} />
           </div>
         ) : (
           <div />
         )}
 
-        {/* Send button */}
         <button
+          type="button"
           onClick={handleSend}
           disabled={disabled || !hasContent}
+          aria-label="Send message"
           className={cn(
-            'flex items-center justify-center rounded-full transition-colors shrink-0',
-            isRoomy ? 'size-11' : 'size-9',
+            'flex shrink-0 items-center justify-center rounded-full border transition-colors',
+            isRoomy ? 'size-12' : 'size-10',
             hasContent
-              ? 'bg-text-primary text-surface-0 hover:opacity-80'
-              : 'bg-surface-3 text-text-muted cursor-default',
+              ? 'border-text-primary bg-text-primary text-surface-0 hover:opacity-85'
+              : 'cursor-default border-[#d0d0d0] bg-[#e7e7e7] text-[#aaaaaa]',
           )}
         >
           <ArrowUp size={isRoomy ? 18 : 16} />
@@ -112,14 +111,16 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   )
 })
 
-function IconButton({ icon: Icon, label }: { icon: typeof Image; label: string }) {
+function IconButton({ icon: Icon, label, onClick }: { icon: typeof Plus; label: string; onClick?: () => void }) {
   return (
     <button
       type="button"
       title={label}
-      className="flex items-center justify-center size-9 rounded-full text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
+      aria-label={label}
+      onClick={onClick}
+      className="flex size-9 items-center justify-center rounded-full text-text-primary transition-colors hover:bg-surface-1"
     >
-      <Icon size={18} />
+      <Icon size={18} strokeWidth={1.9} />
     </button>
   )
 }

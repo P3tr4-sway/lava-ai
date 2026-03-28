@@ -22,11 +22,12 @@ export function EditorChatEmptyState({ onSuggestionClick, className }: EditorCha
       <div className="flex flex-wrap justify-center gap-2">
         {SUGGESTIONS.map((s) => (
           <button
+            type="button"
             key={s.label}
             onClick={() => onSuggestionClick(s.prompt)}
             className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm text-text-secondary transition-colors hover:border-border-hover hover:bg-surface-2 hover:text-text-primary"
           >
-            <s.icon className="size-4" />
+            <s.icon className="size-4" aria-hidden="true" />
             {s.label}
           </button>
         ))}

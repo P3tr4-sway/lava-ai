@@ -40,23 +40,27 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
 
   // Resize drag handler — dragging left makes panel wider
   const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       e.preventDefault()
+      const target = e.currentTarget as HTMLElement
+      target.setPointerCapture(e.pointerId)
       setResizing(true)
       const startX = e.clientX
       const startWidth = width
 
-      function onMove(ev: MouseEvent) {
+      function onMove(ev: PointerEvent) {
         const delta = startX - ev.clientX
         setChatPanelWidth(startWidth + delta)
       }
-      function onUp() {
+      function onEnd() {
         setResizing(false)
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
+        target.removeEventListener('pointermove', onMove)
+        target.removeEventListener('pointerup', onEnd)
+        target.removeEventListener('pointercancel', onEnd)
       }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
+      target.addEventListener('pointermove', onMove)
+      target.addEventListener('pointerup', onEnd)
+      target.addEventListener('pointercancel', onEnd)
     },
     [width, setChatPanelWidth],
   )
@@ -64,10 +68,6 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
   function handleSuggestionClick(text: string) {
     chatInputRef.current?.setValue(text)
     chatInputRef.current?.focus()
-  }
-
-  function handleNewChat() {
-    clearMessages()
   }
 
   const visibleMessages = messages.filter((m) => !m.hidden)
@@ -106,7 +106,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
     >
       {/* Resize handle — left edge drag target */}
       <div
-        onMouseDown={handleResizeStart}
+        onPointerDown={handleResizeStart}
         className={cn(
           'absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-accent/20',
           resizing && 'bg-accent/20',
@@ -119,7 +119,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={handleNewChat}
+            onClick={clearMessages}
             className="flex size-7 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
             aria-label="New chat"
           >
@@ -157,7 +157,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
         {selectedBars.length > 0 && (
           <div className="mb-1.5 flex">
             <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
-              Selected: bars {Math.min(...selectedBars)}–{Math.max(...selectedBars)}
+              Selected: bars {selectedBars.reduce((a, b) => Math.min(a, b))}–{selectedBars.reduce((a, b) => Math.max(a, b))}
             </span>
           </div>
         )}

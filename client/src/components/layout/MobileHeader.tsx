@@ -1,35 +1,21 @@
+// client/src/components/layout/MobileHeader.tsx
 import { Link } from 'react-router-dom'
-import { Menu, Bot } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { LavaLogo } from './LavaLogo'
-import { useUIStore } from '@/stores/uiStore'
-import { useAgentPanelControls } from '@/hooks/useAgentPanelControls'
 
 export function MobileHeader() {
-  const setSidebarOpen = useUIStore((s) => s.setSidebarOpen)
-  const { canShowPanel, togglePanel } = useAgentPanelControls()
-
   return (
-    <header className="h-14 flex items-center px-4 gap-3 bg-surface-0 border-b border-border shrink-0 sticky top-0 z-20">
+    <header className="flex items-center justify-between px-4 h-12 border-b border-border bg-surface-0">
       <button
-        onClick={() => setSidebarOpen(true)}
-        className="p-2 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-        aria-label="Open menu"
+        className="flex items-center justify-center size-8 text-text-secondary"
+        aria-label="Menu"
       >
-        <Menu size={18} />
+        <Menu className="size-5" />
       </button>
-      <Link to="/" className="flex items-center gap-2 flex-1 min-w-0">
+      <Link to="/">
         <LavaLogo />
-        <span className="text-base font-semibold tracking-wide text-text-primary">LAVA</span>
       </Link>
-      {canShowPanel && (
-        <button
-          onClick={togglePanel}
-          className="p-2 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
-          aria-label="AI Practice Assistant"
-        >
-          <Bot size={18} />
-        </button>
-      )}
+      <div className="size-8" /> {/* Spacer for symmetry */}
     </header>
   )
 }

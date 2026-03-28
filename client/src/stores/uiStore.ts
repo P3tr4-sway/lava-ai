@@ -8,7 +8,7 @@ function readTheme(): Theme {
     const v = localStorage.getItem('lava-theme')
     if (v === 'light' || v === 'dark' || v === 'system') return v
   } catch {}
-  return 'system'
+  return 'light'
 }
 
 function readSidebarCollapsed(): boolean {

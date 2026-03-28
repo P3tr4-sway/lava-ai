@@ -5,10 +5,8 @@ import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
 import { HomePage } from '@/spaces/home/HomePage'
 import { PackPage } from '@/spaces/pack/PackPage'
-
-// Lazy placeholders — will be replaced in later tasks
-const MySongsPageStub = () => <div className="p-8 text-text-primary">My Songs stub</div>
-const ProfilePageStub = () => <div className="p-8 text-text-primary">Profile stub</div>
+import { MySongsPage } from '@/spaces/songs/MySongsPage'
+import { ProfilePage } from '@/spaces/profile/ProfilePage'
 
 const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
@@ -18,8 +16,8 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'pack/:id', element: <PackPage /> },
-      { path: 'songs', element: <MySongsPageStub /> },
-      { path: 'profile', element: <ProfilePageStub /> },
+      { path: 'songs', element: <MySongsPage /> },
+      { path: 'profile', element: <ProfilePage /> },
       // Redirects for removed routes
       { path: 'settings', element: <Navigate to="/profile" replace /> },
       // play/:id redirects to /pack/:id

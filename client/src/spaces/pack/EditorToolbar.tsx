@@ -69,8 +69,8 @@ export function EditorToolbar({
   const playbackState = useAudioStore((s) => s.playbackState)
   const bpm = useAudioStore((s) => s.bpm)
 
-  const canUndo = useEditorStore((s) => s.canUndo())
-  const canRedo = useEditorStore((s) => s.canRedo())
+  const canUndo = useEditorStore((s) => s.undoStack.length > 0)
+  const canRedo = useEditorStore((s) => s.redoStack.length > 0)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
 

@@ -76,27 +76,8 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
       if (!containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
 
-      const osmd = osmdRef.current
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const graphic = osmd?.GraphicSheet as any
-      if (!graphic) {
-        clearSelection()
-        setPopover(null)
-        return
-      }
-
-      // MeasureList is GraphicalMeasure[][] — rows per staff line
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const measures: any[][] | undefined = graphic.MeasureList
-      if (!measures || measures.length === 0) {
-        clearSelection()
-        setPopover(null)
-        return
-      }
-
-      const barIndex = findClickedMeasure(measures, e.clientX, e.clientY, rect)
+      const barIndex = findClickedMeasure(e.clientX, e.clientY)
       if (barIndex < 0) {
         clearSelection()
         setPopover(null)
@@ -106,6 +87,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       if (toolMode === 'pointer') {
         selectBar(barIndex, e.shiftKey)
       } else if (toolMode === 'chord' || toolMode === 'keySig' || toolMode === 'text') {
+        const rect = containerRef.current.getBoundingClientRect()
         selectBar(barIndex)
         setPopover({
           type: toolMode === 'chord' ? 'chord' : toolMode === 'keySig' ? 'keySig' : 'text',
@@ -176,23 +158,20 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
 }
 
 /**
- * Find which measure index was clicked using the OSMD GraphicalMeasure[][] structure.
- * MeasureList rows correspond to staves; columns correspond to measure indices.
- * We use the first staff row (index 0) since all rows share the same measure count.
+ * Find which measure index was clicked using DOM hit-testing.
+ *
+ * OSMD renders each measure as an SVG <g> element with class "vf-measure" and
+ * id set to the 1-indexed MeasureNumber (e.g. id="1", id="2", ...).
+ * Walk up the DOM from the element under the cursor until we find such a group.
  */
-function findClickedMeasure(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  measures: any[][],
-  clientX: number,
-  clientY: number,
-  containerRect: DOMRect,
-): number {
-  const firstRow = measures[0]
-  if (!firstRow || firstRow.length === 0) return -1
-
-  const totalMeasures = firstRow.length
-  const relativeX = clientX - containerRect.left
-  const barWidth = containerRect.width / totalMeasures
-  const index = Math.floor(relativeX / barWidth)
-  return index >= 0 && index < totalMeasures ? index : -1
+function findClickedMeasure(clientX: number, clientY: number): number {
+  let el = document.elementFromPoint(clientX, clientY)
+  while (el && el !== document.body) {
+    if (el.classList.contains('vf-measure')) {
+      const n = parseInt(el.id, 10)
+      if (!isNaN(n) && n > 0) return n - 1 // convert 1-indexed → 0-indexed
+    }
+    el = el.parentElement
+  }
+  return -1
 }

@@ -33,6 +33,12 @@
   --radius: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+
+  --editor-chat-width: 380px;
+  --editor-chat-min-width: 320px;
+  --editor-titlebar-height: 48px;
+  --editor-daw-collapsed-height: 40px;
+  --editor-toolbar-height: 44px;
 }
 
 /* ── Light theme ────────────────────────────────────────── */

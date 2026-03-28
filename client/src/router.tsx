@@ -11,11 +11,11 @@ import { ProfilePage } from '@/spaces/profile/ProfilePage'
 const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  { path: '/pack/:id', element: <EditorPage /> },
   {
     element: <AppShell />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: 'pack/:id', element: <EditorPage /> },
       { path: 'songs', element: <MySongsPage /> },
       { path: 'profile', element: <ProfilePage /> },
       // Redirects for removed routes

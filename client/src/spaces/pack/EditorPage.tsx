@@ -7,6 +7,7 @@ import { useDawPanelStore } from '@/stores/dawPanelStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useTheme } from '@/hooks/useTheme'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -16,6 +17,7 @@ import { CompactDawStrip } from './CompactDawStrip'
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const isMobile = useIsMobile()
+  useTheme()
 
   const projectName = useLeadSheetStore((s) => s.projectName)
   const tracks = useDawPanelStore((s) => s.tracks)

@@ -21,6 +21,10 @@ export function EditorTitleBar({ packName, onNameChange, className }: EditorTitl
     if (editing) inputRef.current?.focus()
   }, [editing])
 
+  useEffect(() => {
+    if (!editing) setDraft(packName)
+  }, [packName, editing])
+
   function commitName() {
     const trimmed = draft.trim()
     if (trimmed && trimmed !== packName) onNameChange(trimmed)
@@ -78,13 +82,12 @@ export function EditorTitleBar({ packName, onNameChange, className }: EditorTitl
         )}
         {saveStatus === 'unsaved' && (
           <>
-            <span className="size-1.5 rounded-full bg-text-muted" />
+            <span className="size-1.5 rounded-full bg-border" />
             Unsaved
           </>
         )}
       </div>
 
-      <div className="flex-1" />
     </div>
   )
 }

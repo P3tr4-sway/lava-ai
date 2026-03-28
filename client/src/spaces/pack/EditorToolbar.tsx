@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react'
 import {
   Play, Pause, MousePointer2, BoxSelect,
   Hash, Music, Type, Undo2, Redo2,
@@ -22,7 +23,7 @@ function ToolButton({
   onClick,
   label,
 }: {
-  icon: React.ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string }>
   active?: boolean
   disabled?: boolean
   onClick: () => void
@@ -50,12 +51,6 @@ function Divider() {
   return <div className="mx-0.5 h-5 w-px bg-border" />
 }
 
-const VIEW_LABELS: Record<ViewMode, string> = {
-  staff: 'Staff',
-  tab: 'Tab',
-  leadSheet: 'Lead Sheet',
-}
-
 export function EditorToolbar({
   onPlayPause,
   onAddBar,
@@ -74,8 +69,8 @@ export function EditorToolbar({
   const playbackState = useAudioStore((s) => s.playbackState)
   const bpm = useAudioStore((s) => s.bpm)
 
-  const canUndo = useEditorStore((s) => s.undoStack.length > 0)
-  const canRedo = useEditorStore((s) => s.redoStack.length > 0)
+  const canUndo = useEditorStore((s) => s.canUndo())
+  const canRedo = useEditorStore((s) => s.canRedo())
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
 
@@ -94,12 +89,12 @@ export function EditorToolbar({
         onClick={onPlayPause}
         label={isPlaying ? 'Pause' : 'Play'}
       />
-      <button
-        className="min-w-[3rem] px-1.5 text-center text-xs font-mono text-text-secondary hover:text-text-primary"
+      <span
+        className="min-w-[3rem] px-1.5 text-center text-xs font-mono text-text-secondary"
         title="Tempo"
       >
         {bpm}
-      </button>
+      </span>
 
       <Divider />
 
@@ -142,8 +137,8 @@ export function EditorToolbar({
       <Divider />
 
       {/* History */}
-      <ToolButton icon={Undo2} onClick={() => { undo() }} disabled={!canUndo} label="Undo" />
-      <ToolButton icon={Redo2} onClick={() => { redo() }} disabled={!canRedo} label="Redo" />
+      <ToolButton icon={Undo2} onClick={undo} disabled={!canUndo} label="Undo" />
+      <ToolButton icon={Redo2} onClick={redo} disabled={!canRedo} label="Redo" />
 
       <Divider />
 

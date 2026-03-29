@@ -88,6 +88,7 @@ interface LeadSheetStore {
   timeSignature: string
   sections: LeadSheetSection[]
   pdfUrl: string | null
+  musicXml: string | null
   arrangements: PlayableArrangement[]
   selectedArrangementId: ArrangementId
   scoreView: 'lead_sheet' | 'staff' | 'tab'
@@ -101,6 +102,7 @@ interface LeadSheetStore {
   setTempo: (bpm: number) => void
   setTimeSignature: (ts: string) => void
   setPdfUrl: (url: string | null) => void
+  setMusicXml: (xml: string | null) => void
   selectArrangement: (id: ArrangementId) => void
   setScoreView: (view: 'lead_sheet' | 'staff' | 'tab') => void
   openArrangementPicker: () => void
@@ -168,6 +170,7 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
   timeSignature: '4/4',
   sections: INITIAL_SECTIONS,
   pdfUrl: null,
+  musicXml: null,
   arrangements: INITIAL_ARRANGEMENTS,
   selectedArrangementId: 'original',
   scoreView: 'lead_sheet',
@@ -200,6 +203,7 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
       timeSignature,
     })),
   setPdfUrl: (pdfUrl) => set({ pdfUrl }),
+  setMusicXml: (musicXml) => set({ musicXml }),
   selectArrangement: (id) =>
     set((state) => {
       const selected = getArrangementById(state.arrangements, id)
@@ -340,6 +344,7 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
     set({
       projectName: project.name,
       pdfUrl: typeof metadata.pdfUrl === 'string' ? metadata.pdfUrl : null,
+      musicXml: typeof metadata.musicXml === 'string' ? metadata.musicXml : null,
       arrangements,
       selectedArrangementId: selected.id,
       scoreView: typeof metadata.scoreView === 'string' && ['lead_sheet', 'staff', 'tab'].includes(metadata.scoreView)
@@ -356,6 +361,7 @@ export const useLeadSheetStore = create<LeadSheetStore>((set) => ({
     set({
       projectName: 'Untitled Sheet',
       pdfUrl: null,
+      musicXml: null,
       arrangements: INITIAL_ARRANGEMENTS,
       selectedArrangementId: 'original',
       scoreView: 'lead_sheet',

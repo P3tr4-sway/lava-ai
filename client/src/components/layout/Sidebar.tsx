@@ -1,18 +1,29 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Plus, PanelLeft, PanelLeftOpen } from 'lucide-react'
 import { SIDEBAR_NAV_ITEMS, HOME_NAV_RESET_EVENT } from './navItems'
 import { LavaLogo } from './LavaLogo'
 import { useUIStore } from '@/stores/uiStore'
 import { cn } from '@/components/ui/utils'
+import { projectService } from '@/services/projectService'
 
 export function Sidebar() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const collapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
 
   const handleNavClick = (to: string) => {
     if (to === '/' && pathname === '/') {
       window.dispatchEvent(new CustomEvent(HOME_NAV_RESET_EVENT))
+    }
+  }
+
+  const handleNewPack = async () => {
+    try {
+      const project = await projectService.create({ name: 'Untitled Pack', space: 'learn', metadata: {} })
+      navigate(`/pack/${project.id}`)
+    } catch {
+      navigate('/pack/new')
     }
   }
 
@@ -44,8 +55,8 @@ export function Sidebar() {
 
       {/* ── New pack button ── */}
       <div className={cn('mb-2', collapsed ? 'px-0 flex justify-center' : 'px-3')}>
-        <Link
-          to="/"
+        <button
+          onClick={handleNewPack}
           title={collapsed ? 'New Pack' : undefined}
           className={cn(
             'flex items-center gap-2 rounded-lg bg-accent text-surface-0 hover:opacity-90 transition-opacity',
@@ -54,7 +65,7 @@ export function Sidebar() {
         >
           <Plus className="size-5 shrink-0" />
           {!collapsed && <span className="text-sm font-medium">New Pack</span>}
-        </Link>
+        </button>
       </div>
 
       {/* ── Nav items ── */}

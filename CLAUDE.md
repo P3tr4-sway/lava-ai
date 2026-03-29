@@ -1,6 +1,6 @@
 # LAVA AI — Design System Rules
 
-This file governs how AI coding agents implement Figma designs in this repository. Follow every rule here before generating any UI code.
+This file governs how AI coding agents work in this repository. Follow every rule here — not just during Figma-driven changes.
 
 ---
 
@@ -32,6 +32,8 @@ pnpm typecheck    # Type-check all workspaces
 pnpm clean        # Remove all dist/ and node_modules/
 ```
 
+Implementation plans: `docs/superpowers/plans/` (used with `superpowers:subagent-driven-development`)
+
 > `pnpm dev` runs `scripts/dev.mjs` which kills any processes on ports 3001/5173 then starts both services together.
 
 ---
@@ -58,7 +60,7 @@ Pages live in `client/src/spaces/<folder>/`. Each space maps to a route group:
 | Home | `home` | `/` | `HomePage` — search-first hero, centered `max-w-3xl pt-[22vh]` layout |
 | Play | `jam` | `/jam`, `/jam/new`, `/jam/:id` | `PlayHubPage` (hub), `TonePage` (effect pedals editor), `JamPage` (free play) |
 | Player | `learn` | `/play/:id` | `SongsPage` — score + accompaniment player |
-| Editor | `editor` | `/editor`, `/editor/:id` | `LeadSheetPage` — blank project editor |
+| Editor | `pack` | `/editor`, `/editor/:id` | `EditorPage`, `EditorCanvas`, `EditorToolbar` — lead sheet editor |
 
 New entrance/hub pages should follow the HomePage pattern: centered hero with `max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10`.
 
@@ -347,22 +349,6 @@ Use the two project animations for UI transitions:
 - Always accept and spread `className?: string` for composability
 - Export components as named exports from barrel `index.ts`
 
-```tsx
-interface MyComponentProps {
-  className?: string;
-  variant?: 'default' | 'secondary';
-  children?: React.ReactNode;
-}
-
-export function MyComponent({ className, variant = 'default', children }: MyComponentProps) {
-  return (
-    <div className={cn('...', variant === 'secondary' && '...', className)}>
-      {children}
-    </div>
-  );
-}
-```
-
 ---
 
 ## Figma Design Patterns — Component Notes
@@ -379,8 +365,67 @@ From the design file (`5kHaKzGmOD9Qr74lYmI6p5`):
 
 ---
 
+## Editor Space Internals
+
+Editor pages live in `client/src/spaces/pack/` (not `editor/`). Key files:
+- `EditorPage.tsx` — top-level; owns `handleAddBar`, `handleDeleteBars`, keyboard hook
+- `EditorCanvas.tsx` — score render + all custom event handlers + overlays
+- `EditorToolbar.tsx` — toolbar buttons and training-wheel toggles
+- `useEditorKeyboard.ts` — keyboard shortcut dispatcher (dispatches `lava-*` events)
+- `useScoreSync.ts` — DOM sync for highlights, beat markers, playhead
+
+### MusicXML Engine
+
+`@/lib/musicXmlEngine` — pure-function transforms (no side effects):
+`addBars`, `deleteBars`, `clearBars`, `copyBars`, `pasteBars`, `duplicateBars`,
+`transposeBars`, `setNotePitch`, `setNoteDuration`, `addAccidental`, `toggleTie`,
+`toggleRest`, `setLyric`, `setAnnotation`, `parseXml`, `getMeasures`
+
+### Editor Stores
+
+- `useEditorStore` — selection, toolMode, undo/redo, saveStatus, showChordDiagrams, showBeatMarkers
+- `useLeadSheetStore` — `musicXml`, `setMusicXml`
+- `useAudioStore` — `transportState`, `setCurrentBar`
+
+### Undo/Redo Pattern
+
+**Always** call `pushUndo(xml)` AFTER the engine call succeeds, inside the `try` block — never before:
+```ts
+try {
+  const newXml = engineFn(xml, ...)   // engine call first
+  pushUndo(xml)                        // then push undo
+  setMusicXml(newXml)                  // then persist
+} catch (err) { ... }
+```
+
+### Custom Event Bus
+
+Keyboard shortcuts dispatch `window.dispatchEvent(new CustomEvent('lava-*'))`. EditorCanvas registers all listeners in one `useEffect` (with cleanup). Events: `lava-pitch-step`, `lava-duration-key`, `lava-accidental`, `lava-toggle-tie`, `lava-toggle-rest`, `lava-copy`, `lava-paste`, `lava-duplicate`, `lava-transpose`, `lava-toggle-dot`, `lava-toggle-triplet`, `lava-bar-delete`, `lava-open-fretboard`, `lava-open-duration`.
+
+### Zustand Callback Pattern
+
+Always use `useStore.getState()` inside callbacks/event handlers for fresh reads — not hook subscriptions (which would be stale closures):
+```ts
+const handleFoo = useCallback(() => {
+  const { selectedBars } = useEditorStore.getState()  // ✓ fresh
+}, [])
+```
+
+### Pitch Utilities
+
+`@/lib/pitchUtils` — `Pitch { step: string; octave: number; alter?: number }`, `pitchToMidi(pitch)`, `midiToPitch(midi, preferFlat?)`, `stepDiatonic`
+
+### OSMD DOM Conventions
+
+- Measures: `.vf-measure[id="N"]` (1-indexed)
+- Notes: `#note-{barIndex}-{noteIndex}` (0-indexed bar/note)
+- Beat markers: SVG `<line class="lava-beat-marker">` injected inside measure SVG elements
+
+---
+
 ## What NOT to do
 
+- ESLint for `client/` is configured in `client/eslint.config.js` (TypeScript parser + react-hooks plugin) — do not edit the root `eslint.config.js` for client-side rules
 - Do not place static routes after dynamic `:id` routes — e.g. `/jam/new` must come before `/jam/:id` in `router.tsx`
 - Do not hardcode hex colors — always use Tailwind tokens above
 - Do not install Tailwind (already configured)

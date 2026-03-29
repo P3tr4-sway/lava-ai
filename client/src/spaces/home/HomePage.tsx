@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { HOME_NAV_RESET_EVENT } from '@/components/layout/navItems'
 import { Paperclip, X } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
 import { useProjectStore } from '@/stores/projectStore'
@@ -22,6 +23,21 @@ export function HomePage() {
   const projects = useProjectStore((s) => s.projects)
   const [phase, setPhase] = useState<SubmitPhase>('idle')
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    chatRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const handleReset = () => {
+      setPhase('idle')
+      setAttachedFile(null)
+      chatRef.current?.setValue('')
+      chatRef.current?.focus()
+    }
+    window.addEventListener(HOME_NAV_RESET_EVENT, handleReset)
+    return () => window.removeEventListener(HOME_NAV_RESET_EVENT, handleReset)
+  }, [])
 
   const handleChipClick = (style: string) => {
     chatRef.current?.setValue(`Convert to ${style.toLowerCase()} arrangement`)

@@ -3,6 +3,8 @@ import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
+import { useScoreSync } from '@/hooks/useScoreSync'
+import { ScoreOverlay } from '@/components/score/ScoreOverlay'
 import { ChordPopover } from './ChordPopover'
 import { KeySigPopover } from './KeySigPopover'
 import { TextAnnotationInput } from './TextAnnotationInput'
@@ -42,9 +44,14 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const zoom = useEditorStore((s) => s.zoom)
   const toolMode = useEditorStore((s) => s.toolMode)
   const selectBar = useEditorStore((s) => s.selectBar)
+  const selectNote = useEditorStore((s) => s.selectNote)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
+  const { syncHighlights, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
+
   const [popover, setPopover] = useState<PopoverState | null>(null)
+
+  const musicXml = useLeadSheetStore((s) => s.musicXml)
 
   // Initialize OSMD
   useEffect(() => {
@@ -56,20 +63,39 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       drawCredits: false,
     })
     osmdRef.current = osmd
-    osmd.load(EMPTY_MUSICXML).then(() => {
+    const initialXml = useLeadSheetStore.getState().musicXml ?? EMPTY_MUSICXML
+    osmd.load(initialXml).then(() => {
       osmd.render()
+      syncHighlights()
     })
     return () => {
       osmdRef.current?.clear()
       osmdRef.current = null
     }
+  // syncHighlights is stable (useCallback with stable deps)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Reload score when musicXml from store changes
+  useEffect(() => {
+    if (!musicXml || !osmdRef.current) return
+    osmdRef.current.load(musicXml).then(() => {
+      if (osmdRef.current) {
+        osmdRef.current.Zoom = zoom / 100
+        osmdRef.current.render()
+        syncHighlights()
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicXml])
 
   // Re-render on zoom change
   useEffect(() => {
     if (!osmdRef.current) return
     osmdRef.current.Zoom = zoom / 100
     osmdRef.current.render()
+    syncHighlights()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom])
 
   // Handle click on score
@@ -77,18 +103,27 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     (e: React.MouseEvent) => {
       if (!containerRef.current) return
 
-      const barIndex = findClickedMeasure(e.clientX, e.clientY)
-      if (barIndex < 0) {
+      const hit = findClickedElement(e.clientX, e.clientY)
+      if (!hit) {
         clearSelection()
         setPopover(null)
         return
       }
 
+      if (hit.type === 'note' && toolMode === 'pointer') {
+        selectNote(hit.barIndex, hit.noteIndex, e.shiftKey)
+        syncHighlights()
+        return
+      }
+
+      const barIndex = hit.barIndex
       if (toolMode === 'pointer') {
         selectBar(barIndex, e.shiftKey)
+        syncHighlights()
       } else if (toolMode === 'chord' || toolMode === 'keySig' || toolMode === 'text') {
         const rect = containerRef.current.getBoundingClientRect()
         selectBar(barIndex)
+        syncHighlights()
         setPopover({
           type: toolMode === 'chord' ? 'chord' : toolMode === 'keySig' ? 'keySig' : 'text',
           position: { x: e.clientX - rect.left, y: e.clientY - rect.top - 10 },
@@ -97,7 +132,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       }
       // TODO: 'range' tool — click+drag selection; wire selectRange from editorStore
     },
-    [toolMode, selectBar, clearSelection],
+    [toolMode, selectBar, selectNote, clearSelection, syncHighlights],
   )
 
   const handleChordSelect = useCallback(
@@ -126,6 +161,10 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     [],
   )
 
+  // Expose getMeasureBounds/getNoteBounds via data attributes for future overlay consumers
+  void getMeasureBounds
+  void getNoteBounds
+
   return (
     <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>
       <div
@@ -133,6 +172,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         onClick={handleCanvasClick}
         className="min-h-full p-6"
       />
+      <ScoreOverlay />
 
       {popover?.type === 'chord' && (
         <ChordPopover
@@ -160,20 +200,33 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
 }
 
 /**
- * Find which measure index was clicked using DOM hit-testing.
+ * Find which score element was clicked using DOM hit-testing.
  *
- * OSMD renders each measure as an SVG <g> element with class "vf-measure" and
- * id set to the 1-indexed MeasureNumber (e.g. id="1", id="2", ...).
- * Walk up the DOM from the element under the cursor until we find such a group.
+ * Checks for notes (vf-stavenote) first, then measures (vf-measure).
+ * OSMD note ids follow the pattern "note-{barIndex}-{noteIndex}" (0-indexed).
+ * OSMD measure ids are 1-indexed measure numbers.
  */
-function findClickedMeasure(clientX: number, clientY: number): number {
-  let el = document.elementFromPoint(clientX, clientY)
-  while (el && el !== document.body) {
-    if (el.classList.contains('vf-measure')) {
-      const n = parseInt(el.id, 10)
-      if (!isNaN(n) && n > 0) return n - 1 // convert 1-indexed → 0-indexed
+type ClickHit =
+  | { type: 'bar'; barIndex: number }
+  | { type: 'note'; barIndex: number; noteIndex: number }
+
+function findClickedElement(clientX: number, clientY: number): ClickHit | null {
+  const elements = document.elementsFromPoint(clientX, clientY)
+  // Walk collected elements from top to bottom — prefer notes over bars
+  let barHit: ClickHit | null = null
+  for (const el of elements) {
+    if (el.classList.contains('vf-stavenote')) {
+      const match = /^note-(\d+)-(\d+)$/.exec(el.id)
+      if (match) {
+        return { type: 'note', barIndex: parseInt(match[1], 10), noteIndex: parseInt(match[2], 10) }
+      }
     }
-    el = el.parentElement
+    if (!barHit && el.classList.contains('vf-measure')) {
+      const n = parseInt(el.id, 10)
+      if (!isNaN(n) && n > 0) {
+        barHit = { type: 'bar', barIndex: n - 1 }
+      }
+    }
   }
-  return -1
+  return barHit
 }

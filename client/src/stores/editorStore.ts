@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export type ToolMode = 'pointer' | 'range' | 'chord' | 'keySig' | 'text'
 export type ViewMode = 'staff' | 'tab' | 'leadSheet'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved'
+export type PlaybackState = 'stopped' | 'playing' | 'paused'
 
 export interface NoteRef {
   barIndex: number
@@ -56,6 +57,12 @@ interface EditorStore {
   toggleChatPanel: () => void
   dawPanelExpanded: boolean
   toggleDawPanel: () => void
+
+  // Playback position (synced from audioStore for score highlighting)
+  currentBar: number
+  playbackState: PlaybackState
+  setCurrentBar: (bar: number) => void
+  setPlaybackState: (state: PlaybackState) => void
 
   // Save
   saveStatus: SaveStatus
@@ -165,6 +172,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   toggleChatPanel: () => set((state) => ({ chatPanelCollapsed: !state.chatPanelCollapsed })),
   dawPanelExpanded: false,
   toggleDawPanel: () => set((state) => ({ dawPanelExpanded: !state.dawPanelExpanded })),
+
+  // Playback position
+  currentBar: -1,
+  playbackState: 'stopped' as PlaybackState,
+  setCurrentBar: (bar) => set({ currentBar: bar }),
+  setPlaybackState: (state) => set({ playbackState: state }),
 
   // Save
   saveStatus: 'saved',

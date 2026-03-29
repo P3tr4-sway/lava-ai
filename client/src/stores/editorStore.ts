@@ -88,7 +88,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const lo = Math.min(start, end)
     const hi = Math.max(start, end)
     for (let i = lo; i <= hi; i++) bars.push(i)
-    set({ selectedBars: bars })
+    set({ selectedBars: bars, selectedNotes: [] })
   },
   clearSelection: () => set({ selectedBars: [] }),
 

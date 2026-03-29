@@ -7,6 +7,7 @@ import { useScoreSync } from '@/hooks/useScoreSync'
 import { ScoreOverlay } from '@/components/score/ScoreOverlay'
 import { PlaybackCursor } from '@/components/score/PlaybackCursor'
 import { SelectionRect } from '@/components/score/SelectionRect'
+import { ContextPill, type ContextPillSelectionType } from '@/components/score/ContextPill'
 import { useRangeSelect } from '@/hooks/useRangeSelect'
 import { ChordPopover } from './ChordPopover'
 import { KeySigPopover } from './KeySigPopover'
@@ -49,8 +50,10 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const selectBar = useEditorStore((s) => s.selectBar)
   const selectNote = useEditorStore((s) => s.selectNote)
   const clearSelection = useEditorStore((s) => s.clearSelection)
+  const selectedBars = useEditorStore((s) => s.selectedBars)
+  const selectedNotes = useEditorStore((s) => s.selectedNotes)
 
-  const { syncHighlights, getMeasureBounds } = useScoreSync(containerRef)
+  const { syncHighlights, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
   const { selectionBox, onMouseDown, onMouseMove, onMouseUp } = useRangeSelect(
     containerRef,
     getMeasureBounds,
@@ -169,6 +172,34 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     [],
   )
 
+  // Derived selection info for ContextPill
+  const contextSelectionType: ContextPillSelectionType =
+    selectedNotes.length > 0 ? 'note' : selectedBars.length > 0 ? 'bar' : 'none'
+
+  // Get bounds of first selected bar/note for pill positioning
+  const contextBounds =
+    contextSelectionType === 'bar'
+      ? getMeasureBounds(selectedBars[0])
+      : contextSelectionType === 'note'
+        ? getNoteBounds(selectedNotes[0].barIndex, selectedNotes[0].noteIndex)
+        : null
+
+  const handleContextDelete = useCallback(() => {
+    // TODO: delete selected bars/notes via musicXmlEngine
+  }, [])
+
+  const handleContextClear = useCallback(() => {
+    // TODO: clear selected bars via musicXmlEngine
+  }, [])
+
+  const handleContextCopy = useCallback(() => {
+    // TODO: copy selected bars to clipboard
+  }, [])
+
+  const handleContextTranspose = useCallback(() => {
+    // TODO: open transpose dialog for selected notes
+  }, [])
+
   return (
     <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>
       <div
@@ -182,6 +213,14 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       <ScoreOverlay>
         <PlaybackCursor getMeasureBounds={getMeasureBounds} />
         <SelectionRect box={selectionBox} />
+        <ContextPill
+          selectionType={contextSelectionType}
+          bounds={contextBounds}
+          onDelete={handleContextDelete}
+          onClear={handleContextClear}
+          onCopy={handleContextCopy}
+          onTranspose={handleContextTranspose}
+        />
       </ScoreOverlay>
 
       {popover?.type === 'chord' && (

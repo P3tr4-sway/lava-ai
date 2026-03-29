@@ -25,6 +25,44 @@ export function useScoreSync(containerRef: RefObject<HTMLElement | null>) {
   useEditorStore((s) => s.selectedNotes)
   useEditorStore((s) => s.currentBar)
   useEditorStore((s) => s.playbackState)
+  useEditorStore((s) => s.showBeatMarkers)
+
+  const syncBeatMarkers = useCallback(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    // Remove existing beat marker lines
+    container.querySelectorAll('.lava-beat-marker, .lava-beat-marker-downbeat').forEach((el) => el.remove())
+
+    const { showBeatMarkers } = useEditorStore.getState()
+    if (!showBeatMarkers) return
+
+    const svgNS = 'http://www.w3.org/2000/svg'
+    const measureEls = container.querySelectorAll<SVGGraphicsElement>('.vf-measure')
+
+    measureEls.forEach((measureEl) => {
+      let bbox: DOMRect | SVGRect | null = null
+      try {
+        bbox = measureEl.getBBox()
+      } catch {
+        return
+      }
+      if (!bbox || bbox.width === 0) return
+
+      // Default 4 beats per bar (full time-sig awareness would require XML parsing)
+      const beats = 4
+      for (let beat = 1; beat < beats; beat++) {
+        const x = bbox.x + (beat / beats) * bbox.width
+        const line = document.createElementNS(svgNS, 'line')
+        line.setAttribute('x1', String(x))
+        line.setAttribute('y1', String(bbox.y))
+        line.setAttribute('x2', String(x))
+        line.setAttribute('y2', String(bbox.y + bbox.height))
+        line.classList.add('lava-beat-marker')
+        measureEl.appendChild(line)
+      }
+    })
+  }, [containerRef])
 
   const syncHighlights = useCallback(() => {
     const container = containerRef.current
@@ -56,7 +94,9 @@ export function useScoreSync(containerRef: RefObject<HTMLElement | null>) {
       const el = container.querySelector(`.vf-measure[id="${currentBar + 1}"]`)
       el?.classList.add('lava-bar-playing')
     }
-  }, [containerRef])
+
+    syncBeatMarkers()
+  }, [containerRef, syncBeatMarkers])
 
   const getMeasureBounds = useCallback(
     (barIndex: number): DOMRect | null => {

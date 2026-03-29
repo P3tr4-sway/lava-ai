@@ -8,10 +8,18 @@ import { ScoreOverlay } from '@/components/score/ScoreOverlay'
 import { PlaybackCursor } from '@/components/score/PlaybackCursor'
 import { SelectionRect } from '@/components/score/SelectionRect'
 import { ContextPill, type ContextPillSelectionType } from '@/components/score/ContextPill'
+import { MiniFretboard, DurationPalette, LyricInput, AnnotationInput, ChordDiagramPopover } from '@/components/score'
 import { useRangeSelect } from '@/hooks/useRangeSelect'
 import { ChordPopover } from './ChordPopover'
 import { KeySigPopover } from './KeySigPopover'
 import { TextAnnotationInput } from './TextAnnotationInput'
+import {
+  clearBars, copyBars, pasteBars, duplicateBars, transposeBars,
+  setNotePitch, setNoteDuration, addAccidental, toggleTie, toggleRest,
+  setLyric, setAnnotation,
+} from '@/lib/musicXmlEngine'
+import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
+import type { Pitch } from '@/lib/pitchUtils'
 
 // Minimal MusicXML template for empty scores
 const EMPTY_MUSICXML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -62,6 +70,13 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const [popover, setPopover] = useState<PopoverState | null>(null)
 
   const musicXml = useLeadSheetStore((s) => s.musicXml)
+
+  // Overlay state
+  const [fretboardState, setFretboardState] = useState<{ visible: boolean; x: number; y: number; midi?: number }>({ visible: false, x: 0, y: 0 })
+  const [durationState, setDurationState] = useState<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 })
+  const [lyricState, setLyricState] = useState<{ visible: boolean; x: number; y: number; barIndex: number; noteIndex: number }>({ visible: false, x: 0, y: 0, barIndex: 0, noteIndex: 0 })
+  const [annotationState, setAnnotationState] = useState<{ visible: boolean; x: number; y: number; barIndex: number }>({ visible: false, x: 0, y: 0, barIndex: 0 })
+  const [chordDiagramHover] = useState<{ visible: boolean; x: number; y: number; chordName: string }>({ visible: false, x: 0, y: 0, chordName: '' })
 
   // Initialize OSMD
   useEffect(() => {
@@ -184,21 +199,306 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         ? getNoteBounds(selectedNotes[0].barIndex, selectedNotes[0].noteIndex)
         : null
 
+  // Helper functions — no deps, defined inline
+  function getXml() {
+    return useLeadSheetStore.getState().musicXml
+  }
+  function saveXml(newXml: string) {
+    useLeadSheetStore.getState().setMusicXml(newXml)
+    useEditorStore.getState().setSaveStatus('unsaved')
+  }
+
   const handleContextDelete = useCallback(() => {
-    // TODO: delete selected bars/notes via musicXmlEngine
-  }, [])
+    const xml = getXml()
+    const { selectedNotes: notes, selectedBars: bars, pushUndo, clearSelection: clearSel } = useEditorStore.getState()
+    if (!xml) return
+    if (notes.length > 0) {
+      // Toggle each selected note to rest
+      try {
+        let newXml = xml
+        pushUndo(xml)
+        for (const { barIndex, noteIndex } of notes) {
+          newXml = toggleRest(newXml, barIndex, noteIndex)
+        }
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[handleContextDelete]', err) }
+    } else if (bars.length > 0) {
+      // No delete from store — handled by EditorPage.handleDeleteBars
+      // Just clear selection for now
+      clearSel()
+      syncHighlights()
+    }
+  }, [syncHighlights])
 
   const handleContextClear = useCallback(() => {
-    // TODO: clear selected bars via musicXmlEngine
-  }, [])
+    const xml = getXml()
+    const { selectedBars: bars, pushUndo } = useEditorStore.getState()
+    if (!xml || bars.length === 0) return
+    try {
+      const newXml = clearBars(xml, bars)
+      pushUndo(xml)
+      saveXml(newXml)
+      syncHighlights()
+    } catch (err) { console.error('[handleContextClear]', err) }
+  }, [syncHighlights])
 
   const handleContextCopy = useCallback(() => {
-    // TODO: copy selected bars to clipboard
+    const xml = getXml()
+    const { selectedBars: bars } = useEditorStore.getState()
+    if (!xml || bars.length === 0) return
+    try {
+      const fragment = copyBars(xml, bars)
+      useEditorStore.getState().setClipboard(fragment)
+    } catch (err) { console.error('[handleContextCopy]', err) }
   }, [])
 
   const handleContextTranspose = useCallback(() => {
-    // TODO: open transpose dialog for selected notes
-  }, [])
+    const xml = getXml()
+    const { selectedBars: bars, pushUndo } = useEditorStore.getState()
+    if (!xml || bars.length === 0) return
+    try {
+      const newXml = transposeBars(xml, bars, 1)
+      pushUndo(xml)
+      saveXml(newXml)
+      syncHighlights()
+    } catch (err) { console.error('[handleContextTranspose]', err) }
+  }, [syncHighlights])
+
+  // Custom keyboard event handlers dispatched from useEditorKeyboard
+  useEffect(() => {
+    function onLavaPitchStep(e: CustomEvent<{ steps: number }>) {
+      const xml = getXml()
+      const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+      if (!xml || notes.length === 0) return
+      try {
+        let newXml = xml
+        pushUndo(xml)
+        for (const { barIndex, noteIndex } of notes) {
+          const midi = pitchToMidi(midiToPitch(60)) // placeholder — will be enriched when note parse is available
+          const newPitch: Pitch = midiToPitch(Math.max(21, Math.min(108, midi + e.detail.steps)))
+          newXml = setNotePitch(newXml, barIndex, noteIndex, newPitch)
+        }
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-pitch-step]', err) }
+    }
+
+    function onLavaDurationKey(e: CustomEvent<{ key: string }>) {
+      const xml = getXml()
+      const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+      if (!xml || notes.length === 0) return
+      const map: Record<string, ['whole' | 'half' | 'quarter' | 'eighth' | '16th', number]> = {
+        '1': ['whole', 4], '2': ['half', 2], '3': ['quarter', 1], '4': ['eighth', 0.5], '5': ['16th', 0.25],
+      }
+      const dur = map[e.detail.key]
+      if (!dur) return
+      try {
+        let newXml = xml
+        pushUndo(xml)
+        for (const { barIndex, noteIndex } of notes) {
+          newXml = setNoteDuration(newXml, barIndex, noteIndex, dur[0], dur[1])
+        }
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-duration-key]', err) }
+    }
+
+    function onLavaAccidental(e: CustomEvent<{ type: 'sharp' | 'flat' | 'natural' }>) {
+      const xml = getXml()
+      const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+      if (!xml || notes.length === 0) return
+      try {
+        let newXml = xml
+        pushUndo(xml)
+        for (const { barIndex, noteIndex } of notes) {
+          newXml = addAccidental(newXml, barIndex, noteIndex, e.detail.type)
+        }
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-accidental]', err) }
+    }
+
+    function onLavaToggleTie() {
+      const xml = getXml()
+      const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+      if (!xml || notes.length === 0) return
+      try {
+        let newXml = xml
+        pushUndo(xml)
+        for (const { barIndex, noteIndex } of notes) {
+          newXml = toggleTie(newXml, barIndex, noteIndex)
+        }
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-toggle-tie]', err) }
+    }
+
+    function onLavaToggleRest() {
+      const xml = getXml()
+      const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+      if (!xml || notes.length === 0) return
+      try {
+        let newXml = xml
+        pushUndo(xml)
+        for (const { barIndex, noteIndex } of notes) {
+          newXml = toggleRest(newXml, barIndex, noteIndex)
+        }
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-toggle-rest]', err) }
+    }
+
+    function onLavaOpenFretboard() {
+      const { selectedNotes: notes } = useEditorStore.getState()
+      if (notes.length === 0) return
+      const { barIndex, noteIndex } = notes[0]
+      const bounds = getNoteBounds(barIndex, noteIndex)
+      if (bounds) {
+        setFretboardState({ visible: true, x: bounds.x, y: bounds.y - 10 })
+      }
+    }
+
+    function onLavaOpenDuration() {
+      const { selectedNotes: notes } = useEditorStore.getState()
+      if (notes.length === 0) return
+      const { barIndex, noteIndex } = notes[0]
+      const bounds = getNoteBounds(barIndex, noteIndex)
+      if (bounds) {
+        setDurationState({ visible: true, x: bounds.x, y: bounds.y - 10 })
+      }
+    }
+
+    function onLavaCopy() {
+      const xml = getXml()
+      const { selectedBars: bars } = useEditorStore.getState()
+      if (!xml || bars.length === 0) return
+      try {
+        const fragment = copyBars(xml, bars)
+        useEditorStore.getState().setClipboard(fragment)
+      } catch (err) { console.error('[lava-copy]', err) }
+    }
+
+    function onLavaPaste() {
+      const xml = getXml()
+      const { selectedBars: bars, clipboard, pushUndo } = useEditorStore.getState()
+      if (!xml || !clipboard) return
+      const afterIndex = bars.length > 0 ? Math.max(...bars) : -1
+      try {
+        const newXml = pasteBars(xml, clipboard, Math.max(afterIndex, 0))
+        pushUndo(xml)
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-paste]', err) }
+    }
+
+    function onLavaDuplicate() {
+      const xml = getXml()
+      const { selectedBars: bars, pushUndo } = useEditorStore.getState()
+      if (!xml || bars.length === 0) return
+      try {
+        const insertAfter = Math.max(...bars)
+        const newXml = duplicateBars(xml, bars, insertAfter)
+        pushUndo(xml)
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-duplicate]', err) }
+    }
+
+    function onLavaTranspose(e: CustomEvent<{ semitones: number }>) {
+      const xml = getXml()
+      const { selectedBars: bars, pushUndo } = useEditorStore.getState()
+      if (!xml || bars.length === 0) return
+      try {
+        const newXml = transposeBars(xml, bars, e.detail.semitones)
+        pushUndo(xml)
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) { console.error('[lava-transpose]', err) }
+    }
+
+    window.addEventListener('lava-pitch-step', onLavaPitchStep as EventListener)
+    window.addEventListener('lava-duration-key', onLavaDurationKey as EventListener)
+    window.addEventListener('lava-accidental', onLavaAccidental as EventListener)
+    window.addEventListener('lava-toggle-tie', onLavaToggleTie)
+    window.addEventListener('lava-toggle-rest', onLavaToggleRest)
+    window.addEventListener('lava-open-fretboard', onLavaOpenFretboard)
+    window.addEventListener('lava-open-duration', onLavaOpenDuration)
+    window.addEventListener('lava-copy', onLavaCopy)
+    window.addEventListener('lava-paste', onLavaPaste)
+    window.addEventListener('lava-duplicate', onLavaDuplicate)
+    window.addEventListener('lava-transpose', onLavaTranspose as EventListener)
+
+    return () => {
+      window.removeEventListener('lava-pitch-step', onLavaPitchStep as EventListener)
+      window.removeEventListener('lava-duration-key', onLavaDurationKey as EventListener)
+      window.removeEventListener('lava-accidental', onLavaAccidental as EventListener)
+      window.removeEventListener('lava-toggle-tie', onLavaToggleTie)
+      window.removeEventListener('lava-toggle-rest', onLavaToggleRest)
+      window.removeEventListener('lava-open-fretboard', onLavaOpenFretboard)
+      window.removeEventListener('lava-open-duration', onLavaOpenDuration)
+      window.removeEventListener('lava-copy', onLavaCopy)
+      window.removeEventListener('lava-paste', onLavaPaste)
+      window.removeEventListener('lava-duplicate', onLavaDuplicate)
+      window.removeEventListener('lava-transpose', onLavaTranspose as EventListener)
+    }
+  }, [syncHighlights, getNoteBounds])
+
+  // Overlay component handlers
+  const handleFretSelect = useCallback((midi: number) => {
+    const xml = getXml()
+    const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+    if (!xml || notes.length === 0) return
+    const { barIndex, noteIndex } = notes[0]
+    try {
+      const pitch = midiToPitch(midi)
+      const newXml = setNotePitch(xml, barIndex, noteIndex, pitch)
+      pushUndo(xml)
+      saveXml(newXml)
+      syncHighlights()
+    } catch (err) { console.error('[handleFretSelect]', err) }
+    setFretboardState((s) => ({ ...s, visible: false }))
+  }, [syncHighlights])
+
+  const handleDurationSelect = useCallback((type: 'whole' | 'half' | 'quarter' | 'eighth' | '16th', divisions: number) => {
+    const xml = getXml()
+    const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
+    if (!xml || notes.length === 0) return
+    try {
+      let newXml = xml
+      pushUndo(xml)
+      for (const { barIndex, noteIndex } of notes) {
+        newXml = setNoteDuration(newXml, barIndex, noteIndex, type, divisions)
+      }
+      saveXml(newXml)
+      syncHighlights()
+    } catch (err) { console.error('[handleDurationSelect]', err) }
+    setDurationState((s) => ({ ...s, visible: false }))
+  }, [syncHighlights])
+
+  const handleLyricSubmit = useCallback((text: string) => {
+    const xml = getXml()
+    const { barIndex, noteIndex } = lyricState
+    if (!xml) return
+    try {
+      const newXml = setLyric(xml, barIndex, noteIndex, text)
+      useEditorStore.getState().pushUndo(xml)
+      saveXml(newXml)
+    } catch (err) { console.error('[handleLyricSubmit]', err) }
+    setLyricState((s) => ({ ...s, visible: false }))
+  }, [lyricState])
+
+  const handleAnnotationSubmit = useCallback((text: string) => {
+    const xml = getXml()
+    const { barIndex } = annotationState
+    if (!xml) return
+    try {
+      const newXml = setAnnotation(xml, barIndex, text)
+      useEditorStore.getState().pushUndo(xml)
+      saveXml(newXml)
+    } catch (err) { console.error('[handleAnnotationSubmit]', err) }
+    setAnnotationState((s) => ({ ...s, visible: false }))
+  }, [annotationState])
 
   return (
     <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>
@@ -220,6 +520,42 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
           onClear={handleContextClear}
           onCopy={handleContextCopy}
           onTranspose={handleContextTranspose}
+        />
+        <MiniFretboard
+          visible={fretboardState.visible}
+          x={fretboardState.x}
+          y={fretboardState.y}
+          currentMidi={fretboardState.midi}
+          onFretSelect={handleFretSelect}
+        />
+        <DurationPalette
+          visible={durationState.visible}
+          x={durationState.x}
+          y={durationState.y}
+          onDurationSelect={handleDurationSelect}
+          onToggleDot={() => window.dispatchEvent(new CustomEvent('lava-toggle-dot'))}
+          onToggleTriplet={() => window.dispatchEvent(new CustomEvent('lava-toggle-triplet'))}
+        />
+        <LyricInput
+          visible={lyricState.visible}
+          x={lyricState.x}
+          y={lyricState.y}
+          onSubmit={handleLyricSubmit}
+          onAdvance={() => setLyricState((s) => ({ ...s, visible: false }))}
+          onDismiss={() => setLyricState((s) => ({ ...s, visible: false }))}
+        />
+        <AnnotationInput
+          visible={annotationState.visible}
+          x={annotationState.x}
+          y={annotationState.y}
+          onSubmit={handleAnnotationSubmit}
+          onDismiss={() => setAnnotationState((s) => ({ ...s, visible: false }))}
+        />
+        <ChordDiagramPopover
+          visible={chordDiagramHover.visible}
+          x={chordDiagramHover.x}
+          y={chordDiagramHover.y}
+          chordName={chordDiagramHover.chordName}
         />
       </ScoreOverlay>
 

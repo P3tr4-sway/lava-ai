@@ -20,9 +20,7 @@ function renumberMeasures(doc: Document): void {
   getMeasures(doc).forEach((m, i) => m.setAttribute('number', String(i + 1)))
 }
 
-function createRestMeasure(doc: Document, divisions: number, beats: number): Element {
-  const m = doc.createElement('measure')
-  m.setAttribute('number', '0') // will be renumbered
+function buildWholeRestNote(doc: Document, divisions: number, beats: number): Element {
   const note = doc.createElement('note')
   const rest = doc.createElement('rest')
   const dur = doc.createElement('duration')
@@ -32,7 +30,13 @@ function createRestMeasure(doc: Document, divisions: number, beats: number): Ele
   note.appendChild(rest)
   note.appendChild(dur)
   note.appendChild(type)
-  m.appendChild(note)
+  return note
+}
+
+function createRestMeasure(doc: Document, divisions: number, beats: number): Element {
+  const m = doc.createElement('measure')
+  m.setAttribute('number', '0') // will be renumbered
+  m.appendChild(buildWholeRestNote(doc, divisions, beats))
   return m
 }
 
@@ -48,13 +52,18 @@ function getTimeInfo(doc: Document): { divisions: number; beats: number } {
 export function addBars(xml: string, afterIndex: number, count: number): string {
   const doc = parseXml(xml)
   const measures = getMeasures(doc)
+  if (afterIndex < 0 || afterIndex >= measures.length) {
+    throw new RangeError(`addBars: afterIndex ${afterIndex} out of range (length ${measures.length})`)
+  }
   const { divisions, beats } = getTimeInfo(doc)
   const ref = measures[afterIndex]
   const parent = ref.parentNode!
 
+  let insertionPoint: Node | null = ref.nextSibling
   for (let i = 0; i < count; i++) {
     const newMeasure = createRestMeasure(doc, divisions, beats)
-    parent.insertBefore(newMeasure, ref.nextSibling)
+    parent.insertBefore(newMeasure, insertionPoint)
+    insertionPoint = newMeasure.nextSibling
   }
 
   renumberMeasures(doc)
@@ -87,16 +96,7 @@ export function clearBars(xml: string, barIndices: number[]): string {
     const toRemove = m.querySelectorAll('note, forward, backup, harmony, direction')
     toRemove.forEach((el) => el.parentNode!.removeChild(el))
     // Add whole rest
-    const note = doc.createElement('note')
-    const rest = doc.createElement('rest')
-    const dur = doc.createElement('duration')
-    dur.textContent = String(divisions * beats)
-    const type = doc.createElement('type')
-    type.textContent = 'whole'
-    note.appendChild(rest)
-    note.appendChild(dur)
-    note.appendChild(type)
-    m.appendChild(note)
+    m.appendChild(buildWholeRestNote(doc, divisions, beats))
   }
 
   return serializeXml(doc)

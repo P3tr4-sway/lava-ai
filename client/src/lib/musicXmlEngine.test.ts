@@ -73,6 +73,24 @@ describe('addBars', () => {
       expect(m.getAttribute('number')).toBe(String(i + 1))
     })
   })
+
+  it('adds 2 bars in forward order (first bar is immediately after reference)', () => {
+    const result = addBars(SIMPLE_XML, 0, 2)
+    const doc = parseXml(result)
+    const measures = getMeasures(doc)
+    // bar 0 stays, then 2 new rest bars, then original bars 1 and 2
+    expect(measures.length).toBe(5)
+    // measures[1] and [2] should both be whole rests
+    expect(measures[1].querySelector('rest')).not.toBeNull()
+    expect(measures[2].querySelector('rest')).not.toBeNull()
+    // measures[3] should be the original bar 2 (G whole note)
+    expect(measures[3].querySelector('pitch > step')?.textContent).toBe('G')
+  })
+
+  it('throws RangeError for out-of-range afterIndex', () => {
+    expect(() => addBars(SIMPLE_XML, 10, 1)).toThrow(RangeError)
+    expect(() => addBars(SIMPLE_XML, -1, 1)).toThrow(RangeError)
+  })
 })
 
 describe('deleteBars', () => {

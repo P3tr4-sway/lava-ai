@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useLeadSheetStore } from '@/stores/leadSheetStore'
 
 export type ToolMode = 'pointer' | 'range' | 'chord' | 'keySig' | 'text'
 export type ViewMode = 'staff' | 'tab' | 'leadSheet'
@@ -145,24 +146,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       redoStack: [],
     })),
   undo: () => {
-    const { undoStack, redoStack } = get()
-    if (undoStack.length === 0) return null
-    const snapshot = undoStack[undoStack.length - 1]
-    set({
-      undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, snapshot],
+    set((s) => {
+      if (s.undoStack.length === 0) return s
+      const currentXml = useLeadSheetStore.getState().musicXml ?? ''
+      const prevXml = s.undoStack[s.undoStack.length - 1]
+      useLeadSheetStore.getState().setMusicXml(prevXml)
+      return {
+        undoStack: s.undoStack.slice(0, -1),
+        redoStack: [...s.redoStack, currentXml],
+      }
     })
-    return snapshot
+    return null
   },
   redo: () => {
-    const { undoStack, redoStack } = get()
-    if (redoStack.length === 0) return null
-    const snapshot = redoStack[redoStack.length - 1]
-    set({
-      redoStack: redoStack.slice(0, -1),
-      undoStack: [...undoStack, snapshot],
+    set((s) => {
+      if (s.redoStack.length === 0) return s
+      const currentXml = useLeadSheetStore.getState().musicXml ?? ''
+      const nextXml = s.redoStack[s.redoStack.length - 1]
+      useLeadSheetStore.getState().setMusicXml(nextXml)
+      return {
+        redoStack: s.redoStack.slice(0, -1),
+        undoStack: [...s.undoStack, currentXml],
+      }
     })
-    return snapshot
+    return null
   },
   // Panels
   chatPanelWidth: 380,

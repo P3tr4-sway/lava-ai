@@ -47,18 +47,21 @@ export function ChordDiagram({ voicing, width = 40, height = 48, className }: Ch
         />
       )}
 
-      {/* Fret lines */}
-      {Array.from({ length: FRETS + 1 }, (_, i) => (
-        <line
-          key={`fret-${i}`}
-          x1={PAD_LEFT}
-          y1={PAD_TOP + i * fretH}
-          x2={PAD_LEFT + (STRINGS - 1) * stringW}
-          y2={PAD_TOP + i * fretH}
-          className="stroke-text-muted"
-          strokeWidth={0.5}
-        />
-      ))}
+      {/* Fret lines — skip i=0 when nut is drawn (they are coincident) */}
+      {Array.from({ length: FRETS + 1 }, (_, i) => {
+        if (i === 0 && voicing.baseFret === 1) return null
+        return (
+          <line
+            key={`fret-${i}`}
+            x1={PAD_LEFT}
+            y1={PAD_TOP + i * fretH}
+            x2={PAD_LEFT + (STRINGS - 1) * stringW}
+            y2={PAD_TOP + i * fretH}
+            className="stroke-text-muted"
+            strokeWidth={0.5}
+          />
+        )
+      })}
 
       {/* String lines */}
       {Array.from({ length: STRINGS }, (_, i) => (

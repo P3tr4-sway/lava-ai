@@ -151,6 +151,16 @@ describe('setChord', () => {
     expect(harmonies.length).toBe(1)
     expect(harmonies[0].querySelector('root > root-step')!.textContent).toBe('G')
   })
+
+  it('correctly parses B-flat chord (Bb)', () => {
+    const result = setChord(SIMPLE_XML, 0, 0, 'Bb')
+    const doc = parseXml(result)
+    const harmony = getMeasures(doc)[0].querySelector('harmony')
+    expect(harmony).not.toBeNull()
+    expect(harmony!.querySelector('root > root-step')!.textContent).toBe('B')
+    expect(harmony!.querySelector('root > root-alter')!.textContent).toBe('-1')
+    expect(harmony!.querySelector('kind')!.textContent).toBe('major')
+  })
 })
 
 describe('setKeySig', () => {

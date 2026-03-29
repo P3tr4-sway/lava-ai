@@ -113,7 +113,7 @@ function parseChordName(name: string): { rootStep: string; rootAlter: number; ki
   if (rest.startsWith('#') || rest.startsWith('♯')) {
     rootAlter = 1
     rest = rest.slice(1)
-  } else if ((rest.startsWith('b') && rest !== 'b') || rest.startsWith('♭')) {
+  } else if (rest.startsWith('b') || rest.startsWith('♭')) {
     rootAlter = -1
     rest = rest.slice(1)
   }
@@ -154,12 +154,13 @@ export function setChord(xml: string, barIndex: number, beatIndex: number, chord
   if (!m) return xml
 
   const { rootStep, rootAlter, kind } = parseChordName(chordSymbol)
+  const { divisions } = getTimeInfo(doc)
 
-  // Remove existing harmony at same offset
+  // Remove existing harmony at same beat
   const existing = m.querySelectorAll('harmony')
   existing.forEach((h) => {
     const offset = h.querySelector('offset')
-    const hBeat = offset ? Math.floor(parseInt(offset.textContent || '0', 10)) : 0
+    const hBeat = offset ? Math.round(parseInt(offset.textContent || '0', 10) / divisions) : 0
     if (hBeat === beatIndex) h.parentNode!.removeChild(h)
   })
 
@@ -180,7 +181,6 @@ export function setChord(xml: string, barIndex: number, beatIndex: number, chord
   harmony.appendChild(kindEl)
 
   if (beatIndex > 0) {
-    const { divisions } = getTimeInfo(doc)
     const offset = doc.createElement('offset')
     offset.textContent = String(beatIndex * divisions)
     harmony.appendChild(offset)

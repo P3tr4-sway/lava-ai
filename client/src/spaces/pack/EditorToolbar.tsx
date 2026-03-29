@@ -1,18 +1,19 @@
 import type { ComponentType } from 'react'
 import {
-  Play, Pause, MousePointer2, BoxSelect,
+  Play, Pause, RotateCcw, MousePointer2, BoxSelect,
   Hash, Music, Type, Undo2, Redo2,
   Plus, Trash2, Disc3, ZoomOut, ZoomIn, Layers,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
-import { useEditorStore, type ToolMode, type ViewMode } from '@/stores/editorStore'
+import { useEditorStore, type ViewMode } from '@/stores/editorStore'
 import { useAudioStore } from '@/stores/audioStore'
 
 interface EditorToolbarProps {
-  onPlayPause: () => void
   onAddBar: () => void
   onDeleteBars: () => void
   onStylePicker: () => void
+  totalBars?: number
+  beatsPerBar?: number
   className?: string
 }
 
@@ -30,20 +31,26 @@ function ToolButton({
   label: string
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={cn(
-        'flex size-8 items-center justify-center rounded-lg transition-colors',
-        active
-          ? 'bg-surface-3 text-accent'
-          : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
-        disabled && 'cursor-not-allowed opacity-40',
-      )}
-    >
-      <Icon className="size-4" />
-    </button>
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        className={cn(
+          'flex size-8 items-center justify-center rounded-lg transition-colors',
+          active
+            ? 'bg-surface-3 text-accent'
+            : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
+          disabled && 'cursor-not-allowed opacity-40',
+        )}
+      >
+        <Icon className="size-4" />
+      </button>
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-surface-4 px-2 py-0.5 text-[11px] font-medium text-accent opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+        {label}
+      </span>
+    </div>
   )
 }
 
@@ -51,11 +58,20 @@ function Divider() {
   return <div className="mx-0.5 h-5 w-px bg-border" />
 }
 
+function barsToSeconds(bar: number, bpm: number, beatsPerBar: number) {
+  return bar * beatsPerBar * (60 / bpm)
+}
+
+function isRunningState(state: string) {
+  return state !== 'stopped' && state !== 'paused' && state !== 'locating'
+}
+
 export function EditorToolbar({
-  onPlayPause,
   onAddBar,
   onDeleteBars,
   onStylePicker,
+  totalBars = 16,
+  beatsPerBar = 4,
   className,
 }: EditorToolbarProps) {
   const toolMode = useEditorStore((s) => s.toolMode)
@@ -65,16 +81,61 @@ export function EditorToolbar({
   const zoom = useEditorStore((s) => s.zoom)
   const setZoom = useEditorStore((s) => s.setZoom)
   const selectedBars = useEditorStore((s) => s.selectedBars)
-
-  const playbackState = useAudioStore((s) => s.playbackState)
-  const bpm = useAudioStore((s) => s.bpm)
-
   const canUndo = useEditorStore((s) => s.undoStack.length > 0)
   const canRedo = useEditorStore((s) => s.redoStack.length > 0)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
 
-  const isPlaying = playbackState === 'playing'
+  const transportState = useAudioStore((s) => s.transportState)
+  const setTransportState = useAudioStore((s) => s.setTransportState)
+  const currentBar = useAudioStore((s) => s.currentBar)
+  const setCurrentBar = useAudioStore((s) => s.setCurrentBar)
+  const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
+  const bpm = useAudioStore((s) => s.bpm)
+
+  const safeTotalBars = Math.max(1, totalBars)
+  const isPlaying = isRunningState(transportState)
+  const clampedBar = Math.max(0, Math.min(currentBar, safeTotalBars))
+  const displayBar = Math.min(safeTotalBars, Math.max(1, Math.floor(clampedBar) + 1))
+  const sliderValue = Math.round((clampedBar / safeTotalBars) * 1000)
+
+  const locateToBar = (bar: number) => {
+    const nextBar = Math.max(0, Math.min(bar, safeTotalBars))
+    const nextTime = barsToSeconds(nextBar, bpm, beatsPerBar)
+    if (isRunningState(transportState)) {
+      setTransportState('locating')
+      setCurrentBar(nextBar)
+      setCurrentTime(nextTime)
+      setTimeout(() => setTransportState('rolling'), 0)
+    } else {
+      setCurrentBar(nextBar)
+      setCurrentTime(nextTime)
+    }
+  }
+
+  const handleTogglePlayback = () => {
+    if (isPlaying) {
+      setTransportState('paused')
+    } else {
+      if (clampedBar >= safeTotalBars) {
+        setCurrentBar(0)
+        setCurrentTime(0)
+      }
+      setTransportState('rolling')
+    }
+  }
+
+  const handleRestart = () => {
+    setTransportState('stopped')
+    setCurrentBar(0)
+    setCurrentTime(0)
+  }
+
+  const viewModeLabel: Record<string, string> = {
+    staff: 'Staff view',
+    leadSheet: 'Lead sheet',
+    tab: 'Tab view',
+  }
 
   return (
     <div
@@ -83,27 +144,46 @@ export function EditorToolbar({
         className,
       )}
     >
-      {/* Playback */}
+      {/* Playback controls */}
       <ToolButton
         icon={isPlaying ? Pause : Play}
-        onClick={onPlayPause}
+        onClick={handleTogglePlayback}
         label={isPlaying ? 'Pause' : 'Play'}
       />
-      <span
-        className="min-w-[3rem] px-1.5 text-center text-xs font-mono text-text-secondary"
-        title="Tempo (BPM)"
-      >
-        {bpm} BPM
-      </span>
+      <ToolButton
+        icon={RotateCcw}
+        onClick={handleRestart}
+        label="Restart"
+      />
+
+      {/* Position scrubber */}
+      <div className="flex items-center gap-1.5 px-1.5">
+        <span className="min-w-[2.75rem] text-center text-[11px] font-mono text-text-muted" title="Bar position">
+          {displayBar}/{safeTotalBars}
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={1000}
+          step={1}
+          value={sliderValue}
+          onChange={(e) => locateToBar((Number(e.target.value) / 1000) * safeTotalBars)}
+          className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-surface-3 accent-accent"
+          aria-label="Playback position"
+        />
+        <span className="min-w-[3rem] text-center text-[11px] font-mono text-text-muted" title="Tempo">
+          {bpm} BPM
+        </span>
+      </div>
 
       <Divider />
 
-      {/* Selection */}
+      {/* Selection tools */}
       <ToolButton
         icon={MousePointer2}
         active={toolMode === 'pointer'}
         onClick={() => setToolMode('pointer')}
-        label="Pointer tool"
+        label="Select"
       />
       <ToolButton
         icon={BoxSelect}
@@ -114,24 +194,24 @@ export function EditorToolbar({
 
       <Divider />
 
-      {/* Editing */}
+      {/* Editing tools */}
       <ToolButton
         icon={Hash}
         active={toolMode === 'chord'}
         onClick={() => setToolMode('chord')}
-        label="Chord tool"
+        label="Edit chord"
       />
       <ToolButton
         icon={Music}
         active={toolMode === 'keySig'}
         onClick={() => setToolMode('keySig')}
-        label="Key/time signature"
+        label="Key & time sig"
       />
       <ToolButton
         icon={Type}
         active={toolMode === 'text'}
         onClick={() => setToolMode('text')}
-        label="Text annotation"
+        label="Add annotation"
       />
 
       <Divider />
@@ -148,17 +228,17 @@ export function EditorToolbar({
         icon={Trash2}
         onClick={onDeleteBars}
         disabled={selectedBars.length === 0}
-        label="Delete selected bars"
+        label="Delete bar"
       />
 
       <Divider />
 
-      {/* Style picker */}
-      <ToolButton icon={Disc3} onClick={onStylePicker} label="Playback style" />
+      {/* Playback style */}
+      <ToolButton icon={Disc3} onClick={onStylePicker} label="Sound style" />
 
       <Divider />
 
-      {/* Zoom + View */}
+      {/* Zoom */}
       <ToolButton icon={ZoomOut} onClick={() => setZoom(zoom - 10)} disabled={zoom <= 50} label="Zoom out" />
       <span className="min-w-[2.5rem] text-center text-xs font-mono text-text-secondary">
         {zoom}%
@@ -167,10 +247,10 @@ export function EditorToolbar({
 
       <Divider />
 
-      {/* View mode */}
+      {/* View mode cycle */}
       <ToolButton
         icon={Layers}
-        label="View mode"
+        label={viewModeLabel[viewMode] ?? 'View mode'}
         onClick={() => {
           const modes: ViewMode[] = ['staff', 'leadSheet', 'tab']
           const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]

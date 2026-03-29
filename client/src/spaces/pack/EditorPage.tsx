@@ -1,13 +1,11 @@
 import { useCallback, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
-import { useAudioStore } from '@/stores/audioStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
-import { LeadSheetPlaybackBar } from '@/components/score/LeadSheetPlaybackBar'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -32,16 +30,6 @@ export function EditorPage() {
 
   // Keyboard shortcuts (stores-driven, no callbacks needed)
   useEditorKeyboard()
-
-  // Playback toggle
-  const handlePlayPause = useCallback(() => {
-    const store = useAudioStore.getState()
-    if (store.playbackState === 'playing') {
-      store.setPlaybackState('paused')
-    } else {
-      store.setPlaybackState('playing')
-    }
-  }, [])
 
   // Bar management
   const handleAddBar = useCallback(() => {
@@ -73,14 +61,13 @@ export function EditorPage() {
 
           <EditorCanvas className="flex-1" />
 
-          <LeadSheetPlaybackBar totalBars={16} beatsPerBar={4} />
-
-          {/* Floating toolbar — absolute positioned within editor area (z-20 to float above canvas) */}
+          {/* Unified floating toolbar with embedded playback controls */}
           <EditorToolbar
-            onPlayPause={handlePlayPause}
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
             onStylePicker={handleStylePicker}
+            totalBars={16}
+            beatsPerBar={4}
             className="z-20"
           />
         </div>

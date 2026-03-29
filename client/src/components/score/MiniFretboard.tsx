@@ -55,9 +55,7 @@ export function MiniFretboard({ currentMidi, onFretSelect, x, y, visible, classN
                 className={cn(
                   'w-5 h-5 flex items-center justify-center border-r border-border transition-colors',
                   fret === 0 ? 'border-r-2 border-r-text-primary' : '',
-                  isHighlighted(stringNum, fret)
-                    ? 'bg-accent text-surface-0 rounded-full'
-                    : 'hover:bg-surface-3',
+                  !isHighlighted(stringNum, fret) && 'hover:bg-surface-3',
                 )}
               >
                 {isHighlighted(stringNum, fret) && (

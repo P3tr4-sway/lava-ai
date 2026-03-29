@@ -69,3 +69,38 @@
 .coach-pulse {
   animation: coach-pulse 0.75s ease-in-out 2;
 }
+
+/* === Score interaction highlights === */
+
+.lava-bar-selected > rect:first-child,
+.lava-bar-selected > path:first-child {
+  fill: var(--accent);
+  opacity: 0.1;
+}
+
+.lava-note-selected .vf-notehead path {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.lava-bar-playing > rect:first-child,
+.lava-bar-playing > path:first-child {
+  fill: var(--accent);
+  opacity: 0.05;
+}
+
+.lava-note-playing .vf-notehead path {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent));
+  transition: fill 100ms ease-out, filter 100ms ease-out;
+}
+
+.lava-beat-marker {
+  stroke: var(--border);
+  opacity: 0.3;
+  stroke-dasharray: 2;
+}
+
+.lava-beat-marker-downbeat {
+  opacity: 0.5;
+}

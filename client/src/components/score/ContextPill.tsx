@@ -72,7 +72,7 @@ export function ContextPill({
       >
         <Copy className="size-3.5" />
       </Button>
-      {selectionType === 'note' && onTranspose && (
+      {selectionType === 'note' && (
         <Button
           variant="ghost"
           size="icon-sm"

@@ -104,6 +104,37 @@ describe('ContextPill', () => {
     expect(container.firstChild).toBeNull()
   })
 
+  it('calls onClear when Clear button clicked', async () => {
+    const onClear = vi.fn()
+    render(
+      <ContextPill
+        selectionType="bar"
+        bounds={defaultBounds}
+        onDelete={vi.fn()}
+        onClear={onClear}
+        onCopy={vi.fn()}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: /clear/i }))
+    expect(onClear).toHaveBeenCalledOnce()
+  })
+
+  it('calls onTranspose when Transpose button clicked', async () => {
+    const onTranspose = vi.fn()
+    render(
+      <ContextPill
+        selectionType="note"
+        bounds={defaultBounds}
+        onDelete={vi.fn()}
+        onClear={vi.fn()}
+        onCopy={vi.fn()}
+        onTranspose={onTranspose}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: /transpose/i }))
+    expect(onTranspose).toHaveBeenCalledOnce()
+  })
+
   it('is positioned above the selection bounds', () => {
     const { container } = render(
       <ContextPill

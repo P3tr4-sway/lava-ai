@@ -4,6 +4,11 @@ export type ToolMode = 'pointer' | 'range' | 'chord' | 'keySig' | 'text'
 export type ViewMode = 'staff' | 'tab' | 'leadSheet'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved'
 
+export interface NoteRef {
+  barIndex: number
+  noteIndex: number
+}
+
 const MAX_UNDO_STACK = 50
 
 interface EditorStore {
@@ -16,6 +21,21 @@ interface EditorStore {
   selectBar: (bar: number, additive?: boolean) => void
   selectRange: (start: number, end: number) => void
   clearSelection: () => void
+
+  // Note-level selection (mutually exclusive with bar selection)
+  selectedNotes: NoteRef[]
+  selectNote: (barIndex: number, noteIndex: number, additive?: boolean) => void
+  clearNoteSelection: () => void
+
+  // Clipboard
+  clipboard: string | null
+  setClipboard: (fragment: string | null) => void
+
+  // Training wheels
+  showChordDiagrams: boolean
+  showBeatMarkers: boolean
+  toggleChordDiagrams: () => void
+  toggleBeatMarkers: () => void
 
   // View
   viewMode: ViewMode
@@ -49,14 +69,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Selection
   selectedBars: [],
-  selectBar: (bar, additive = false) =>
-    set((state) => ({
-      selectedBars: additive
-        ? state.selectedBars.includes(bar)
-          ? state.selectedBars.filter((b) => b !== bar)
-          : [...state.selectedBars, bar]
-        : [bar],
-    })),
+  selectBar: (bar, additive) => {
+    set((s) => {
+      if (additive) {
+        const has = s.selectedBars.includes(bar)
+        return {
+          selectedBars: has
+            ? s.selectedBars.filter((b) => b !== bar)
+            : [...s.selectedBars, bar],
+          selectedNotes: [], // mutual exclusion
+        }
+      }
+      return { selectedBars: [bar], selectedNotes: [] } // mutual exclusion
+    })
+  },
   selectRange: (start, end) => {
     const bars: number[] = []
     const lo = Math.min(start, end)
@@ -65,6 +91,37 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selectedBars: bars })
   },
   clearSelection: () => set({ selectedBars: [] }),
+
+  // Note selection
+  selectedNotes: [],
+  selectNote: (barIndex, noteIndex, additive) => {
+    set((s) => {
+      const ref: NoteRef = { barIndex, noteIndex }
+      const exists = s.selectedNotes.findIndex(
+        (n) => n.barIndex === barIndex && n.noteIndex === noteIndex
+      )
+      let next: NoteRef[]
+      if (additive) {
+        next = exists >= 0
+          ? s.selectedNotes.filter((_, i) => i !== exists)
+          : [...s.selectedNotes, ref]
+      } else {
+        next = [ref]
+      }
+      return { selectedNotes: next, selectedBars: [] } // mutual exclusion
+    })
+  },
+  clearNoteSelection: () => set({ selectedNotes: [] }),
+
+  // Clipboard
+  clipboard: null,
+  setClipboard: (fragment) => set({ clipboard: fragment }),
+
+  // Training wheels
+  showChordDiagrams: false,
+  showBeatMarkers: false,
+  toggleChordDiagrams: () => set((s) => ({ showChordDiagrams: !s.showChordDiagrams })),
+  toggleBeatMarkers: () => set((s) => ({ showBeatMarkers: !s.showBeatMarkers })),
 
   // View
   viewMode: 'staff',

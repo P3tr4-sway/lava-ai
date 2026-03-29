@@ -6,6 +6,9 @@ import {
   addBars,
   deleteBars,
   clearBars,
+  setChord,
+  setKeySig,
+  setTimeSig,
 } from './musicXmlEngine'
 
 const SIMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -125,5 +128,46 @@ describe('clearBars', () => {
     const notes = measures[0].querySelectorAll('note')
     expect(notes.length).toBe(1)
     expect(notes[0].querySelector('rest')).not.toBeNull()
+  })
+})
+
+describe('setChord', () => {
+  it('adds a harmony element to bar 0 beat 0', () => {
+    const result = setChord(SIMPLE_XML, 0, 0, 'Am7')
+    const doc = parseXml(result)
+    const harmony = getMeasures(doc)[0].querySelector('harmony')
+    expect(harmony).not.toBeNull()
+    const root = harmony!.querySelector('root > root-step')
+    expect(root!.textContent).toBe('A')
+    const kind = harmony!.querySelector('kind')
+    expect(kind!.textContent).toBe('minor-seventh')
+  })
+
+  it('replaces existing chord at same position', () => {
+    const withChord = setChord(SIMPLE_XML, 0, 0, 'Am7')
+    const result = setChord(withChord, 0, 0, 'G')
+    const doc = parseXml(result)
+    const harmonies = getMeasures(doc)[0].querySelectorAll('harmony')
+    expect(harmonies.length).toBe(1)
+    expect(harmonies[0].querySelector('root > root-step')!.textContent).toBe('G')
+  })
+})
+
+describe('setKeySig', () => {
+  it('changes key signature from bar onward', () => {
+    const result = setKeySig(SIMPLE_XML, 0, 'G')
+    const doc = parseXml(result)
+    const fifths = getMeasures(doc)[0].querySelector('key > fifths')
+    expect(fifths!.textContent).toBe('1') // G major = 1 sharp
+  })
+})
+
+describe('setTimeSig', () => {
+  it('changes time signature at specified bar', () => {
+    const result = setTimeSig(SIMPLE_XML, 1, 3, 4)
+    const doc = parseXml(result)
+    const m = getMeasures(doc)[1]
+    const beats = m.querySelector('time > beats')
+    expect(beats!.textContent).toBe('3')
   })
 })

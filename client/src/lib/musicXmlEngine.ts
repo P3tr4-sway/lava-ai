@@ -101,3 +101,172 @@ export function clearBars(xml: string, barIndices: number[]): string {
 
   return serializeXml(doc)
 }
+
+// --- Chord name → MusicXML harmony mapping ---
+
+function parseChordName(name: string): { rootStep: string; rootAlter: number; kind: string } {
+  // Extract root note (e.g., 'C', 'F#', 'Bb')
+  let rootStep = name[0].toUpperCase()
+  let rootAlter = 0
+  let rest = name.slice(1)
+
+  if (rest.startsWith('#') || rest.startsWith('♯')) {
+    rootAlter = 1
+    rest = rest.slice(1)
+  } else if ((rest.startsWith('b') && rest !== 'b') || rest.startsWith('♭')) {
+    rootAlter = -1
+    rest = rest.slice(1)
+  }
+
+  // Map suffix to MusicXML kind
+  const kindMap: Record<string, string> = {
+    '': 'major',
+    'm': 'minor',
+    'min': 'minor',
+    'minor': 'minor',
+    '7': 'dominant',
+    'maj7': 'major-seventh',
+    'M7': 'major-seventh',
+    'm7': 'minor-seventh',
+    'min7': 'minor-seventh',
+    'dim': 'diminished',
+    'dim7': 'diminished-seventh',
+    'aug': 'augmented',
+    'sus2': 'suspended-second',
+    'sus4': 'suspended-fourth',
+    '6': 'major-sixth',
+    'm6': 'minor-sixth',
+    '9': 'dominant-ninth',
+    'maj9': 'major-ninth',
+    'm9': 'minor-ninth',
+    'add9': 'major',
+    '5': 'power',
+  }
+
+  const kind = kindMap[rest] ?? 'major'
+  return { rootStep, rootAlter, kind }
+}
+
+export function setChord(xml: string, barIndex: number, beatIndex: number, chordSymbol: string): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const m = measures[barIndex]
+  if (!m) return xml
+
+  const { rootStep, rootAlter, kind } = parseChordName(chordSymbol)
+
+  // Remove existing harmony at same offset
+  const existing = m.querySelectorAll('harmony')
+  existing.forEach((h) => {
+    const offset = h.querySelector('offset')
+    const hBeat = offset ? Math.floor(parseInt(offset.textContent || '0', 10)) : 0
+    if (hBeat === beatIndex) h.parentNode!.removeChild(h)
+  })
+
+  // Build <harmony> element
+  const harmony = doc.createElement('harmony')
+  const root = doc.createElement('root')
+  const rootStepEl = doc.createElement('root-step')
+  rootStepEl.textContent = rootStep
+  root.appendChild(rootStepEl)
+  if (rootAlter !== 0) {
+    const rootAlterEl = doc.createElement('root-alter')
+    rootAlterEl.textContent = String(rootAlter)
+    root.appendChild(rootAlterEl)
+  }
+  harmony.appendChild(root)
+  const kindEl = doc.createElement('kind')
+  kindEl.textContent = kind
+  harmony.appendChild(kindEl)
+
+  if (beatIndex > 0) {
+    const { divisions } = getTimeInfo(doc)
+    const offset = doc.createElement('offset')
+    offset.textContent = String(beatIndex * divisions)
+    harmony.appendChild(offset)
+  }
+
+  // Insert harmony before first note
+  const firstNote = m.querySelector('note')
+  if (firstNote) {
+    m.insertBefore(harmony, firstNote)
+  } else {
+    m.appendChild(harmony)
+  }
+
+  return serializeXml(doc)
+}
+
+const KEY_FIFTHS: Record<string, number> = {
+  'C': 0, 'G': 1, 'D': 2, 'A': 3, 'E': 4, 'B': 5, 'F#': 6, 'Gb': -6,
+  'F': -1, 'Bb': -2, 'Eb': -3, 'Ab': -4, 'Db': -5, 'Cb': -7,
+  'Am': 0, 'Em': 1, 'Bm': 2, 'F#m': 3, 'C#m': 4, 'G#m': 5,
+  'Dm': -1, 'Gm': -2, 'Cm': -3, 'Fm': -4, 'Bbm': -5, 'Ebm': -6,
+}
+
+export function setKeySig(xml: string, fromBar: number, key: string): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const m = measures[fromBar]
+  if (!m) return xml
+
+  const fifths = KEY_FIFTHS[key] ?? 0
+
+  // Find or create <attributes> block
+  let attrs = m.querySelector('attributes')
+  if (!attrs) {
+    attrs = doc.createElement('attributes')
+    m.insertBefore(attrs, m.firstChild)
+  }
+
+  // Find or create <key>
+  let keyEl = attrs.querySelector('key')
+  if (!keyEl) {
+    keyEl = doc.createElement('key')
+    attrs.appendChild(keyEl)
+  }
+
+  let fifthsEl = keyEl.querySelector('fifths')
+  if (!fifthsEl) {
+    fifthsEl = doc.createElement('fifths')
+    keyEl.appendChild(fifthsEl)
+  }
+  fifthsEl.textContent = String(fifths)
+
+  return serializeXml(doc)
+}
+
+export function setTimeSig(xml: string, fromBar: number, beats: number, beatType: number): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const m = measures[fromBar]
+  if (!m) return xml
+
+  let attrs = m.querySelector('attributes')
+  if (!attrs) {
+    attrs = doc.createElement('attributes')
+    m.insertBefore(attrs, m.firstChild)
+  }
+
+  let timeEl = attrs.querySelector('time')
+  if (!timeEl) {
+    timeEl = doc.createElement('time')
+    attrs.appendChild(timeEl)
+  }
+
+  let beatsEl = timeEl.querySelector('beats')
+  if (!beatsEl) {
+    beatsEl = doc.createElement('beats')
+    timeEl.appendChild(beatsEl)
+  }
+  beatsEl.textContent = String(beats)
+
+  let beatTypeEl = timeEl.querySelector('beat-type')
+  if (!beatTypeEl) {
+    beatTypeEl = doc.createElement('beat-type')
+    timeEl.appendChild(beatTypeEl)
+  }
+  beatTypeEl.textContent = String(beatType)
+
+  return serializeXml(doc)
+}

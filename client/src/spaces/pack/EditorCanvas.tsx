@@ -3,6 +3,7 @@ import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
+import { useAudioStore } from '@/stores/audioStore'
 import { useScoreSync } from '@/hooks/useScoreSync'
 import { ScoreOverlay } from '@/components/score/ScoreOverlay'
 import { PlaybackCursor } from '@/components/score/PlaybackCursor'
@@ -144,6 +145,13 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       }
 
       const barIndex = hit.barIndex
+
+      // Click-to-reposition playhead when stopped or paused
+      const { transportState, setCurrentBar } = useAudioStore.getState()
+      if (transportState === 'stopped' || transportState === 'paused') {
+        setCurrentBar(barIndex)
+      }
+
       if (toolMode === 'pointer') {
         selectBar(barIndex, e.shiftKey)
         syncHighlights()

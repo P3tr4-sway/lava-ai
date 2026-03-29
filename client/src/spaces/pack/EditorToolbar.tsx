@@ -3,6 +3,7 @@ import {
   Play, Pause, RotateCcw, MousePointer2, BoxSelect,
   Hash, Music, Type, Undo2, Redo2,
   Plus, Trash2, Disc3, ZoomOut, ZoomIn, Layers,
+  Guitar, Grid3x3,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore, type ViewMode } from '@/stores/editorStore'
@@ -85,6 +86,10 @@ export function EditorToolbar({
   const canRedo = useEditorStore((s) => s.redoStack.length > 0)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
+  const showChordDiagrams = useEditorStore((s) => s.showChordDiagrams)
+  const showBeatMarkers = useEditorStore((s) => s.showBeatMarkers)
+  const toggleChordDiagrams = useEditorStore((s) => s.toggleChordDiagrams)
+  const toggleBeatMarkers = useEditorStore((s) => s.toggleBeatMarkers)
 
   const transportState = useAudioStore((s) => s.transportState)
   const setTransportState = useAudioStore((s) => s.setTransportState)
@@ -262,6 +267,22 @@ export function EditorToolbar({
             const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
             setViewMode(next)
           }}
+        />
+
+        <Divider />
+
+        {/* Training wheels */}
+        <ToolButton
+          icon={Guitar}
+          label="Chord shapes"
+          active={showChordDiagrams}
+          onClick={toggleChordDiagrams}
+        />
+        <ToolButton
+          icon={Grid3x3}
+          label="Beat grid"
+          active={showBeatMarkers}
+          onClick={toggleBeatMarkers}
         />
       </div>
     </div>

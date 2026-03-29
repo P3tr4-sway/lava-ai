@@ -282,7 +282,9 @@ function getNotes(measure: Element): Element[] {
 export function setNotePitch(xml: string, barIndex: number, noteIndex: number, pitch: Pitch): string {
   const doc = parseXml(xml)
   const measures = getMeasures(doc)
-  const notes = getNotes(measures[barIndex])
+  const m = measures[barIndex]
+  if (!m) return xml
+  const notes = getNotes(m)
   const note = notes[noteIndex]
   if (!note) return xml
 
@@ -327,7 +329,9 @@ export function setNoteDuration(
 ): string {
   const doc = parseXml(xml)
   const measures = getMeasures(doc)
-  const notes = getNotes(measures[barIndex])
+  const m = measures[barIndex]
+  if (!m) return xml
+  const notes = getNotes(m)
   const note = notes[noteIndex]
   if (!note) return xml
 
@@ -348,7 +352,9 @@ export function addAccidental(
 ): string {
   const doc = parseXml(xml)
   const measures = getMeasures(doc)
-  const notes = getNotes(measures[barIndex])
+  const m = measures[barIndex]
+  if (!m) return xml
+  const notes = getNotes(m)
   const note = notes[noteIndex]
   if (!note) return xml
 
@@ -380,7 +386,9 @@ export function addAccidental(
 export function toggleTie(xml: string, barIndex: number, noteIndex: number): string {
   const doc = parseXml(xml)
   const measures = getMeasures(doc)
-  const notes = getNotes(measures[barIndex])
+  const m = measures[barIndex]
+  if (!m) return xml
+  const notes = getNotes(m)
   const note = notes[noteIndex]
   if (!note) return xml
 
@@ -389,7 +397,11 @@ export function toggleTie(xml: string, barIndex: number, noteIndex: number): str
     // Remove all ties and notations/tied
     note.querySelectorAll('tie').forEach((t) => t.parentNode!.removeChild(t))
     const tied = note.querySelector('notations > tied')
-    if (tied) tied.parentNode!.removeChild(tied)
+    if (tied) {
+      const notations = tied.parentNode as Element
+      notations.removeChild(tied)
+      if (!notations.hasChildNodes()) notations.parentNode!.removeChild(notations)
+    }
   } else {
     const tie = doc.createElement('tie')
     tie.setAttribute('type', 'start')
@@ -408,7 +420,9 @@ export function toggleTie(xml: string, barIndex: number, noteIndex: number): str
 export function toggleRest(xml: string, barIndex: number, noteIndex: number): string {
   const doc = parseXml(xml)
   const measures = getMeasures(doc)
-  const notes = getNotes(measures[barIndex])
+  const m = measures[barIndex]
+  if (!m) return xml
+  const notes = getNotes(m)
   const note = notes[noteIndex]
   if (!note) return xml
 

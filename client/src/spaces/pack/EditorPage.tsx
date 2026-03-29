@@ -115,6 +115,11 @@ export function EditorPage() {
     }
   }, [])
 
+  useEffect(() => {
+    window.addEventListener('lava-bar-delete', handleDeleteBars)
+    return () => window.removeEventListener('lava-bar-delete', handleDeleteBars)
+  }, [handleDeleteBars])
+
   const handleStylePicker = useCallback(() => {
     // TODO: Open playback style picker drawer
   }, [])

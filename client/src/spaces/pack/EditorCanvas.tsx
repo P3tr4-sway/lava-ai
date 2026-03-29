@@ -16,7 +16,7 @@ import { TextAnnotationInput } from './TextAnnotationInput'
 import {
   clearBars, copyBars, pasteBars, duplicateBars, transposeBars,
   setNotePitch, setNoteDuration, addAccidental, toggleTie, toggleRest,
-  setLyric, setAnnotation,
+  setLyric, setAnnotation, parseXml, getMeasures,
 } from '@/lib/musicXmlEngine'
 import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
 import type { Pitch } from '@/lib/pitchUtils'
@@ -210,7 +210,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
 
   const handleContextDelete = useCallback(() => {
     const xml = getXml()
-    const { selectedNotes: notes, selectedBars: bars, pushUndo, clearSelection: clearSel } = useEditorStore.getState()
+    const { selectedNotes: notes, selectedBars: bars, pushUndo } = useEditorStore.getState()
     if (!xml) return
     if (notes.length > 0) {
       // Toggle each selected note to rest
@@ -224,10 +224,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         syncHighlights()
       } catch (err) { console.error('[handleContextDelete]', err) }
     } else if (bars.length > 0) {
-      // No delete from store — handled by EditorPage.handleDeleteBars
-      // Just clear selection for now
-      clearSel()
-      syncHighlights()
+      window.dispatchEvent(new CustomEvent('lava-bar-delete'))
     }
   }, [syncHighlights])
 
@@ -269,14 +266,30 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   useEffect(() => {
     function onLavaPitchStep(e: CustomEvent<{ steps: number }>) {
       const xml = getXml()
-      const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
-      if (!xml || notes.length === 0) return
+      const { selectedNotes, pushUndo } = useEditorStore.getState()
+      if (!xml || selectedNotes.length === 0) return
       try {
+        const doc = parseXml(xml)
+        const measures = getMeasures(doc)
         let newXml = xml
         pushUndo(xml)
-        for (const { barIndex, noteIndex } of notes) {
-          const midi = pitchToMidi(midiToPitch(60)) // placeholder — will be enriched when note parse is available
-          const newPitch: Pitch = midiToPitch(Math.max(21, Math.min(108, midi + e.detail.steps)))
+        for (const { barIndex, noteIndex } of selectedNotes) {
+          const measure = measures[barIndex]
+          if (!measure) continue
+          const noteEls = Array.from(measure.querySelectorAll('note')).filter(
+            (n) => !n.querySelector('chord'),
+          )
+          const noteEl = noteEls[noteIndex]
+          if (!noteEl) continue
+          const pitchEl = noteEl.querySelector('pitch')
+          if (!pitchEl) continue // skip rests
+          const step = pitchEl.querySelector('step')?.textContent ?? 'C'
+          const octave = parseInt(pitchEl.querySelector('octave')?.textContent ?? '4', 10)
+          const alter = parseFloat(pitchEl.querySelector('alter')?.textContent ?? '0')
+          const currentPitch: Pitch = { step, octave, alter: alter || undefined }
+          const currentMidi = pitchToMidi(currentPitch)
+          const newMidi = Math.max(21, Math.min(108, currentMidi + e.detail.steps))
+          const newPitch = midiToPitch(newMidi, alter < 0)
           newXml = setNotePitch(newXml, barIndex, noteIndex, newPitch)
         }
         saveXml(newXml)

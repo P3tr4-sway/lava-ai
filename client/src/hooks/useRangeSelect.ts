@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type React from 'react'
 import { useEditorStore } from '@/stores/editorStore'
@@ -12,6 +12,9 @@ interface Box {
 
 type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
 
+// Upper bound for measure scan — guards against getMeasureBounds never returning null
+const MAX_MEASURES = 500
+
 interface RangeSelectState {
   isDragging: boolean
   selectionBox: Box | null
@@ -24,6 +27,11 @@ interface RangeSelectState {
  * Handles mouse-drag range selection on the score.
  * Only activates when toolMode === 'range'.
  * Reads measure bounds via getMeasureBounds to determine which bars are covered.
+ *
+ * Drag state (isDraggingRef, startPtRef, selectionBoxRef) is stored in refs so
+ * onMouseMove can always read the latest values without needing to be recreated
+ * on every state change, avoiding the stale-closure window between mousedown and
+ * the next render.
  */
 export function useRangeSelect(
   containerRef: RefObject<HTMLElement | null>,
@@ -33,9 +41,14 @@ export function useRangeSelect(
   const selectRange = useEditorStore((s) => s.selectRange)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
+  // Render-triggering state (for component to react to drag)
   const [isDragging, setIsDragging] = useState(false)
-  const [startPt, setStartPt] = useState<{ x: number; y: number } | null>(null)
   const [selectionBox, setSelectionBox] = useState<Box | null>(null)
+
+  // Refs for always-current values inside callbacks
+  const isDraggingRef = useRef(false)
+  const startPtRef = useRef<{ x: number; y: number } | null>(null)
+  const selectionBoxRef = useRef<Box | null>(null)
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -45,9 +58,12 @@ export function useRangeSelect(
       const rect = container.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
-      setStartPt({ x, y })
+      const box: Box = { x, y, width: 0, height: 0 }
+      startPtRef.current = { x, y }
+      selectionBoxRef.current = box
+      isDraggingRef.current = true
       setIsDragging(true)
-      setSelectionBox({ x, y, width: 0, height: 0 })
+      setSelectionBox(box)
       clearSelection()
     },
     [toolMode, containerRef, clearSelection],
@@ -55,38 +71,42 @@ export function useRangeSelect(
 
   const onMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!isDragging || !startPt) return
+      if (!isDraggingRef.current || !startPtRef.current) return
       const container = containerRef.current
       if (!container) return
       const rect = container.getBoundingClientRect()
       const curX = e.clientX - rect.left
       const curY = e.clientY - rect.top
+      const startPt = startPtRef.current
       const box: Box = {
         x: Math.min(startPt.x, curX),
         y: Math.min(startPt.y, curY),
         width: Math.abs(curX - startPt.x),
         height: Math.abs(curY - startPt.y),
       }
+      selectionBoxRef.current = box
       setSelectionBox(box)
     },
-    [isDragging, startPt, containerRef],
+    [containerRef],
   )
 
   const onMouseUp = useCallback(() => {
-    if (!isDragging || !selectionBox) {
+    const box = selectionBoxRef.current
+    if (!isDraggingRef.current || !box) {
+      isDraggingRef.current = false
+      startPtRef.current = null
+      selectionBoxRef.current = null
       setIsDragging(false)
-      setStartPt(null)
       setSelectionBox(null)
       return
     }
 
     // Find all measures whose bounds intersect the selection box
-    // Scan measure indices 0..N by querying getMeasureBounds until null
     const coveredBars: number[] = []
-    for (let i = 0; i < 500; i++) {
+    for (let i = 0; i < MAX_MEASURES; i++) {
       const bounds = getMeasureBounds(i)
       if (!bounds) break
-      if (rectsOverlap(selectionBox, bounds)) {
+      if (rectsOverlap(box, bounds)) {
         coveredBars.push(i)
       }
     }
@@ -97,10 +117,12 @@ export function useRangeSelect(
       selectRange(coveredBars[0], coveredBars[0])
     }
 
+    isDraggingRef.current = false
+    startPtRef.current = null
+    selectionBoxRef.current = null
     setIsDragging(false)
-    setStartPt(null)
     setSelectionBox(null)
-  }, [isDragging, selectionBox, getMeasureBounds, selectRange])
+  }, [getMeasureBounds, selectRange])
 
   return { isDragging, selectionBox, onMouseDown, onMouseMove, onMouseUp }
 }

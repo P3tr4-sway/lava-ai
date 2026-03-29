@@ -170,7 +170,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   )
 
   return (
-    <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', toolMode === 'range' && 'cursor-crosshair', className)}>
+    <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>
       <div
         ref={containerRef}
         onClick={handleCanvasClick}

@@ -1,11 +1,14 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useEditorStore } from '@/stores/editorStore'
+import { useProjectStore } from '@/stores/projectStore'
+import { projectService } from '@/services/projectService'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
+import { addBars, deleteBars } from '@/lib/musicXmlEngine'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -18,6 +21,56 @@ export function EditorPage() {
 
   const projectName = useLeadSheetStore((s) => s.projectName)
   const chatCollapsed = useEditorStore((s) => s.chatPanelCollapsed)
+  const saveStatus = useEditorStore((s) => s.saveStatus)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Load project from server when navigating to /pack/:id
+  useEffect(() => {
+    if (!id) {
+      useLeadSheetStore.getState().reset()
+      useEditorStore.getState().setSaveStatus('saved')
+      return
+    }
+    projectService.get(id).then((project) => {
+      useLeadSheetStore.getState().loadFromProject(project)
+      useProjectStore.getState().setActiveProject(project)
+      useEditorStore.getState().setSaveStatus('saved')
+    }).catch((err) => {
+      console.error('Failed to load project:', err)
+    })
+  }, [id])
+
+  // Auto-save with 2 s debounce whenever the sheet is marked unsaved
+  useEffect(() => {
+    if (!id || saveStatus !== 'unsaved') return
+    saveTimerRef.current = setTimeout(async () => {
+      useEditorStore.getState().setSaveStatus('saving')
+      const s = useLeadSheetStore.getState()
+      try {
+        const updated = await projectService.update(id, {
+          name: s.projectName,
+          metadata: {
+            key: s.key,
+            tempo: s.tempo,
+            timeSignature: s.timeSignature,
+            sections: s.sections,
+            arrangements: s.arrangements,
+            selectedArrangementId: s.selectedArrangementId,
+            scoreView: s.scoreView,
+            pdfUrl: s.pdfUrl,
+            musicXml: s.musicXml,
+          },
+        })
+        useProjectStore.getState().upsertProject(updated)
+        useEditorStore.getState().setSaveStatus('saved')
+      } catch {
+        useEditorStore.getState().setSaveStatus('unsaved')
+      }
+    }, 2000)
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [id, saveStatus])
 
   // Set agent space context
   useEffect(() => {
@@ -33,14 +86,25 @@ export function EditorPage() {
 
   // Bar management
   const handleAddBar = useCallback(() => {
-    // TODO: Add a bar to the MusicXML in leadSheetStore
+    const xml = useLeadSheetStore.getState().musicXml
+    if (!xml) return
+    const { selectedBars, pushUndo } = useEditorStore.getState()
+    pushUndo(xml)
+    const afterIndex = selectedBars.length > 0 ? Math.max(...selectedBars) : -1
+    const newXml = addBars(xml, Math.max(afterIndex, 0), 1)
+    useLeadSheetStore.getState().setMusicXml(newXml)
+    useEditorStore.getState().setSaveStatus('unsaved')
   }, [])
 
   const handleDeleteBars = useCallback(() => {
-    const selected = useEditorStore.getState().selectedBars
-    if (selected.length === 0) return
-    // TODO: Delete selected bars from MusicXML in leadSheetStore
-    useEditorStore.getState().clearSelection()
+    const xml = useLeadSheetStore.getState().musicXml
+    const { selectedBars, clearSelection, pushUndo } = useEditorStore.getState()
+    if (!xml || selectedBars.length === 0) return
+    pushUndo(xml)
+    const newXml = deleteBars(xml, selectedBars)
+    useLeadSheetStore.getState().setMusicXml(newXml)
+    clearSelection()
+    useEditorStore.getState().setSaveStatus('unsaved')
   }, [])
 
   const handleStylePicker = useCallback(() => {

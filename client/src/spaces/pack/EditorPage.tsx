@@ -3,16 +3,15 @@ import { useParams } from 'react-router-dom'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { useAgentStore } from '@/stores/agentStore'
-import { useDawPanelStore } from '@/stores/dawPanelStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
+import { LeadSheetPlaybackBar } from '@/components/score/LeadSheetPlaybackBar'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
 import { EditorChatPanel } from './EditorChatPanel'
-import { CompactDawStrip } from './CompactDawStrip'
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -20,10 +19,6 @@ export function EditorPage() {
   useTheme()
 
   const projectName = useLeadSheetStore((s) => s.projectName)
-  const tracks = useDawPanelStore((s) => s.tracks)
-  const updateTrack = useDawPanelStore((s) => s.updateTrack)
-  const addTrack = useDawPanelStore((s) => s.addTrack)
-  const removeTrack = useDawPanelStore((s) => s.removeTrack)
   const chatCollapsed = useEditorStore((s) => s.chatPanelCollapsed)
 
   // Set agent space context
@@ -34,13 +29,6 @@ export function EditorPage() {
       projectName,
     })
   }, [id, projectName])
-
-  // Re-seed DAW tracks whenever the store is empty (also covers mount)
-  useEffect(() => {
-    if (tracks.length === 0) {
-      useDawPanelStore.getState().addTrack()
-    }
-  }, [tracks.length])
 
   // Keyboard shortcuts (stores-driven, no callbacks needed)
   useEditorKeyboard()
@@ -85,17 +73,7 @@ export function EditorPage() {
 
           <EditorCanvas className="flex-1" />
 
-          <CompactDawStrip
-            dawProps={{
-              tracks,
-              onUpdateTrack: updateTrack,
-              onAddTrack: addTrack,
-              onRemoveTrack: removeTrack,
-              showRecordButton: true,
-              totalBars: 16,
-              beatsPerBar: 4,
-            }}
-          />
+          <LeadSheetPlaybackBar totalBars={16} beatsPerBar={4} />
 
           {/* Floating toolbar — absolute positioned within editor area (z-20 to float above canvas) */}
           <EditorToolbar

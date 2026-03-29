@@ -14,6 +14,13 @@ import {
   addAccidental,
   toggleTie,
   toggleRest,
+  transposeBars,
+  copyBars,
+  pasteBars,
+  duplicateBars,
+  setLyric,
+  setAnnotation,
+  buildNoteOnsetMap,
 } from './musicXmlEngine'
 
 const SIMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -251,5 +258,69 @@ describe('toggleRest', () => {
     const note = getMeasures(doc)[0].querySelectorAll('note')[0]
     expect(note.querySelector('pitch')).not.toBeNull()
     expect(note.querySelector('rest')).toBeNull()
+  })
+})
+
+describe('transposeBars', () => {
+  it('transposes all notes in bar up by 2 semitones', () => {
+    const result = transposeBars(SIMPLE_XML, [0], 2)
+    const doc = parseXml(result)
+    const firstNote = getMeasures(doc)[0].querySelectorAll('note')[0]
+    // C4 + 2 semitones = D4
+    expect(firstNote.querySelector('pitch > step')!.textContent).toBe('D')
+  })
+})
+
+describe('copyBars / pasteBars', () => {
+  it('copies bar 0 and pastes after bar 2', () => {
+    const fragment = copyBars(SIMPLE_XML, [0])
+    const result = pasteBars(SIMPLE_XML, fragment, 2)
+    const doc = parseXml(result)
+    expect(getMeasures(doc).length).toBe(4)
+  })
+})
+
+describe('duplicateBars', () => {
+  it('duplicates bar 0 after itself', () => {
+    const result = duplicateBars(SIMPLE_XML, [0], 0)
+    const doc = parseXml(result)
+    expect(getMeasures(doc).length).toBe(4)
+    // Duplicated bar should have same notes
+    const orig = getMeasures(parseXml(SIMPLE_XML))[0].querySelectorAll('note')
+    const dup = getMeasures(doc)[1].querySelectorAll('note')
+    expect(dup.length).toBe(orig.length)
+  })
+})
+
+describe('setLyric', () => {
+  it('adds lyric to a note', () => {
+    const result = setLyric(SIMPLE_XML, 0, 0, 'hel-')
+    const doc = parseXml(result)
+    const lyric = getMeasures(doc)[0].querySelectorAll('note')[0].querySelector('lyric')
+    expect(lyric).not.toBeNull()
+    expect(lyric!.querySelector('text')!.textContent).toBe('hel-')
+  })
+})
+
+describe('setAnnotation', () => {
+  it('adds direction text above bar', () => {
+    const result = setAnnotation(SIMPLE_XML, 0, 'palm mute')
+    const doc = parseXml(result)
+    const direction = getMeasures(doc)[0].querySelector('direction')
+    expect(direction).not.toBeNull()
+    const words = direction!.querySelector('direction-type > words')
+    expect(words!.textContent).toBe('palm mute')
+  })
+})
+
+describe('buildNoteOnsetMap', () => {
+  it('builds onset map for simple XML', () => {
+    const map = buildNoteOnsetMap(SIMPLE_XML, 120)
+    expect(map.length).toBeGreaterThan(0)
+    expect(map[0]).toMatchObject({ barIndex: 0, noteIndex: 0 })
+    expect(typeof map[0].onsetTime).toBe('number')
+    expect(typeof map[0].duration).toBe('number')
+    // At 120 BPM, quarter note = 0.5s. First note onset should be 0
+    expect(map[0].onsetTime).toBe(0)
   })
 })

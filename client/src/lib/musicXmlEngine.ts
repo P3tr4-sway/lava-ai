@@ -1,4 +1,4 @@
-import type { Pitch } from './pitchUtils'
+import { type Pitch, pitchToMidi, midiToPitch } from './pitchUtils'
 
 const parser = new DOMParser()
 const serializer = new XMLSerializer()
@@ -437,4 +437,176 @@ export function toggleRest(xml: string, barIndex: number, noteIndex: number): st
   }
 
   return serializeXml(doc)
+}
+
+export function transposeBars(xml: string, barIndices: number[], semitones: number): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+
+  for (const idx of barIndices) {
+    const m = measures[idx]
+    if (!m) continue
+    const notes = getNotes(m)
+    for (const note of notes) {
+      const pitchEl = note.querySelector('pitch')
+      if (!pitchEl) continue // skip rests
+      const step = pitchEl.querySelector('step')!.textContent!
+      const octave = parseInt(pitchEl.querySelector('octave')!.textContent!, 10)
+      const alterEl = pitchEl.querySelector('alter')
+      const alter = alterEl ? parseInt(alterEl.textContent!, 10) : 0
+
+      const midi = pitchToMidi({ step, octave, alter })
+      const newPitch = midiToPitch(midi + semitones)
+
+      pitchEl.querySelector('step')!.textContent = newPitch.step
+      pitchEl.querySelector('octave')!.textContent = String(newPitch.octave)
+
+      if (newPitch.alter !== undefined && newPitch.alter !== 0) {
+        if (!alterEl) {
+          const el = doc.createElement('alter')
+          el.textContent = String(newPitch.alter)
+          pitchEl.insertBefore(el, pitchEl.querySelector('octave'))
+        } else {
+          alterEl.textContent = String(newPitch.alter)
+        }
+      } else if (alterEl) {
+        alterEl.parentNode!.removeChild(alterEl)
+      }
+    }
+  }
+
+  return serializeXml(doc)
+}
+
+export function copyBars(xml: string, barIndices: number[]): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const fragDoc = parser.parseFromString('<measures></measures>', 'application/xml')
+  const root = fragDoc.documentElement
+
+  for (const idx of [...barIndices].sort((a, b) => a - b)) {
+    if (measures[idx]) {
+      root.appendChild(fragDoc.importNode(measures[idx], true))
+    }
+  }
+
+  return serializer.serializeToString(fragDoc)
+}
+
+export function pasteBars(xml: string, fragment: string, afterIndex: number): string {
+  const doc = parseXml(xml)
+  const fragDoc = parser.parseFromString(fragment, 'application/xml')
+  const fragMeasures = Array.from(fragDoc.querySelectorAll('measure'))
+  const measures = getMeasures(doc)
+  const ref = measures[afterIndex]
+  const parent = ref?.parentNode ?? doc.querySelector('part')!
+
+  let insertionPoint: Node | null = ref?.nextSibling ?? null
+  for (const fm of fragMeasures) {
+    const imported = doc.importNode(fm, true)
+    parent.insertBefore(imported, insertionPoint)
+    insertionPoint = imported.nextSibling
+  }
+
+  renumberMeasures(doc)
+  return serializeXml(doc)
+}
+
+export function duplicateBars(xml: string, barIndices: number[], insertAfter: number): string {
+  const fragment = copyBars(xml, barIndices)
+  return pasteBars(xml, fragment, insertAfter)
+}
+
+export function setLyric(xml: string, barIndex: number, noteIndex: number, syllable: string): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const notes = getNotes(measures[barIndex])
+  const note = notes[noteIndex]
+  if (!note) return xml
+
+  // Remove existing lyric
+  const existing = note.querySelector('lyric')
+  if (existing) existing.parentNode!.removeChild(existing)
+
+  const lyric = doc.createElement('lyric')
+  lyric.setAttribute('number', '1')
+  const syllabicEl = doc.createElement('syllabic')
+  // Detect syllabic type from text
+  if (syllable.endsWith('-')) {
+    syllabicEl.textContent = 'begin'
+  } else if (syllable.startsWith('-')) {
+    syllabicEl.textContent = 'end'
+  } else {
+    syllabicEl.textContent = 'single'
+  }
+  lyric.appendChild(syllabicEl)
+  const textEl = doc.createElement('text')
+  textEl.textContent = syllable
+  lyric.appendChild(textEl)
+  note.appendChild(lyric)
+
+  return serializeXml(doc)
+}
+
+export function setAnnotation(xml: string, barIndex: number, text: string): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const m = measures[barIndex]
+  if (!m) return xml
+
+  const direction = doc.createElement('direction')
+  direction.setAttribute('placement', 'above')
+  const dirType = doc.createElement('direction-type')
+  const words = doc.createElement('words')
+  words.textContent = text
+  dirType.appendChild(words)
+  direction.appendChild(dirType)
+
+  // Insert before first note
+  const firstNote = m.querySelector('note')
+  if (firstNote) {
+    m.insertBefore(direction, firstNote)
+  } else {
+    m.appendChild(direction)
+  }
+
+  return serializeXml(doc)
+}
+
+export interface NoteOnset {
+  barIndex: number
+  noteIndex: number
+  onsetTime: number  // seconds
+  duration: number   // seconds
+}
+
+export function buildNoteOnsetMap(xml: string, bpm: number): NoteOnset[] {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const { divisions } = getTimeInfo(doc)
+  const secondsPerDivision = 60 / (bpm * divisions)
+  const onsets: NoteOnset[] = []
+  let currentTime = 0
+
+  for (let barIndex = 0; barIndex < measures.length; barIndex++) {
+    const notes = getNotes(measures[barIndex])
+    let noteIndex = 0
+    for (const note of notes) {
+      const durEl = note.querySelector('duration')
+      const durDivisions = durEl ? parseInt(durEl.textContent || '1', 10) : 1
+      const durSeconds = durDivisions * secondsPerDivision
+
+      onsets.push({
+        barIndex,
+        noteIndex,
+        onsetTime: currentTime,
+        duration: durSeconds,
+      })
+
+      currentTime += durSeconds
+      noteIndex++
+    }
+  }
+
+  return onsets
 }

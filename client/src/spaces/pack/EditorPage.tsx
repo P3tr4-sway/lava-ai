@@ -89,22 +89,30 @@ export function EditorPage() {
     const xml = useLeadSheetStore.getState().musicXml
     if (!xml) return
     const { selectedBars, pushUndo } = useEditorStore.getState()
-    pushUndo(xml)
     const afterIndex = selectedBars.length > 0 ? Math.max(...selectedBars) : -1
-    const newXml = addBars(xml, Math.max(afterIndex, 0), 1)
-    useLeadSheetStore.getState().setMusicXml(newXml)
-    useEditorStore.getState().setSaveStatus('unsaved')
+    try {
+      const newXml = addBars(xml, Math.max(afterIndex, 0), 1)
+      pushUndo(xml)
+      useLeadSheetStore.getState().setMusicXml(newXml)
+      useEditorStore.getState().setSaveStatus('unsaved')
+    } catch (err) {
+      console.error('[handleAddBar] addBars failed:', err)
+    }
   }, [])
 
   const handleDeleteBars = useCallback(() => {
     const xml = useLeadSheetStore.getState().musicXml
     const { selectedBars, clearSelection, pushUndo } = useEditorStore.getState()
     if (!xml || selectedBars.length === 0) return
-    pushUndo(xml)
-    const newXml = deleteBars(xml, selectedBars)
-    useLeadSheetStore.getState().setMusicXml(newXml)
-    clearSelection()
-    useEditorStore.getState().setSaveStatus('unsaved')
+    try {
+      const newXml = deleteBars(xml, selectedBars)
+      pushUndo(xml)
+      useLeadSheetStore.getState().setMusicXml(newXml)
+      clearSelection()
+      useEditorStore.getState().setSaveStatus('unsaved')
+    } catch (err) {
+      console.error('[handleDeleteBars] deleteBars failed:', err)
+    }
   }, [])
 
   const handleStylePicker = useCallback(() => {

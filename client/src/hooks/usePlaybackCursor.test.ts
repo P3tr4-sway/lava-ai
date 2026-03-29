@@ -37,6 +37,7 @@ describe('usePlaybackCursor', () => {
     const getMeasureBounds = vi.fn().mockReturnValue(null)
     const { result } = renderHook(() => usePlaybackCursor(getMeasureBounds))
     expect(result.current.visible).toBe(false)
+    expect(getMeasureBounds).not.toHaveBeenCalled()
   })
 
   it('returns correct bounds from getMeasureBounds', () => {

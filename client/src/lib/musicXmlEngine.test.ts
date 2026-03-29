@@ -9,6 +9,11 @@ import {
   setChord,
   setKeySig,
   setTimeSig,
+  setNotePitch,
+  setNoteDuration,
+  addAccidental,
+  toggleTie,
+  toggleRest,
 } from './musicXmlEngine'
 
 const SIMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -179,5 +184,72 @@ describe('setTimeSig', () => {
     const m = getMeasures(doc)[1]
     const beats = m.querySelector('time > beats')
     expect(beats!.textContent).toBe('3')
+  })
+})
+
+describe('setNotePitch', () => {
+  it('changes pitch of first note in bar 0', () => {
+    const result = setNotePitch(SIMPLE_XML, 0, 0, { step: 'A', octave: 4, alter: 0 })
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('pitch > step')!.textContent).toBe('A')
+    expect(note.querySelector('pitch > octave')!.textContent).toBe('4')
+  })
+})
+
+describe('setNoteDuration', () => {
+  it('changes duration type of a note', () => {
+    const result = setNoteDuration(SIMPLE_XML, 0, 0, 'half', 2)
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('type')!.textContent).toBe('half')
+    expect(note.querySelector('duration')!.textContent).toBe('2')
+  })
+})
+
+describe('addAccidental', () => {
+  it('adds sharp accidental to a note', () => {
+    const result = addAccidental(SIMPLE_XML, 0, 0, 'sharp')
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('accidental')!.textContent).toBe('sharp')
+    expect(note.querySelector('pitch > alter')!.textContent).toBe('1')
+  })
+})
+
+describe('toggleTie', () => {
+  it('adds tie to a note that has none', () => {
+    const result = toggleTie(SIMPLE_XML, 0, 0)
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('tie')).not.toBeNull()
+  })
+
+  it('removes tie from a note that has one', () => {
+    const withTie = toggleTie(SIMPLE_XML, 0, 0)
+    const result = toggleTie(withTie, 0, 0)
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('tie')).toBeNull()
+  })
+})
+
+describe('toggleRest', () => {
+  it('converts a note to rest of same duration', () => {
+    const result = toggleRest(SIMPLE_XML, 0, 0)
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('rest')).not.toBeNull()
+    expect(note.querySelector('pitch')).toBeNull()
+    expect(note.querySelector('type')!.textContent).toBe('quarter')
+  })
+
+  it('converts a rest back to a note (default C4)', () => {
+    const withRest = toggleRest(SIMPLE_XML, 0, 0)
+    const result = toggleRest(withRest, 0, 0)
+    const doc = parseXml(result)
+    const note = getMeasures(doc)[0].querySelectorAll('note')[0]
+    expect(note.querySelector('pitch')).not.toBeNull()
+    expect(note.querySelector('rest')).toBeNull()
   })
 })

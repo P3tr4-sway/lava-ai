@@ -1,3 +1,5 @@
+import type { Pitch } from './pitchUtils'
+
 const parser = new DOMParser()
 const serializer = new XMLSerializer()
 
@@ -267,6 +269,172 @@ export function setTimeSig(xml: string, fromBar: number, beats: number, beatType
     timeEl.appendChild(beatTypeEl)
   }
   beatTypeEl.textContent = String(beatType)
+
+  return serializeXml(doc)
+}
+
+// --- Note operations ---
+
+function getNotes(measure: Element): Element[] {
+  return Array.from(measure.querySelectorAll('note'))
+}
+
+export function setNotePitch(xml: string, barIndex: number, noteIndex: number, pitch: Pitch): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const notes = getNotes(measures[barIndex])
+  const note = notes[noteIndex]
+  if (!note) return xml
+
+  // Remove existing rest if present (converting rest → note)
+  const restEl = note.querySelector('rest')
+  if (restEl) restEl.parentNode!.removeChild(restEl)
+
+  // Find or create pitch element
+  let pitchEl = note.querySelector('pitch')
+  if (!pitchEl) {
+    pitchEl = doc.createElement('pitch')
+    note.insertBefore(pitchEl, note.firstChild)
+  }
+
+  let stepEl = pitchEl.querySelector('step')
+  if (!stepEl) { stepEl = doc.createElement('step'); pitchEl.appendChild(stepEl) }
+  stepEl.textContent = pitch.step
+
+  let octEl = pitchEl.querySelector('octave')
+  if (!octEl) { octEl = doc.createElement('octave'); pitchEl.appendChild(octEl) }
+  octEl.textContent = String(pitch.octave)
+
+  const existingAlter = pitchEl.querySelector('alter')
+  if (pitch.alter !== undefined && pitch.alter !== 0) {
+    if (!existingAlter) {
+      const alterEl = doc.createElement('alter')
+      alterEl.textContent = String(pitch.alter)
+      pitchEl.insertBefore(alterEl, octEl)
+    } else {
+      existingAlter.textContent = String(pitch.alter)
+    }
+  } else if (existingAlter) {
+    existingAlter.parentNode!.removeChild(existingAlter)
+  }
+
+  return serializeXml(doc)
+}
+
+export function setNoteDuration(
+  xml: string, barIndex: number, noteIndex: number,
+  type: string, durationValue: number
+): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const notes = getNotes(measures[barIndex])
+  const note = notes[noteIndex]
+  if (!note) return xml
+
+  let typeEl = note.querySelector('type')
+  if (!typeEl) { typeEl = doc.createElement('type'); note.appendChild(typeEl) }
+  typeEl.textContent = type
+
+  let durEl = note.querySelector('duration')
+  if (!durEl) { durEl = doc.createElement('duration'); note.appendChild(durEl) }
+  durEl.textContent = String(durationValue)
+
+  return serializeXml(doc)
+}
+
+export function addAccidental(
+  xml: string, barIndex: number, noteIndex: number,
+  accidental: 'sharp' | 'flat' | 'natural'
+): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const notes = getNotes(measures[barIndex])
+  const note = notes[noteIndex]
+  if (!note) return xml
+
+  // Add/update accidental element
+  let accEl = note.querySelector('accidental')
+  if (!accEl) { accEl = doc.createElement('accidental'); note.appendChild(accEl) }
+  accEl.textContent = accidental
+
+  // Update pitch alter
+  const pitchEl = note.querySelector('pitch')
+  if (pitchEl) {
+    const alterValue = accidental === 'sharp' ? 1 : accidental === 'flat' ? -1 : 0
+    let alterEl = pitchEl.querySelector('alter')
+    if (alterValue !== 0) {
+      if (!alterEl) {
+        alterEl = doc.createElement('alter')
+        const octEl = pitchEl.querySelector('octave')
+        pitchEl.insertBefore(alterEl, octEl)
+      }
+      alterEl.textContent = String(alterValue)
+    } else if (alterEl) {
+      alterEl.parentNode!.removeChild(alterEl)
+    }
+  }
+
+  return serializeXml(doc)
+}
+
+export function toggleTie(xml: string, barIndex: number, noteIndex: number): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const notes = getNotes(measures[barIndex])
+  const note = notes[noteIndex]
+  if (!note) return xml
+
+  const existingTie = note.querySelector('tie')
+  if (existingTie) {
+    // Remove all ties and notations/tied
+    note.querySelectorAll('tie').forEach((t) => t.parentNode!.removeChild(t))
+    const tied = note.querySelector('notations > tied')
+    if (tied) tied.parentNode!.removeChild(tied)
+  } else {
+    const tie = doc.createElement('tie')
+    tie.setAttribute('type', 'start')
+    note.appendChild(tie)
+
+    let notations = note.querySelector('notations')
+    if (!notations) { notations = doc.createElement('notations'); note.appendChild(notations) }
+    const tied = doc.createElement('tied')
+    tied.setAttribute('type', 'start')
+    notations.appendChild(tied)
+  }
+
+  return serializeXml(doc)
+}
+
+export function toggleRest(xml: string, barIndex: number, noteIndex: number): string {
+  const doc = parseXml(xml)
+  const measures = getMeasures(doc)
+  const notes = getNotes(measures[barIndex])
+  const note = notes[noteIndex]
+  if (!note) return xml
+
+  const isRest = !!note.querySelector('rest')
+
+  if (isRest) {
+    // Convert rest to note (default C4)
+    const restEl = note.querySelector('rest')
+    if (restEl) restEl.parentNode!.removeChild(restEl)
+    const pitchEl = doc.createElement('pitch')
+    const stepEl = doc.createElement('step')
+    stepEl.textContent = 'C'
+    const octEl = doc.createElement('octave')
+    octEl.textContent = '4'
+    pitchEl.appendChild(stepEl)
+    pitchEl.appendChild(octEl)
+    note.insertBefore(pitchEl, note.firstChild)
+  } else {
+    // Convert note to rest
+    const pitchEl = note.querySelector('pitch')
+    if (pitchEl) pitchEl.parentNode!.removeChild(pitchEl)
+    // Remove accidentals, ties, notations
+    note.querySelectorAll('accidental, tie, notations').forEach((el) => el.parentNode!.removeChild(el))
+    const restEl = doc.createElement('rest')
+    note.insertBefore(restEl, note.firstChild)
+  }
 
   return serializeXml(doc)
 }

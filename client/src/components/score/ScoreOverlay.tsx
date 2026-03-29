@@ -1,8 +1,9 @@
+import type { ReactNode } from 'react'
 import { cn } from '@/components/ui/utils'
 
 interface ScoreOverlayProps {
   className?: string
-  children?: React.ReactNode
+  children?: ReactNode
 }
 
 /**

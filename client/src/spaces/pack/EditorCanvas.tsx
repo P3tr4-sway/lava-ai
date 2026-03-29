@@ -47,7 +47,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const selectNote = useEditorStore((s) => s.selectNote)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
-  const { syncHighlights, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
+  const { syncHighlights } = useScoreSync(containerRef)
 
   const [popover, setPopover] = useState<PopoverState | null>(null)
 
@@ -160,10 +160,6 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     },
     [],
   )
-
-  // Expose getMeasureBounds/getNoteBounds via data attributes for future overlay consumers
-  void getMeasureBounds
-  void getNoteBounds
 
   return (
     <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>

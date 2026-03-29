@@ -97,7 +97,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     for (let i = lo; i <= hi; i++) bars.push(i)
     set({ selectedBars: bars, selectedNotes: [] })
   },
-  clearSelection: () => set({ selectedBars: [] }),
+  clearSelection: () => set({ selectedBars: [], selectedNotes: [] }),
 
   // Note selection
   selectedNotes: [],

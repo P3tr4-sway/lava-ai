@@ -30,6 +30,12 @@ describe('midiToPitch', () => {
   it('converts 61 to C#4', () => {
     expect(midiToPitch(61)).toEqual({ step: 'C', octave: 4, alter: 1 })
   })
+  it('returns flat spelling when preferFlats=true', () => {
+    expect(midiToPitch(61, true)).toEqual({ step: 'D', octave: 4, alter: -1 })
+  })
+  it('returns sharp spelling by default', () => {
+    expect(midiToPitch(61)).toEqual({ step: 'C', octave: 4, alter: 1 })
+  })
 })
 
 describe('stepDiatonic', () => {
@@ -68,5 +74,9 @@ describe('fretToMidi', () => {
   })
   it('converts 1st string 5th fret to A4 (69)', () => {
     expect(fretToMidi(1, 5, STANDARD_TUNING)).toBe(69)
+  })
+  it('throws RangeError for invalid string number', () => {
+    expect(() => fretToMidi(0, 0, STANDARD_TUNING)).toThrow(RangeError)
+    expect(() => fretToMidi(7, 0, STANDARD_TUNING)).toThrow(RangeError)
   })
 })

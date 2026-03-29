@@ -16,24 +16,32 @@ const STEP_TO_SEMITONE: Record<string, number> = {
 const DIATONIC_STEPS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
 
 // Standard guitar tuning: string 1 (high E) to string 6 (low E), as MIDI numbers
-export const STANDARD_TUNING = [64, 59, 55, 50, 45, 40] // E4, B3, G3, D3, A2, E2
+export const STANDARD_TUNING: readonly number[] = [64, 59, 55, 50, 45, 40] // E4, B3, G3, D3, A2, E2
 
 export function pitchToMidi(p: Pitch): number {
   return (p.octave + 1) * 12 + STEP_TO_SEMITONE[p.step] + (p.alter ?? 0)
 }
 
-export function midiToPitch(midi: number): Pitch {
+export function midiToPitch(midi: number, preferFlats = false): Pitch {
   const octave = Math.floor(midi / 12) - 1
   const semitone = midi % 12
-  // Find closest natural note
+  // Natural notes
   for (const [step, semi] of Object.entries(STEP_TO_SEMITONE)) {
     if (semi === semitone) return { step, octave, alter: 0 }
   }
-  // It's a sharp — find the note below
-  for (const [step, semi] of Object.entries(STEP_TO_SEMITONE)) {
-    if (semi === semitone - 1) return { step, octave, alter: 1 }
+  // Accidentals — sharp or flat depending on preference
+  if (preferFlats) {
+    // Find the note above with flat
+    for (const [step, semi] of Object.entries(STEP_TO_SEMITONE)) {
+      if (semi === semitone + 1) return { step, octave, alter: -1 }
+    }
+  } else {
+    // Find the note below with sharp
+    for (const [step, semi] of Object.entries(STEP_TO_SEMITONE)) {
+      if (semi === semitone - 1) return { step, octave, alter: 1 }
+    }
   }
-  return { step: 'C', octave, alter: 0 } // fallback
+  throw new Error(`midiToPitch: unreachable semitone ${semitone}`)
 }
 
 export function stepDiatonic(p: Pitch, steps: number): Pitch {
@@ -48,7 +56,7 @@ export function stepDiatonic(p: Pitch, steps: number): Pitch {
   }
 }
 
-export function midiToFret(midi: number, tuning: number[]): FretPosition[] {
+export function midiToFret(midi: number, tuning: readonly number[]): FretPosition[] {
   const positions: FretPosition[] = []
   for (let s = 0; s < tuning.length; s++) {
     const fret = midi - tuning[s]
@@ -59,6 +67,9 @@ export function midiToFret(midi: number, tuning: number[]): FretPosition[] {
   return positions
 }
 
-export function fretToMidi(string: number, fret: number, tuning: number[]): number {
+export function fretToMidi(string: number, fret: number, tuning: readonly number[]): number {
+  if (string < 1 || string > tuning.length) {
+    throw new RangeError(`fretToMidi: string ${string} out of range (1-${tuning.length})`)
+  }
   return tuning[string - 1] + fret
 }

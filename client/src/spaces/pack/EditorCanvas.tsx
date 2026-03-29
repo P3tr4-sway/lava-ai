@@ -5,6 +5,7 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useScoreSync } from '@/hooks/useScoreSync'
 import { ScoreOverlay } from '@/components/score/ScoreOverlay'
+import { PlaybackCursor } from '@/components/score/PlaybackCursor'
 import { ChordPopover } from './ChordPopover'
 import { KeySigPopover } from './KeySigPopover'
 import { TextAnnotationInput } from './TextAnnotationInput'
@@ -47,7 +48,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const selectNote = useEditorStore((s) => s.selectNote)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
-  const { syncHighlights } = useScoreSync(containerRef)
+  const { syncHighlights, getMeasureBounds } = useScoreSync(containerRef)
 
   const [popover, setPopover] = useState<PopoverState | null>(null)
 
@@ -168,7 +169,9 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         onClick={handleCanvasClick}
         className="min-h-full p-6"
       />
-      <ScoreOverlay />
+      <ScoreOverlay>
+        <PlaybackCursor getMeasureBounds={getMeasureBounds} />
+      </ScoreOverlay>
 
       {popover?.type === 'chord' && (
         <ChordPopover

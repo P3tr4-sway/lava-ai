@@ -140,27 +140,12 @@ export function EditorToolbar({
   return (
     <div
       className={cn(
-        'absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-0.5 rounded-full border border-border bg-surface-0 px-2 py-1.5 shadow-lg',
+        'absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-stretch gap-2',
         className,
       )}
     >
-      {/* Playback controls */}
-      <ToolButton
-        icon={isPlaying ? Pause : Play}
-        onClick={handleTogglePlayback}
-        label={isPlaying ? 'Pause' : 'Play'}
-      />
-      <ToolButton
-        icon={RotateCcw}
-        onClick={handleRestart}
-        label="Restart"
-      />
-
-      {/* Position scrubber */}
-      <div className="flex items-center gap-1.5 px-1.5">
-        <span className="min-w-[2.75rem] text-center text-[11px] font-mono text-text-muted" title="Bar position">
-          {displayBar}/{safeTotalBars}
-        </span>
+      {/* Standalone scrubber — iOS style: dim at rest, full opacity on hover/focus */}
+      <div className="group/scrub px-2 opacity-30 transition-opacity duration-200 hover:opacity-100 focus-within:opacity-100">
         <input
           type="range"
           min={0}
@@ -168,95 +153,117 @@ export function EditorToolbar({
           step={1}
           value={sliderValue}
           onChange={(e) => locateToBar((Number(e.target.value) / 1000) * safeTotalBars)}
-          className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-surface-3 accent-accent"
-          aria-label="Playback position"
+          aria-label={`Playback position — bar ${displayBar} of ${safeTotalBars}`}
+          className={cn(
+            'block w-full cursor-pointer appearance-none bg-transparent',
+            // Track
+            '[&::-webkit-slider-runnable-track]:h-0.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-text-primary',
+            '[&::-moz-range-track]:h-0.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-text-primary [&::-moz-range-track]:border-0',
+            // Thumb
+            '[&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-text-primary',
+            '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-text-primary',
+          )}
         />
-        <span className="min-w-[3rem] text-center text-[11px] font-mono text-text-muted" title="Tempo">
-          {bpm} BPM
-        </span>
       </div>
 
-      <Divider />
+      {/* Toolbar pill */}
+      <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface-0 px-2 py-1.5 shadow-lg">
+        {/* Playback */}
+        <ToolButton
+          icon={isPlaying ? Pause : Play}
+          onClick={handleTogglePlayback}
+          label={isPlaying ? 'Pause' : 'Play'}
+        />
+        <ToolButton icon={RotateCcw} onClick={handleRestart} label="Restart" />
+        <span
+          className="min-w-[3rem] px-1 text-center text-[11px] font-mono text-text-muted"
+          title="Tempo"
+        >
+          {bpm} BPM
+        </span>
 
-      {/* Selection tools */}
-      <ToolButton
-        icon={MousePointer2}
-        active={toolMode === 'pointer'}
-        onClick={() => setToolMode('pointer')}
-        label="Select"
-      />
-      <ToolButton
-        icon={BoxSelect}
-        active={toolMode === 'range'}
-        onClick={() => setToolMode('range')}
-        label="Range select"
-      />
+        <Divider />
 
-      <Divider />
+        {/* Selection tools */}
+        <ToolButton
+          icon={MousePointer2}
+          active={toolMode === 'pointer'}
+          onClick={() => setToolMode('pointer')}
+          label="Select"
+        />
+        <ToolButton
+          icon={BoxSelect}
+          active={toolMode === 'range'}
+          onClick={() => setToolMode('range')}
+          label="Range select"
+        />
 
-      {/* Editing tools */}
-      <ToolButton
-        icon={Hash}
-        active={toolMode === 'chord'}
-        onClick={() => setToolMode('chord')}
-        label="Edit chord"
-      />
-      <ToolButton
-        icon={Music}
-        active={toolMode === 'keySig'}
-        onClick={() => setToolMode('keySig')}
-        label="Key & time sig"
-      />
-      <ToolButton
-        icon={Type}
-        active={toolMode === 'text'}
-        onClick={() => setToolMode('text')}
-        label="Add annotation"
-      />
+        <Divider />
 
-      <Divider />
+        {/* Editing tools */}
+        <ToolButton
+          icon={Hash}
+          active={toolMode === 'chord'}
+          onClick={() => setToolMode('chord')}
+          label="Edit chord"
+        />
+        <ToolButton
+          icon={Music}
+          active={toolMode === 'keySig'}
+          onClick={() => setToolMode('keySig')}
+          label="Key & time sig"
+        />
+        <ToolButton
+          icon={Type}
+          active={toolMode === 'text'}
+          onClick={() => setToolMode('text')}
+          label="Add annotation"
+        />
 
-      {/* History */}
-      <ToolButton icon={Undo2} onClick={undo} disabled={!canUndo} label="Undo" />
-      <ToolButton icon={Redo2} onClick={redo} disabled={!canRedo} label="Redo" />
+        <Divider />
 
-      <Divider />
+        {/* History */}
+        <ToolButton icon={Undo2} onClick={undo} disabled={!canUndo} label="Undo" />
+        <ToolButton icon={Redo2} onClick={redo} disabled={!canRedo} label="Redo" />
 
-      {/* Bar management */}
-      <ToolButton icon={Plus} onClick={onAddBar} label="Add bar" />
-      <ToolButton
-        icon={Trash2}
-        onClick={onDeleteBars}
-        disabled={selectedBars.length === 0}
-        label="Delete bar"
-      />
+        <Divider />
 
-      <Divider />
+        {/* Bar management */}
+        <ToolButton icon={Plus} onClick={onAddBar} label="Add bar" />
+        <ToolButton
+          icon={Trash2}
+          onClick={onDeleteBars}
+          disabled={selectedBars.length === 0}
+          label="Delete bar"
+        />
 
-      {/* Playback style */}
-      <ToolButton icon={Disc3} onClick={onStylePicker} label="Sound style" />
+        <Divider />
 
-      <Divider />
+        {/* Playback style */}
+        <ToolButton icon={Disc3} onClick={onStylePicker} label="Sound style" />
 
-      {/* Zoom */}
-      <ToolButton icon={ZoomOut} onClick={() => setZoom(zoom - 10)} disabled={zoom <= 50} label="Zoom out" />
-      <span className="min-w-[2.5rem] text-center text-xs font-mono text-text-secondary">
-        {zoom}%
-      </span>
-      <ToolButton icon={ZoomIn} onClick={() => setZoom(zoom + 10)} disabled={zoom >= 200} label="Zoom in" />
+        <Divider />
 
-      <Divider />
+        {/* Zoom */}
+        <ToolButton icon={ZoomOut} onClick={() => setZoom(zoom - 10)} disabled={zoom <= 50} label="Zoom out" />
+        <span className="min-w-[2.5rem] text-center text-xs font-mono text-text-secondary">
+          {zoom}%
+        </span>
+        <ToolButton icon={ZoomIn} onClick={() => setZoom(zoom + 10)} disabled={zoom >= 200} label="Zoom in" />
 
-      {/* View mode cycle */}
-      <ToolButton
-        icon={Layers}
-        label={viewModeLabel[viewMode] ?? 'View mode'}
-        onClick={() => {
-          const modes: ViewMode[] = ['staff', 'leadSheet', 'tab']
-          const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
-          setViewMode(next)
-        }}
-      />
+        <Divider />
+
+        {/* View mode cycle */}
+        <ToolButton
+          icon={Layers}
+          label={viewModeLabel[viewMode] ?? 'View mode'}
+          onClick={() => {
+            const modes: ViewMode[] = ['staff', 'leadSheet', 'tab']
+            const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
+            setViewMode(next)
+          }}
+        />
+      </div>
     </div>
   )
 }

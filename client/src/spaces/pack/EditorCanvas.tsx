@@ -6,6 +6,8 @@ import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useScoreSync } from '@/hooks/useScoreSync'
 import { ScoreOverlay } from '@/components/score/ScoreOverlay'
 import { PlaybackCursor } from '@/components/score/PlaybackCursor'
+import { SelectionRect } from '@/components/score/SelectionRect'
+import { useRangeSelect } from '@/hooks/useRangeSelect'
 import { ChordPopover } from './ChordPopover'
 import { KeySigPopover } from './KeySigPopover'
 import { TextAnnotationInput } from './TextAnnotationInput'
@@ -49,6 +51,10 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
   const { syncHighlights, getMeasureBounds } = useScoreSync(containerRef)
+  const { selectionBox, onMouseDown, onMouseMove, onMouseUp } = useRangeSelect(
+    containerRef,
+    getMeasureBounds,
+  )
 
   const [popover, setPopover] = useState<PopoverState | null>(null)
 
@@ -102,6 +108,8 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   // Handle click on score
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
+      // Skip click logic for range tool — selection committed on mouseUp
+      if (toolMode === 'range') return
       if (!containerRef.current) return
 
       const hit = findClickedElement(e.clientX, e.clientY)
@@ -131,7 +139,6 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
           barIndex,
         })
       }
-      // TODO: 'range' tool — click+drag selection; wire selectRange from editorStore
     },
     [toolMode, selectBar, selectNote, clearSelection, syncHighlights],
   )
@@ -163,14 +170,18 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   )
 
   return (
-    <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', className)}>
+    <div className={cn('relative flex-1 overflow-y-auto bg-surface-0', toolMode === 'range' && 'cursor-crosshair', className)}>
       <div
         ref={containerRef}
         onClick={handleCanvasClick}
-        className="min-h-full p-6"
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        className={cn('min-h-full p-6', toolMode === 'range' && 'cursor-crosshair')}
       />
       <ScoreOverlay>
         <PlaybackCursor getMeasureBounds={getMeasureBounds} />
+        <SelectionRect box={selectionBox} />
       </ScoreOverlay>
 
       {popover?.type === 'chord' && (

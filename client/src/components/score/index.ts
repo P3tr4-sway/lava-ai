@@ -9,3 +9,4 @@ export { PlaybackStylePickerDrawer, type PlaybackStyleOption } from './PlaybackS
 export { SongActionModal, type SongActionView } from './SongActionModal'
 export { ScoreOverlay } from './ScoreOverlay'
 export { PlaybackCursor } from './PlaybackCursor'
+export { SelectionRect } from './SelectionRect'

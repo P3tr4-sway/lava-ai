@@ -555,7 +555,7 @@ export function setLyric(xml: string, barIndex: number, noteIndex: number, sylla
   }
   lyric.appendChild(syllabicEl)
   const textEl = doc.createElement('text')
-  textEl.textContent = syllable
+  textEl.textContent = syllable.replace(/^-|-$/g, '')
   lyric.appendChild(textEl)
   note.appendChild(lyric)
 
@@ -610,6 +610,8 @@ export function buildNoteOnsetMap(xml: string, bpm: number): NoteOnset[] {
       const durDivisions = durEl ? parseInt(durEl.textContent || '1', 10) : 1
       const durSeconds = durDivisions * secondsPerDivision
 
+      // Rests are included — they still consume time in the onset map.
+      // Callers can detect rests by checking the source MusicXML.
       onsets.push({
         barIndex,
         noteIndex,
@@ -617,6 +619,8 @@ export function buildNoteOnsetMap(xml: string, bpm: number): NoteOnset[] {
         duration: durSeconds,
       })
 
+      // Note: <chord> elements are not handled; chords with shared onset are
+      // treated as sequential for now (out of scope for single-note guitar editor).
       currentTime += durSeconds
       noteIndex++
     }

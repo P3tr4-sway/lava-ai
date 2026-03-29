@@ -298,7 +298,7 @@ describe('setLyric', () => {
     const doc = parseXml(result)
     const lyric = getMeasures(doc)[0].querySelectorAll('note')[0].querySelector('lyric')
     expect(lyric).not.toBeNull()
-    expect(lyric!.querySelector('text')!.textContent).toBe('hel-')
+    expect(lyric!.querySelector('text')!.textContent).toBe('hel')
   })
 })
 

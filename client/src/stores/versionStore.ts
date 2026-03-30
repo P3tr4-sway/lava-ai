@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { Version } from '@lava/shared'
-import type { ArrangementId } from '@lava/shared'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 
 interface VersionStore {
@@ -43,6 +42,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   isPreview: () => get().previewVersionId !== null,
 
   setActiveVersion: (id) => {
+    if (get().previewVersionId) return
     const version = get().versions.find((v) => v.id === id)
     if (!version) return
     set({ activeVersionId: id })
@@ -72,24 +72,27 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   },
 
   applyPreview: () => {
-    const { previewVersionId } = get()
+    const { previewVersionId, versions } = get()
     if (!previewVersionId) return
+    const version = versions.find((v) => v.id === previewVersionId)
+    if (version) {
+      useLeadSheetStore.getState().setMusicXml(version.musicXml)
+    }
     set({ activeVersionId: previewVersionId, previewVersionId: null })
   },
 
   discardPreview: () => {
-    const { previewVersionId, activeVersionId, versions } = get()
-    if (!previewVersionId) return
-    // Restore active version's XML
-    const activeVersion = versions.find((v) => v.id === activeVersionId)
-    if (activeVersion) {
-      useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
-    }
-    // Remove the discarded preview version
-    set((s) => ({
-      previewVersionId: null,
-      versions: s.versions.filter((v) => v.id !== previewVersionId),
-    }))
+    set((s) => {
+      if (!s.previewVersionId) return s
+      const activeVersion = s.versions.find((v) => v.id === s.activeVersionId)
+      if (activeVersion) {
+        useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
+      }
+      return {
+        previewVersionId: null,
+        versions: s.versions.filter((v) => v.id !== s.previewVersionId),
+      }
+    })
   },
 
   loadFromArrangements: () => {

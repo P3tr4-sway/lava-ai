@@ -8,9 +8,12 @@ interface PreviewBarProps {
 }
 
 export function PreviewBar({ onCompare, className }: PreviewBarProps) {
-  const previewVersion = useVersionStore((s) => s.getPreviewVersion())
-  const applyPreview = useVersionStore((s) => s.applyPreview)
-  const discardPreview = useVersionStore((s) => s.discardPreview)
+  const previewVersionId = useVersionStore((s) => s.previewVersionId)
+  const versions = useVersionStore((s) => s.versions)
+  const previewVersion = previewVersionId
+    ? versions.find((v) => v.id === previewVersionId)
+    : undefined
+  const { applyPreview, discardPreview } = useVersionStore.getState()
 
   if (!previewVersion) return null
 

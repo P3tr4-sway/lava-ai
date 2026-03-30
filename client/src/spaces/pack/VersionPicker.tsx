@@ -14,7 +14,7 @@ export function VersionPicker({ className }: VersionPickerProps) {
   const versions = useVersionStore((s) => s.versions)
   const activeVersionId = useVersionStore((s) => s.activeVersionId)
   const setActiveVersion = useVersionStore((s) => s.setActiveVersion)
-  const isPreview = useVersionStore((s) => s.isPreview())
+  const isPreview = useVersionStore((s) => s.previewVersionId !== null)
 
   const activeVersion = versions.find((v) => v.id === activeVersionId)
 
@@ -36,6 +36,8 @@ export function VersionPicker({ className }: VersionPickerProps) {
     <div ref={ref} className={cn('relative', className)}>
       <button
         type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
         onClick={() => setOpen(!open)}
         disabled={isPreview}
         className={cn(

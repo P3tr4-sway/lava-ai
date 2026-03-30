@@ -24,6 +24,14 @@ import {
 import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
 import type { Pitch } from '@/lib/pitchUtils'
 
+/** Returns true when editing actions should be blocked (transform mode or version preview). */
+function isEditingDisabled(): boolean {
+  return (
+    useEditorStore.getState().editorMode === 'transform' ||
+    useVersionStore.getState().previewVersionId !== null
+  )
+}
+
 // Minimal MusicXML template for empty scores
 const EMPTY_MUSICXML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
@@ -314,7 +322,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   // Custom keyboard event handlers dispatched from useEditorKeyboard
   useEffect(() => {
     function onLavaPitchStep(e: CustomEvent<{ steps: number }>) {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedNotes, pushUndo } = useEditorStore.getState()
       if (!xml || selectedNotes.length === 0) return
@@ -348,7 +356,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaDurationKey(e: CustomEvent<{ key: string }>) {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -369,7 +377,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaAccidental(e: CustomEvent<{ type: 'sharp' | 'flat' | 'natural' }>) {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -385,7 +393,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaToggleTie() {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -401,7 +409,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaToggleRest() {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -417,6 +425,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaOpenFretboard() {
+      if (isEditingDisabled()) return
       const { selectedNotes: notes } = useEditorStore.getState()
       if (notes.length === 0) return
       const { barIndex, noteIndex } = notes[0]
@@ -427,6 +436,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaOpenDuration() {
+      if (isEditingDisabled()) return
       const { selectedNotes: notes } = useEditorStore.getState()
       if (notes.length === 0) return
       const { barIndex, noteIndex } = notes[0]
@@ -437,7 +447,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaCopy() {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedBars: bars } = useEditorStore.getState()
       if (!xml || bars.length === 0) return
@@ -448,7 +458,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaPaste() {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedBars: bars, clipboard, pushUndo } = useEditorStore.getState()
       if (!xml || !clipboard) return
@@ -462,7 +472,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaDuplicate() {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedBars: bars, pushUndo } = useEditorStore.getState()
       if (!xml || bars.length === 0) return
@@ -476,7 +486,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaTranspose(e: CustomEvent<{ semitones: number }>) {
-      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
+      if (isEditingDisabled()) return
       const xml = getXml()
       const { selectedBars: bars, pushUndo } = useEditorStore.getState()
       if (!xml || bars.length === 0) return
@@ -584,16 +594,15 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       <ScoreOverlay>
         <PlaybackCursor getMeasureBounds={getMeasureBounds} />
         <SelectionRect box={selectionBox} />
-        {!editingDisabled && (
-          <ContextPill
-            selectionType={contextSelectionType}
-            bounds={contextBounds}
-            onDelete={handleContextDelete}
-            onClear={handleContextClear}
-            onCopy={handleContextCopy}
-            onTranspose={handleContextTranspose}
-          />
-        )}
+        <ContextPill
+          selectionType={contextSelectionType}
+          bounds={contextBounds}
+          onDelete={handleContextDelete}
+          onClear={handleContextClear}
+          onCopy={handleContextCopy}
+          onTranspose={handleContextTranspose}
+          readOnly={editingDisabled}
+        />
         <MiniFretboard
           visible={fretboardState.visible}
           x={fretboardState.x}

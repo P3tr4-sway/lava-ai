@@ -192,7 +192,17 @@ export function EditorPage() {
             </div>
           ) : (
             <>
-              <PreviewBar onCompare={() => setShowCompare(true)} />
+              <PreviewBar
+                onApply={() => {
+                  useVersionStore.getState().applyPreview()
+                  setShowCompare(false)
+                }}
+                onDiscard={() => {
+                  useVersionStore.getState().discardPreview()
+                  setShowCompare(false)
+                }}
+                onCompare={() => setShowCompare(true)}
+              />
               <EditorCanvas className="flex-1" />
             </>
           )}

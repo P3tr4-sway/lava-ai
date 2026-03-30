@@ -3,17 +3,18 @@ import { cn } from '@/components/ui/utils'
 import { useVersionStore } from '@/stores/versionStore'
 
 interface PreviewBarProps {
-  onCompare: () => void
+  onApply?: () => void
+  onDiscard?: () => void
+  onCompare?: () => void
   className?: string
 }
 
-export function PreviewBar({ onCompare, className }: PreviewBarProps) {
+export function PreviewBar({ onApply, onDiscard, onCompare, className }: PreviewBarProps) {
   const previewVersionId = useVersionStore((s) => s.previewVersionId)
   const versions = useVersionStore((s) => s.versions)
   const previewVersion = previewVersionId
     ? versions.find((v) => v.id === previewVersionId)
     : undefined
-  const { applyPreview, discardPreview } = useVersionStore.getState()
 
   if (!previewVersion) return null
 
@@ -39,7 +40,7 @@ export function PreviewBar({ onCompare, className }: PreviewBarProps) {
         </button>
         <button
           type="button"
-          onClick={discardPreview}
+          onClick={onDiscard}
           className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-0 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-border-hover hover:bg-surface-2 hover:text-text-primary"
         >
           <X className="size-3.5" />
@@ -47,7 +48,7 @@ export function PreviewBar({ onCompare, className }: PreviewBarProps) {
         </button>
         <button
           type="button"
-          onClick={applyPreview}
+          onClick={onApply}
           className="flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-surface-0 transition-opacity hover:opacity-80"
         >
           <Check className="size-3.5" />

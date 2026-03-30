@@ -91,16 +91,15 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   },
 
   discardPreview: () => {
-    set((s) => {
-      if (!s.previewVersionId) return s
-      const activeVersion = s.versions.find((v) => v.id === s.activeVersionId)
-      if (activeVersion) {
-        useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
-      }
-      return {
-        previewVersionId: null,
-        versions: s.versions.filter((v) => v.id !== s.previewVersionId),
-      }
+    const { previewVersionId, versions, activeVersionId } = get()
+    if (!previewVersionId) return
+    const activeVersion = versions.find((v) => v.id === activeVersionId)
+    if (activeVersion) {
+      useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
+    }
+    set({
+      previewVersionId: null,
+      versions: versions.filter((v) => v.id !== previewVersionId),
     })
   },
 

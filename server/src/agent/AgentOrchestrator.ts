@@ -5,6 +5,7 @@ import { createToolRegistry, ToolExecutor } from './tools/index.js'
 import { SYSTEM_PROMPT } from './prompts/system.js'
 import { buildContextPrompt } from './prompts/context.js'
 import type { LLMProvider, NormalizedMessage } from './providers/types.js'
+import { logger } from '../utils/logger.js'
 
 export class AgentOrchestrator {
   private provider: LLMProvider
@@ -53,20 +54,22 @@ export class AgentOrchestrator {
           const parsed = JSON.parse(result.content) as {
             versionId: string
             name: string
-            musicXml: string
             changeSummary: string[]
           }
+          // musicXml is read from the original tool call input — not from the
+          // handler result — so it is never echoed into the LLM's context window.
+          const musicXml = String(toolCall.input?.['musicXml'] ?? '')
           onEvent({
             type: 'version_created',
             versionPayload: {
               versionId: parsed.versionId,
               name: parsed.name,
-              musicXml: parsed.musicXml,
+              musicXml,
               changeSummary: parsed.changeSummary,
             },
           })
-        } catch {
-          // Malformed result — skip the version_created event
+        } catch (err) {
+          logger.warn({ err }, '[AgentOrchestrator] create_version SSE: malformed tool result JSON')
         }
       }
 

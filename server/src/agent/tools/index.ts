@@ -126,7 +126,11 @@ function getHandler(name: string) {
     create_version: async (input) => {
       const versionId = crypto.randomUUID()
       const name = String(input.name)
-      const musicXml = String(input.musicXml)
+
+      const musicXml = String(input.musicXml ?? '')
+      if (!musicXml.trim() || (!musicXml.includes('<score-partwise') && !musicXml.includes('<?xml'))) {
+        return { error: 'Invalid MusicXML: document must be a valid MusicXML string' }
+      }
 
       const rawSummary = input.changeSummary
       let changeSummary: string[]
@@ -136,11 +140,12 @@ function getHandler(name: string) {
         changeSummary = []
       }
 
+      // Note: musicXml intentionally omitted from the return value — it is sent
+      // via SSE (version_created event) from AgentOrchestrator, not echoed to the LLM.
       return {
         action: 'version_created',
         versionId,
         name,
-        musicXml,
         changeSummary,
       }
     },

@@ -23,6 +23,7 @@ export const createVersionTool: ToolDefinition = {
       description:
         '1-3 bullet points describing what changed (e.g. ["Simplified chord voicings", "Added blues scale runs"])',
       required: true,
+      items: { type: 'string' },
     },
   ],
 }

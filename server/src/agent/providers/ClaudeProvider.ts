@@ -33,6 +33,7 @@ export class ClaudeProvider implements LLMProvider {
               type: p.type,
               description: p.description,
               ...(p.enum ? { enum: p.enum } : {}),
+              ...(p.type === 'array' && p.items ? { items: p.items } : {}),
             },
           ]),
         ),

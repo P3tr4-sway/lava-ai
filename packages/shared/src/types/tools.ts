@@ -7,6 +7,7 @@ export interface ToolParameter {
   required: boolean
   enum?: string[]
   default?: unknown
+  items?: { type: 'string' | 'number' | 'boolean' | 'object' }
 }
 
 export interface ToolDefinition {

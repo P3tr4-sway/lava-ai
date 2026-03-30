@@ -35,7 +35,12 @@ export class OpenAIProvider implements LLMProvider {
           properties: Object.fromEntries(
             t.parameters.map((p) => [
               p.name,
-              { type: p.type, description: p.description, ...(p.enum ? { enum: p.enum } : {}) },
+              {
+                type: p.type,
+                description: p.description,
+                ...(p.enum ? { enum: p.enum } : {}),
+                ...(p.type === 'array' && p.items ? { items: p.items } : {}),
+              },
             ]),
           ),
           required: t.parameters.filter((p) => p.required).map((p) => p.name),

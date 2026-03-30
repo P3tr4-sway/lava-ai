@@ -17,4 +17,5 @@ export interface VersionAction {
   versionId: string
   name: string
   changeSummary: string[]
+  state?: 'pending' | 'applied'
 }

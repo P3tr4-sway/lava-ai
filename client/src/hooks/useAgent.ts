@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
+import { useVersionStore } from '@/stores/versionStore'
 import { agentService } from '@/services/agentService'
 import type { AgentMessage, StreamEvent, MessageChip, ArrangementId } from '@lava/shared'
 import { SPACE_ROUTES } from '@lava/shared'
@@ -148,6 +149,32 @@ export function useAgent() {
       case 'message_stop':
         finalizeStream()
         break
+      case 'version_created': {
+        const payload = event.versionPayload
+        if (payload) {
+          useVersionStore.getState().addVersion({
+            id: payload.versionId,
+            name: payload.name,
+            source: 'ai-transform',
+            musicXml: payload.musicXml,
+            createdAt: Date.now(),
+          })
+          useVersionStore.getState().startPreview(payload.versionId)
+          useAgentStore.getState().addMessage({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: '',
+            subtype: 'versionCreated',
+            versionAction: {
+              versionId: payload.versionId,
+              name: payload.name,
+              changeSummary: payload.changeSummary,
+            },
+            createdAt: Date.now(),
+          })
+        }
+        break
+      }
       case 'error':
         finalizeStream()
         addMessage({

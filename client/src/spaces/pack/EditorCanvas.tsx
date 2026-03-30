@@ -176,14 +176,14 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       const { pushUndo } = useEditorStore.getState()
       const chordSymbol = chord.quality ? `${chord.root}${chord.quality}` : chord.root
       try {
-        const newXml = setChord(xml, popover.barIndex, 0, chordSymbol)
+        const newXml = setChord(xml, popover.barIndex, 0 /* beat index 0 — chord applies to the first beat of the bar */, chordSymbol)
         pushUndo(xml)
         saveXml(newXml)
         syncHighlights()
+        setPopover(null)
       } catch (err) {
         console.error('[handleChordSelect]', err)
       }
-      setPopover(null)
     },
     [popover, syncHighlights],
   )

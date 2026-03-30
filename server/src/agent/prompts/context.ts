@@ -62,6 +62,17 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     prompt += `\nA note: \`<note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>\``
     prompt += `\nA rest: \`<note><rest/><duration>4</duration><type>quarter</type></note>\``
     prompt += `\nMeasures are wrapped in \`<part id="P1"><measure number="N">...</measure></part>\`.`
+
+    prompt += `\n\n### Editing Strategy`
+    prompt += `\n- For WHOLESALE transformations (new arrangement, complete restyle, full reharmonization):`
+    prompt += `\n  → Use \`create_version\` with the complete modified MusicXML.`
+    prompt += `\n- For SURGICAL edits (change a chord, adjust a few notes, transpose a section, fix a pitch):`
+    prompt += `\n  → Use the granular editing tools (\`edit_note_pitch\`, \`edit_chord\`, \`transpose_bars\`, etc.)`
+    prompt += `\n  → Each edit renders live in the score — the user watches changes appear in real-time.`
+    prompt += `\n  → Always call \`end_edit_session\` when done to finalize the version.`
+    prompt += `\n- Prefer granular tools when the user's request targets specific bars or notes.`
+    prompt += `\n- Prefer \`create_version\` when the change touches most of the score.`
+    prompt += `\n- Never mix both strategies in the same response — pick one.`
   }
   if (ctx.projectId && ctx.projectName) {
     prompt += `\nActive project: "${ctx.projectName}" (id: ${ctx.projectId})`

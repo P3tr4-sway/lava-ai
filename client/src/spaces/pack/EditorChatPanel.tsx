@@ -6,6 +6,7 @@ import { ChatMessage } from '@/components/agent/ChatMessage'
 import { useAgentStore } from '@/stores/agentStore'
 import { useAgent } from '@/hooks/useAgent'
 import { useEditorStore } from '@/stores/editorStore'
+import { useVersionStore } from '@/stores/versionStore'
 import { EditorChatEmptyState } from './EditorChatEmptyState'
 import type { AgentMessage } from '@lava/shared'
 
@@ -30,6 +31,15 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
   const selectedBars = useEditorStore((s) => s.selectedBars)
 
   const [resizing, setResizing] = useState(false)
+
+  const handlePreviewVersion = useCallback((versionId: string) => {
+    useVersionStore.getState().startPreview(versionId)
+  }, [])
+
+  const handleApplyVersion = useCallback((versionId: string) => {
+    useVersionStore.getState().startPreview(versionId)
+    useVersionStore.getState().applyPreview()
+  }, [])
 
   // Auto-scroll on new messages or streaming content
   useEffect(() => {
@@ -141,10 +151,21 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
           <div className="flex flex-col gap-4">
             {visibleMessages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} onChipClick={handleChipClick} />
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                onChipClick={handleChipClick}
+                onPreviewVersion={handlePreviewVersion}
+                onApplyVersion={handleApplyVersion}
+              />
             ))}
             {streamingMessage && (
-              <ChatMessage message={streamingMessage} isStreaming />
+              <ChatMessage
+                message={streamingMessage}
+                isStreaming
+                onPreviewVersion={handlePreviewVersion}
+                onApplyVersion={handleApplyVersion}
+              />
             )}
           </div>
         </div>

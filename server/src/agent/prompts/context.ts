@@ -32,12 +32,30 @@ export function buildContextPrompt(ctx: SpaceContext): string {
   }
   if (ctx.currentSpace === 'create') {
     prompt += `\n\n## Editor Transform Mode`
-    prompt += `\nWhen the user is in the editor, you have access to the \`create_version\` tool. Use it to:`
-    prompt += `\n- Generate new song versions when the user asks for transformations ("easier", "blues version", "fingerpicking", "open chords", etc.)`
-    prompt += `\n- Respond to section-specific requests when bar numbers are provided (e.g., "simplify bars 3-4")`
-    prompt += `\n- Always call \`create_version\` with a descriptive name, the modified MusicXML, and 2-3 bullet points summarizing what changed`
-    prompt += `\n- Do NOT describe manual notation editing steps — use \`create_version\` to show the result directly`
-    prompt += `\n- For now, MusicXML transformations are mocked: take the user's request, return a brief explanatory message, and call \`create_version\` with a placeholder version of the MusicXML (you can add an XML comment to the original explaining what would change)`
+
+    if (ctx.editorContext) {
+      const ec = ctx.editorContext
+      prompt += `\n\n### Current Score`
+      prompt += `\n${ec.scoreSummary}`
+      prompt += `\n\n### Score XML (your editing target)`
+      prompt += `\n${ec.musicXml}`
+
+      if (ec.selectedBars && ec.selectedBars.length > 0) {
+        const uiBars = ec.selectedBars.map((b) => b + 1).join(', ')
+        prompt += `\n\nSelected bars (0-indexed): ${ec.selectedBars.join(', ')}  →  bars ${uiBars} in the UI`
+      }
+    }
+
+    prompt += `\n\n### Transform Rules`
+    prompt += `\n- You have the full score above. Modify it and call \`create_version\` with the complete transformed XML.`
+    prompt += `\n- Preserve all structural elements (\`<?xml ...?>\`, \`<score-partwise>\`, \`<part>\`, measure attributes, \`<divisions>\`, \`<key>\`, \`<time>\`) unless the transformation explicitly requires changing them.`
+    prompt += `\n- Only touch the bars, notes, harmony elements, and directions that the transformation requires.`
+    prompt += `\n- For transposition requests: update every \`<pitch>\` element (step + octave + alter) and every \`<harmony>\` root.`
+    prompt += `\n- For chord-only changes: update \`<harmony>\` elements only; leave \`<note>\` pitch/duration untouched.`
+    prompt += `\n- For section-specific requests: only modify the measures in the specified bar range.`
+    prompt += `\n- Do not add XML comments explaining what you changed — the changeSummary parameter of create_version is the right place for that.`
+    prompt += `\n- Always call \`create_version\` with a descriptive name and 2-3 changeSummary bullet points.`
+    prompt += `\n- Do NOT describe manual notation editing steps — use \`create_version\` to show the result directly.`
   }
   if (ctx.projectId && ctx.projectName) {
     prompt += `\nActive project: "${ctx.projectName}" (id: ${ctx.projectId})`

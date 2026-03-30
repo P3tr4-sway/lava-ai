@@ -165,7 +165,7 @@ function getHandler(name: string) {
 
     end_edit_session: async (input) => {
       const versionId = crypto.randomUUID()
-      const name = String(input.name)
+      const name = String(input.name ?? 'Unnamed Version')
       const rawSummary = input.changeSummary
       const changeSummary = Array.isArray(rawSummary)
         ? rawSummary.map((item: unknown) => String(item))

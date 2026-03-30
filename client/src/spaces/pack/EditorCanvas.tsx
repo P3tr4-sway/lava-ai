@@ -203,11 +203,11 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         pushUndo(xml)
         saveXml(newXml)
         syncHighlights()
+        useLeadSheetStore.getState().setKey(keySig.key)
+        useLeadSheetStore.getState().setTimeSignature(keySig.timeSig)
       } catch (err) {
         console.error('[handleKeySigSelect]', err)
       }
-      useLeadSheetStore.getState().setKey(keySig.key)
-      useLeadSheetStore.getState().setTimeSignature(keySig.timeSig)
       setPopover(null)
     },
     [popover, syncHighlights],

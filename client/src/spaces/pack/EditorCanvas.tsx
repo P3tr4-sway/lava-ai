@@ -17,7 +17,8 @@ import { TextAnnotationInput } from './TextAnnotationInput'
 import {
   clearBars, copyBars, pasteBars, duplicateBars, transposeBars,
   setNotePitch, setNoteDuration, addAccidental, toggleTie, toggleRest,
-  setLyric, setAnnotation, setChord, parseXml, getMeasures,
+  setLyric, setAnnotation, setChord, setKeySig, setTimeSig,
+  parseXml, getMeasures,
 } from '@/lib/musicXmlEngine'
 import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
 import type { Pitch } from '@/lib/pitchUtils'
@@ -190,12 +191,26 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
 
   const handleKeySigSelect = useCallback(
     (keySig: { key: string; mode: 'major' | 'minor'; timeSig: string }) => {
+      const xml = getXml()
+      if (!xml || !popover) return
+      const { pushUndo } = useEditorStore.getState()
+      try {
+        let newXml = setKeySig(xml, popover.barIndex, keySig.key)
+        const [beats, beatType] = keySig.timeSig.split('/').map(Number)
+        if (beats && beatType) {
+          newXml = setTimeSig(newXml, popover.barIndex, beats, beatType)
+        }
+        pushUndo(xml)
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) {
+        console.error('[handleKeySigSelect]', err)
+      }
       useLeadSheetStore.getState().setKey(keySig.key)
       useLeadSheetStore.getState().setTimeSignature(keySig.timeSig)
-      // TODO: persist keySig.mode (major/minor) once leadSheetStore exposes setMode
       setPopover(null)
     },
-    [],
+    [popover, syncHighlights],
   )
 
   const handleTextSubmit = useCallback(

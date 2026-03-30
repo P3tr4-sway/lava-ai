@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
@@ -8,7 +8,8 @@ import { projectService } from '@/services/projectService'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
-import { addBars, deleteBars } from '@/lib/musicXmlEngine'
+import { addBars, deleteBars, parseXml, getMeasures } from '@/lib/musicXmlEngine'
+import { useAudioStore } from '@/stores/audioStore'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -20,9 +21,38 @@ export function EditorPage() {
   useTheme()
 
   const projectName = useLeadSheetStore((s) => s.projectName)
+  const musicXml = useLeadSheetStore((s) => s.musicXml)
   const chatCollapsed = useEditorStore((s) => s.chatPanelCollapsed)
   const saveStatus = useEditorStore((s) => s.saveStatus)
+  const bpm = useAudioStore((s) => s.bpm)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const totalBars = useMemo(() => {
+    if (!musicXml) return 16
+    try {
+      const doc = parseXml(musicXml)
+      return getMeasures(doc).length
+    } catch {
+      return 16
+    }
+  }, [musicXml])
+
+  const beatsPerBar = useMemo(() => {
+    if (!musicXml) return 4
+    try {
+      const doc = parseXml(musicXml)
+      const timeEl = doc.querySelector('time')
+      const beats = parseInt(timeEl?.querySelector('beats')?.textContent ?? '4', 10)
+      return isNaN(beats) ? 4 : beats
+    } catch {
+      return 4
+    }
+  }, [musicXml])
+
+  useEffect(() => {
+    const durationSeconds = totalBars * beatsPerBar * (60 / bpm)
+    useAudioStore.getState().setDuration(durationSeconds)
+  }, [totalBars, beatsPerBar, bpm])
 
   // Load project from server when navigating to /pack/:id
   useEffect(() => {
@@ -143,8 +173,8 @@ export function EditorPage() {
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
             onStylePicker={handleStylePicker}
-            totalBars={16}
-            beatsPerBar={4}
+            totalBars={totalBars}
+            beatsPerBar={beatsPerBar}
             className="z-20"
           />
         </div>

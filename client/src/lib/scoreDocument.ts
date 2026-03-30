@@ -663,6 +663,10 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
       break
     }
     case 'insertNoteAtCaret': {
+      if (command.measureIndex < 0 || command.measureIndex >= next.measures.length) {
+        warnings.push(`Measure index ${command.measureIndex} is out of bounds.`)
+        break
+      }
       const existing = track.notes.find((note) =>
         note.measureIndex === command.measureIndex
         && Math.abs(note.beat - command.beat) < 0.001
@@ -952,6 +956,12 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
     }
     case 'deleteMeasureRange': {
       const [start, end] = [command.start, command.end]
+      const deleteCount = end - start + 1
+      if (deleteCount >= next.measures.length) {
+        next.measures = [createMeasureMeta(0)]
+        track.notes = []
+        break
+      }
       next.measures = next.measures
         .filter((measure) => measure.index < start || measure.index > end)
         .map((measure, index) => ({ ...measure, index }))
@@ -959,7 +969,7 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
         .filter((note) => note.measureIndex < start || note.measureIndex > end)
         .map((note) => ({
           ...note,
-          measureIndex: note.measureIndex > end ? note.measureIndex - (end - start + 1) : note.measureIndex,
+          measureIndex: note.measureIndex > end ? note.measureIndex - deleteCount : note.measureIndex,
       }))
       break
     }

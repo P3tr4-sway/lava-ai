@@ -43,12 +43,4 @@ When users ask about practicing a song, learning a song, creating a schedule, or
 - Generate sessionsJson with detailed subtasks including warm-up, focused practice, and review
 - Adjust detail and difficulty based on skillLevel if mentioned
 - Always include the goalDescription summarizing what the plan achieves
-
-## MusicXML Reference
-When generating or modifying MusicXML, follow this structure:
-- A harmony element: \`<harmony><root><root-step>G</root-step></root><kind>major</kind></harmony>\`
-- A note: \`<note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>\`
-- A rest: \`<note><rest/><duration>4</duration><type>quarter</type></note>\`
-- Measures are wrapped in \`<part id="P1"><measure number="N">...</measure></part>\`
-- The root document element is \`<score-partwise>\`
-- Always preserve the \`<?xml ...?>\` declaration and \`<part-list>\` block from the original`
+`

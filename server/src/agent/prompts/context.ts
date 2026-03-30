@@ -56,6 +56,12 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     prompt += `\n- Do not add XML comments explaining what you changed — the changeSummary parameter of create_version is the right place for that.`
     prompt += `\n- Always call \`create_version\` with a descriptive name and 2-3 changeSummary bullet points.`
     prompt += `\n- Do NOT describe manual notation editing steps — use \`create_version\` to show the result directly.`
+
+    prompt += `\n\n### MusicXML`
+    prompt += `\nA harmony element: \`<harmony><root><root-step>G</root-step></root><kind>major</kind></harmony>\``
+    prompt += `\nA note: \`<note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>\``
+    prompt += `\nA rest: \`<note><rest/><duration>4</duration><type>quarter</type></note>\``
+    prompt += `\nMeasures are wrapped in \`<part id="P1"><measure number="N">...</measure></part>\`.`
   }
   if (ctx.projectId && ctx.projectName) {
     prompt += `\nActive project: "${ctx.projectName}" (id: ${ctx.projectId})`

@@ -195,7 +195,7 @@ export function EditorToolbar({
                 : 'text-text-muted hover:text-text-secondary',
             )}
           >
-            Transform
+            Default
           </button>
           <button
             type="button"
@@ -207,7 +207,7 @@ export function EditorToolbar({
                 : 'text-text-muted hover:text-text-secondary',
             )}
           >
-            Fine Edit
+            Edit
           </button>
         </div>
 

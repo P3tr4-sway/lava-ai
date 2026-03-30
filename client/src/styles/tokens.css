@@ -72,17 +72,52 @@
 
 /* === Score interaction highlights === */
 
+/* Make notes feel clickable */
+.vf-stavenote {
+  cursor: pointer;
+  transition: opacity 100ms ease-out;
+}
+
+.vf-stavenote:hover .vf-notehead path {
+  fill: var(--accent);
+  opacity: 0.7;
+  transition: fill 100ms ease-out, opacity 100ms ease-out;
+}
+
+.vf-stavenote:hover .vf-stem path,
+.vf-stavenote:hover .vf-flag path {
+  stroke: var(--accent);
+  opacity: 0.7;
+  transition: stroke 100ms ease-out, opacity 100ms ease-out;
+}
+
+/* Bar selection — subtle background tint */
 .lava-bar-selected > rect:first-child,
 .lava-bar-selected > path:first-child {
   fill: var(--accent);
   opacity: 0.1;
 }
 
+/* Note selection — highlighted notehead + stem with ring */
 .lava-note-selected .vf-notehead path {
+  fill: var(--accent);
   stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 40%, transparent));
+  transition: fill 80ms ease-out, stroke 80ms ease-out, filter 80ms ease-out;
 }
 
+.lava-note-selected .vf-stem path {
+  stroke: var(--accent);
+  transition: stroke 80ms ease-out;
+}
+
+.lava-note-selected .vf-flag path {
+  fill: var(--accent);
+  transition: fill 80ms ease-out;
+}
+
+/* Playback — current bar highlight */
 .lava-bar-playing > rect:first-child,
 .lava-bar-playing > path:first-child {
   fill: var(--accent);
@@ -95,6 +130,7 @@
   transition: fill 100ms ease-out, filter 100ms ease-out;
 }
 
+/* Beat grid markers */
 .lava-beat-marker {
   stroke: var(--border);
   opacity: 0.3;

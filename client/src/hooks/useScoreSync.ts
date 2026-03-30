@@ -10,13 +10,92 @@ const LAVA_CLASSES = [
 ]
 
 /**
+ * Walk the OSMD-rendered SVG and assign `note-{barIndex}-{noteIndex}` IDs to
+ * each `vf-stavenote` element.  OSMD itself does not label notes with our ID
+ * scheme, so this must run after every render.
+ *
+ * Strategy: for each `.vf-measure` (which carries id="N", 1-indexed), collect
+ * all descendant `.vf-stavenote` groups and number them left-to-right.
+ * If notes are *siblings* of measures rather than children (varies by OSMD
+ * version), we fall back to spatial hit-testing via bounding boxes.
+ */
+function assignNoteIds(container: HTMLElement) {
+  const measureEls = Array.from(
+    container.querySelectorAll<SVGGElement>('.vf-measure'),
+  )
+
+  // First pass — try child-based assignment (fastest)
+  let assigned = 0
+  for (const measureEl of measureEls) {
+    const mId = parseInt(measureEl.id, 10)
+    if (isNaN(mId) || mId < 1) continue
+    const barIndex = mId - 1
+    const notes = Array.from(
+      measureEl.querySelectorAll<SVGGElement>(':scope > .vf-stavenote, :scope .vf-stavenote'),
+    )
+    // Sort left-to-right by x-position for consistent ordering
+    notes.sort((a, b) => {
+      const aRect = a.getBoundingClientRect()
+      const bRect = b.getBoundingClientRect()
+      return aRect.left - bRect.left
+    })
+    notes.forEach((noteEl, noteIndex) => {
+      noteEl.id = `note-${barIndex}-${noteIndex}`
+      assigned++
+    })
+  }
+
+  // Second pass — spatial fallback if child-based found nothing but notes exist
+  if (assigned === 0) {
+    const allNotes = Array.from(
+      container.querySelectorAll<SVGGElement>('.vf-stavenote'),
+    )
+    if (allNotes.length === 0 || measureEls.length === 0) return
+
+    // Build measure x-ranges
+    const measureBounds = measureEls
+      .map((el) => {
+        const id = parseInt(el.id, 10)
+        if (isNaN(id) || id < 1) return null
+        const rect = el.getBoundingClientRect()
+        return { barIndex: id - 1, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }
+      })
+      .filter(Boolean) as { barIndex: number; left: number; right: number; top: number; bottom: number }[]
+
+    const noteCounts: Record<string, number> = {}
+
+    // Sort notes top-to-bottom, left-to-right for deterministic ordering
+    allNotes.sort((a, b) => {
+      const ar = a.getBoundingClientRect()
+      const br = b.getBoundingClientRect()
+      const dy = ar.top - br.top
+      return Math.abs(dy) > 5 ? dy : ar.left - br.left
+    })
+
+    for (const noteEl of allNotes) {
+      const nr = noteEl.getBoundingClientRect()
+      const cx = nr.left + nr.width / 2
+      const cy = nr.top + nr.height / 2
+      const measure = measureBounds.find(
+        (m) => cx >= m.left && cx <= m.right && cy >= m.top - 10 && cy <= m.bottom + 10,
+      )
+      if (!measure) continue
+      const key = `${measure.barIndex}`
+      const noteIndex = noteCounts[key] ?? 0
+      noteCounts[key] = noteIndex + 1
+      noteEl.id = `note-${measure.barIndex}-${noteIndex}`
+    }
+  }
+}
+
+/**
  * Returns utilities to sync editorStore selection/playback state
  * into CSS classes on OSMD-rendered SVG elements.
  *
  * OSMD DOM conventions:
  *   - Measures: <g class="vf-measure" id="N"> where N is 1-indexed measure number
  *   - Notes:    <g class="vf-stavenote" id="note-{barIndex}-{noteIndex}">
- *               where barIndex and noteIndex are 0-indexed
+ *               (assigned by assignNoteIds after each render)
  */
 export function useScoreSync(containerRef: RefObject<HTMLElement | null>) {
   // Subscribe to relevant slices so the component re-renders when they change,
@@ -64,9 +143,18 @@ export function useScoreSync(containerRef: RefObject<HTMLElement | null>) {
     })
   }, [containerRef])
 
+  /** Assign note IDs after OSMD re-render so click detection and CSS selection work. */
+  const tagNotes = useCallback(() => {
+    const container = containerRef.current
+    if (container) assignNoteIds(container)
+  }, [containerRef])
+
   const syncHighlights = useCallback(() => {
     const container = containerRef.current
     if (!container) return
+
+    // Ensure note IDs are present (idempotent — safe to re-run)
+    assignNoteIds(container)
 
     // Read latest state directly at call-time to avoid stale closure values
     const { selectedBars, selectedNotes, currentBar, playbackState } =
@@ -134,5 +222,5 @@ export function useScoreSync(containerRef: RefObject<HTMLElement | null>) {
     [containerRef],
   )
 
-  return { syncHighlights, getMeasureBounds, getNoteBounds }
+  return { syncHighlights, tagNotes, getMeasureBounds, getNoteBounds }
 }

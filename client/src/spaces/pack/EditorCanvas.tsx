@@ -77,7 +77,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   // Render-time reactive version of isEditingDisabled() (module-level fn uses getState() for callbacks)
   const editingDisabled = editorMode === 'transform' || isPreview
 
-  const { syncHighlights, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
+  const { syncHighlights, tagNotes, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
   const { selectionBox, onMouseDown, onMouseMove, onMouseUp } = useRangeSelect(
     containerRef,
     getMeasureBounds,
@@ -107,6 +107,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     const initialXml = useLeadSheetStore.getState().musicXml ?? EMPTY_MUSICXML
     osmd.load(initialXml).then(() => {
       osmd.render()
+      tagNotes()
       syncHighlights()
     })
     return () => {
@@ -124,6 +125,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       if (osmdRef.current) {
         osmdRef.current.Zoom = zoom / 100
         osmdRef.current.render()
+        tagNotes()
         syncHighlights()
       }
     })
@@ -135,6 +137,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     if (!osmdRef.current) return
     osmdRef.current.Zoom = zoom / 100
     osmdRef.current.render()
+    tagNotes()
     syncHighlights()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom])
@@ -153,7 +156,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         return
       }
 
-      if (hit.type === 'note' && toolMode === 'pointer' && !editingDisabled) {
+      if (hit.type === 'note' && toolMode === 'pointer') {
         selectNote(hit.barIndex, hit.noteIndex, e.shiftKey)
         syncHighlights()
         return

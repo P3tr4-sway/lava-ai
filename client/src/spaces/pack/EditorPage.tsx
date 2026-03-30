@@ -27,29 +27,23 @@ export function EditorPage() {
   const bpm = useAudioStore((s) => s.bpm)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const totalBars = useMemo(() => {
-    if (!musicXml) return 16
+  const { totalBars, beatsPerBar } = useMemo(() => {
+    if (!musicXml) return { totalBars: 16, beatsPerBar: 4 }
     try {
       const doc = parseXml(musicXml)
-      return getMeasures(doc).length
+      const bars = getMeasures(doc).length
+      const beats = parseInt(doc.querySelector('time > beats')?.textContent ?? '4', 10)
+      return {
+        totalBars: bars || 16,
+        beatsPerBar: isNaN(beats) ? 4 : beats,
+      }
     } catch {
-      return 16
-    }
-  }, [musicXml])
-
-  const beatsPerBar = useMemo(() => {
-    if (!musicXml) return 4
-    try {
-      const doc = parseXml(musicXml)
-      const timeEl = doc.querySelector('time')
-      const beats = parseInt(timeEl?.querySelector('beats')?.textContent ?? '4', 10)
-      return isNaN(beats) ? 4 : beats
-    } catch {
-      return 4
+      return { totalBars: 16, beatsPerBar: 4 }
     }
   }, [musicXml])
 
   useEffect(() => {
+    if (bpm <= 0) return
     const durationSeconds = totalBars * beatsPerBar * (60 / bpm)
     useAudioStore.getState().setDuration(durationSeconds)
   }, [totalBars, beatsPerBar, bpm])

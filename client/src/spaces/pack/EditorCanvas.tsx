@@ -199,11 +199,21 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   )
 
   const handleTextSubmit = useCallback(
-    (_text: string) => {
-      // TODO: Attach annotation to selected bar
-      setPopover(null)
+    (text: string) => {
+      const xml = getXml()
+      if (!xml || !popover) return
+      const { pushUndo } = useEditorStore.getState()
+      try {
+        const newXml = setAnnotation(xml, popover.barIndex, text)
+        pushUndo(xml)
+        saveXml(newXml)
+        syncHighlights()
+        setPopover(null)
+      } catch (err) {
+        console.error('[handleTextSubmit]', err)
+      }
     },
-    [],
+    [popover, syncHighlights],
   )
 
   // Derived selection info for ContextPill

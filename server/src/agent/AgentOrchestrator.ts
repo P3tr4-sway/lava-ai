@@ -59,15 +59,24 @@ export class AgentOrchestrator {
           // musicXml is read from the original tool call input — not from the
           // handler result — so it is never echoed into the LLM's context window.
           const musicXml = String(toolCall.input?.['musicXml'] ?? '')
-          onEvent({
-            type: 'version_created',
-            versionPayload: {
-              versionId: parsed.versionId,
-              name: parsed.name,
-              musicXml,
-              changeSummary: parsed.changeSummary,
-            },
-          })
+
+          if (isValidMusicXml(musicXml)) {
+            onEvent({
+              type: 'version_created',
+              versionPayload: {
+                versionId: parsed.versionId,
+                name: parsed.name,
+                musicXml,
+                changeSummary: parsed.changeSummary,
+              },
+            })
+          } else {
+            logger.warn('[AgentOrchestrator] create_version: invalid MusicXML output, skipping version')
+            onEvent({
+              type: 'error',
+              error: "The arrangement couldn't be generated — please try rephrasing your request.",
+            })
+          }
         } catch (err) {
           logger.warn({ err }, '[AgentOrchestrator] create_version SSE: malformed tool result JSON')
         }
@@ -166,4 +175,12 @@ function parseToolResultContent(content: string) {
   } catch {
     return content
   }
+}
+
+function isValidMusicXml(xml: string): boolean {
+  if (!xml || xml.trim().length === 0) return false
+  if (!xml.includes('<score-partwise')) return false
+  if (!xml.includes('</score-partwise>')) return false
+  if (!xml.includes('<measure')) return false
+  return true
 }

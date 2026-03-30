@@ -31,7 +31,7 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     }
   }
   if (ctx.currentSpace === 'create') {
-    prompt += `\n\n## Editor Transform Mode`
+    prompt += `\n\n## Editor Mode`
 
     if (ctx.editorContext) {
       const ec = ctx.editorContext
@@ -46,7 +46,17 @@ export function buildContextPrompt(ctx: SpaceContext): string {
       }
     }
 
-    prompt += `\n\n### Transform Rules`
+    prompt += `\n\n### Editing Strategy — pick ONE approach per response`
+    prompt += `\n- For SURGICAL edits (delete a bar, change a chord, adjust a few notes, transpose a section, fix a pitch):`
+    prompt += `\n  → Use the granular editing tools (\`delete_bars\`, \`edit_note_pitch\`, \`edit_chord\`, \`transpose_bars\`, etc.)`
+    prompt += `\n  → Each edit renders live in the score — the user watches changes appear in real-time.`
+    prompt += `\n  → Always call \`end_edit_session\` when done to finalize the version.`
+    prompt += `\n  → Prefer this when the request targets specific bars, notes, or small parts of the score.`
+    prompt += `\n- For WHOLESALE transformations (new arrangement, complete restyle, full reharmonization, changes across most of the score):`
+    prompt += `\n  → Use \`create_version\` with the complete modified MusicXML.`
+    prompt += `\n  → Never mix both strategies in the same response.`
+
+    prompt += `\n\n### create_version Rules (wholesale path only)`
     prompt += `\n- You have the full score above. Modify it and call \`create_version\` with the complete transformed XML.`
     prompt += `\n- Preserve all structural elements (\`<?xml ...?>\`, \`<score-partwise>\`, \`<part>\`, measure attributes, \`<divisions>\`, \`<key>\`, \`<time>\`) unless the transformation explicitly requires changing them.`
     prompt += `\n- Only touch the bars, notes, harmony elements, and directions that the transformation requires.`
@@ -54,7 +64,7 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     prompt += `\n- For chord-only changes: update \`<harmony>\` elements only; leave \`<note>\` pitch/duration untouched.`
     prompt += `\n- For section-specific requests: only modify the measures in the specified bar range.`
     prompt += `\n- Do not add XML comments explaining what you changed — the changeSummary parameter of create_version is the right place for that.`
-    prompt += `\n- Always call \`create_version\` with a descriptive name and 2-3 changeSummary bullet points.`
+    prompt += `\n- Call \`create_version\` with a descriptive name and 2-3 changeSummary bullet points.`
     prompt += `\n- Do NOT describe manual notation editing steps — use \`create_version\` to show the result directly.`
 
     prompt += `\n\n### MusicXML`
@@ -62,17 +72,6 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     prompt += `\nA note: \`<note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>\``
     prompt += `\nA rest: \`<note><rest/><duration>4</duration><type>quarter</type></note>\``
     prompt += `\nMeasures are wrapped in \`<part id="P1"><measure number="N">...</measure></part>\`.`
-
-    prompt += `\n\n### Editing Strategy`
-    prompt += `\n- For WHOLESALE transformations (new arrangement, complete restyle, full reharmonization):`
-    prompt += `\n  → Use \`create_version\` with the complete modified MusicXML.`
-    prompt += `\n- For SURGICAL edits (change a chord, adjust a few notes, transpose a section, fix a pitch):`
-    prompt += `\n  → Use the granular editing tools (\`edit_note_pitch\`, \`edit_chord\`, \`transpose_bars\`, etc.)`
-    prompt += `\n  → Each edit renders live in the score — the user watches changes appear in real-time.`
-    prompt += `\n  → Always call \`end_edit_session\` when done to finalize the version.`
-    prompt += `\n- Prefer granular tools when the user's request targets specific bars or notes.`
-    prompt += `\n- Prefer \`create_version\` when the change touches most of the score.`
-    prompt += `\n- Never mix both strategies in the same response — pick one.`
   }
   if (ctx.projectId && ctx.projectName) {
     prompt += `\nActive project: "${ctx.projectName}" (id: ${ctx.projectId})`

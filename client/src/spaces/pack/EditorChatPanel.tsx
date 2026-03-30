@@ -149,7 +149,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
           </div>
         </div>
       ) : (
-        <EditorChatEmptyState onSuggestionClick={handleSuggestionClick} />
+        <EditorChatEmptyState onSuggestionClick={handleSuggestionClick} selectedBars={selectedBars} />
       )}
 
       {/* Footer */}

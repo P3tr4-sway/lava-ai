@@ -4,6 +4,7 @@ import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useVersionStore } from '@/stores/versionStore'
 import { useScoreSync } from '@/hooks/useScoreSync'
 import { ScoreOverlay } from '@/components/score/ScoreOverlay'
 import { PlaybackCursor } from '@/components/score/PlaybackCursor'
@@ -62,6 +63,10 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const clearSelection = useEditorStore((s) => s.clearSelection)
   const selectedBars = useEditorStore((s) => s.selectedBars)
   const selectedNotes = useEditorStore((s) => s.selectedNotes)
+
+  const editorMode = useEditorStore((s) => s.editorMode)
+  const isPreview = useVersionStore((s) => s.previewVersionId !== null)
+  const editingDisabled = editorMode === 'transform' || isPreview
 
   const { syncHighlights, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
   const { selectionBox, onMouseDown, onMouseMove, onMouseUp } = useRangeSelect(
@@ -139,7 +144,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         return
       }
 
-      if (hit.type === 'note' && toolMode === 'pointer') {
+      if (hit.type === 'note' && toolMode === 'pointer' && !editingDisabled) {
         selectNote(hit.barIndex, hit.noteIndex, e.shiftKey)
         syncHighlights()
         return
@@ -156,7 +161,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       if (toolMode === 'pointer') {
         selectBar(barIndex, e.shiftKey)
         syncHighlights()
-      } else if (toolMode === 'chord' || toolMode === 'keySig' || toolMode === 'text') {
+      } else if (!editingDisabled && (toolMode === 'chord' || toolMode === 'keySig' || toolMode === 'text')) {
         const rect = containerRef.current.getBoundingClientRect()
         selectBar(barIndex)
         syncHighlights()
@@ -167,7 +172,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         })
       }
     },
-    [toolMode, selectBar, selectNote, clearSelection, syncHighlights],
+    [toolMode, selectBar, selectNote, clearSelection, syncHighlights, editingDisabled],
   )
 
   const handleChordSelect = useCallback(
@@ -309,6 +314,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   // Custom keyboard event handlers dispatched from useEditorKeyboard
   useEffect(() => {
     function onLavaPitchStep(e: CustomEvent<{ steps: number }>) {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedNotes, pushUndo } = useEditorStore.getState()
       if (!xml || selectedNotes.length === 0) return
@@ -342,6 +348,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaDurationKey(e: CustomEvent<{ key: string }>) {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -362,6 +369,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaAccidental(e: CustomEvent<{ type: 'sharp' | 'flat' | 'natural' }>) {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -377,6 +385,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaToggleTie() {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -392,6 +401,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaToggleRest() {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedNotes: notes, pushUndo } = useEditorStore.getState()
       if (!xml || notes.length === 0) return
@@ -427,6 +437,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaCopy() {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedBars: bars } = useEditorStore.getState()
       if (!xml || bars.length === 0) return
@@ -437,6 +448,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaPaste() {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedBars: bars, clipboard, pushUndo } = useEditorStore.getState()
       if (!xml || !clipboard) return
@@ -450,6 +462,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaDuplicate() {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedBars: bars, pushUndo } = useEditorStore.getState()
       if (!xml || bars.length === 0) return
@@ -463,6 +476,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     }
 
     function onLavaTranspose(e: CustomEvent<{ semitones: number }>) {
+      if (useEditorStore.getState().editorMode === 'transform' || useVersionStore.getState().previewVersionId !== null) return
       const xml = getXml()
       const { selectedBars: bars, pushUndo } = useEditorStore.getState()
       if (!xml || bars.length === 0) return
@@ -570,14 +584,16 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       <ScoreOverlay>
         <PlaybackCursor getMeasureBounds={getMeasureBounds} />
         <SelectionRect box={selectionBox} />
-        <ContextPill
-          selectionType={contextSelectionType}
-          bounds={contextBounds}
-          onDelete={handleContextDelete}
-          onClear={handleContextClear}
-          onCopy={handleContextCopy}
-          onTranspose={handleContextTranspose}
-        />
+        {!editingDisabled && (
+          <ContextPill
+            selectionType={contextSelectionType}
+            bounds={contextBounds}
+            onDelete={handleContextDelete}
+            onClear={handleContextClear}
+            onCopy={handleContextCopy}
+            onTranspose={handleContextTranspose}
+          />
+        )}
         <MiniFretboard
           visible={fretboardState.visible}
           x={fretboardState.x}

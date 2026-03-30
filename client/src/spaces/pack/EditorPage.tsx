@@ -108,13 +108,21 @@ export function EditorPage() {
       const selectedBars = useEditorStore.getState().selectedBars
       const name = useLeadSheetStore.getState().projectName
       if (xml) {
-        const scoreSummary = buildScoreSummary(xml)
-        useAgentStore.getState().setSpaceContext({
-          currentSpace: 'create',
-          projectId: id,
-          projectName: name,
-          editorContext: { musicXml: xml, scoreSummary, selectedBars },
-        })
+        try {
+          const scoreSummary = buildScoreSummary(xml)
+          useAgentStore.getState().setSpaceContext({
+            currentSpace: 'create',
+            projectId: id,
+            projectName: name,
+            editorContext: { musicXml: xml, scoreSummary, selectedBars },
+          })
+        } catch {
+          useAgentStore.getState().setSpaceContext({
+            currentSpace: 'create',
+            projectId: id,
+            projectName: name,
+          })
+        }
       } else {
         useAgentStore.getState().setSpaceContext({
           currentSpace: 'create',

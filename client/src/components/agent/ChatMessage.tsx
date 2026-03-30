@@ -10,6 +10,8 @@ interface ChatMessageProps {
   onApplyToneAction?: (messageId: string) => void
   onUndoToneAction?: (messageId: string) => void
   onRetryToneAction?: (messageId: string) => void
+  onPreviewVersion?: (versionId: string) => void
+  onApplyVersion?: (versionId: string) => void
 }
 
 export function ChatMessage({
@@ -19,6 +21,8 @@ export function ChatMessage({
   onApplyToneAction,
   onUndoToneAction,
   onRetryToneAction,
+  onPreviewVersion,
+  onApplyVersion,
 }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const isPracticeStatus = message.subtype === 'practiceStatus'
@@ -123,6 +127,55 @@ export function ChatMessage({
               >
                 Try another
               </button>
+            </div>
+          </div>
+        )}
+        {message.versionAction && (
+          <div className="mt-2 rounded-2xl border border-border bg-surface-1 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">New Version</p>
+            <p className="mt-2 text-sm font-medium text-text-primary">{message.versionAction.name}</p>
+            <div className="mt-2 flex flex-col gap-1">
+              {message.versionAction.changeSummary.map((item) => (
+                <p key={item} className="text-xs text-text-secondary">
+                  {item}
+                </p>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {message.versionAction.state === 'applied' ? (
+                <span className="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-[11px] font-medium text-text-secondary">
+                  Applied
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onPreviewVersion?.(message.versionAction!.versionId)}
+                    disabled={!onPreviewVersion}
+                    className={cn(
+                      'rounded-full border border-border bg-surface-0 px-3 py-1.5 text-[11px] font-medium text-text-primary transition-colors',
+                      onPreviewVersion
+                        ? 'hover:border-border-hover hover:bg-surface-2'
+                        : 'cursor-not-allowed opacity-50',
+                    )}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onApplyVersion?.(message.versionAction!.versionId)}
+                    disabled={!onApplyVersion}
+                    className={cn(
+                      'rounded-full px-3 py-1.5 text-[11px] font-medium text-surface-0 transition-opacity',
+                      onApplyVersion
+                        ? 'bg-text-primary hover:opacity-80'
+                        : 'cursor-not-allowed bg-text-primary opacity-50',
+                    )}
+                  >
+                    Apply
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

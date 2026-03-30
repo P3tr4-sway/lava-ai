@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
@@ -11,7 +11,6 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
 import { addBars, deleteBars, parseXml, getMeasures } from '@/lib/musicXmlEngine'
 import { useAudioStore } from '@/stores/audioStore'
-import { cn } from '@/components/ui/utils'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -22,8 +21,6 @@ export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const isMobile = useIsMobile()
   useTheme()
-
-  const [showCompare, setShowCompare] = useState(false)
 
   const projectName = useLeadSheetStore((s) => s.projectName)
   const musicXml = useLeadSheetStore((s) => s.musicXml)
@@ -166,53 +163,25 @@ export function EditorPage() {
         <div className="relative flex flex-1 flex-col">
           <EditorTitleBar packName={projectName || 'Untitled'} onNameChange={handleNameChange} />
 
-          {showCompare ? (
-            <div className="flex flex-1 overflow-hidden">
-              <div className="flex flex-1 flex-col overflow-hidden border-r border-border">
-                <div className="flex h-8 shrink-0 items-center px-3">
-                  <span className="text-xs font-medium text-text-secondary">Original</span>
-                </div>
-                <EditorCanvas className="flex-1" />
-              </div>
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <div className="flex h-8 shrink-0 items-center justify-between px-3">
-                  <span className="text-xs font-medium text-text-secondary">Preview Version</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowCompare(false)}
-                    className="text-xs text-text-muted transition-colors hover:text-text-primary"
-                  >
-                    Close compare
-                  </button>
-                </div>
-                <div className={cn('flex flex-1 items-center justify-center bg-surface-1 text-text-muted text-sm')}>
-                  TODO: CompareView
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <PreviewBar
-                onApply={() => {
-                  useVersionStore.getState().applyPreview()
-                  setShowCompare(false)
-                }}
-                onDiscard={() => {
-                  useVersionStore.getState().discardPreview()
-                  setShowCompare(false)
-                }}
-                onCompare={() => setShowCompare(true)}
-              />
-              <EditorCanvas className="flex-1" />
-            </>
-          )}
+          <PreviewBar
+            onApply={() => {
+              useVersionStore.getState().applyPreview()
+            }}
+            onDiscard={() => {
+              useVersionStore.getState().discardPreview()
+            }}
+            // TODO: implement CompareView (see spec section 2.3)
+            onCompare={() => {}}
+          />
+          <EditorCanvas className="flex-1" />
 
           {/* Unified floating toolbar with embedded playback controls */}
           <EditorToolbar
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
             onStylePicker={handleStylePicker}
-            onCompare={() => setShowCompare(true)}
+            // TODO: implement CompareView (see spec section 2.3)
+            onCompare={() => {}}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             className="z-20"

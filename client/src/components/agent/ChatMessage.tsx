@@ -130,7 +130,7 @@ export function ChatMessage({
             </div>
           </div>
         )}
-        {message.versionAction && (
+        {message.subtype === 'versionCreated' && message.versionAction && (
           <div className="mt-2 rounded-2xl border border-border bg-surface-1 p-3">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">New Version</p>
             <p className="mt-2 text-sm font-medium text-text-primary">{message.versionAction.name}</p>

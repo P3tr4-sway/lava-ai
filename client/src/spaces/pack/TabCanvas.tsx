@@ -57,6 +57,7 @@ interface AlphaTabNoteLike {
 }
 
 const DURATION_OPTIONS: NoteValue[] = ['whole', 'half', 'quarter', 'eighth', 'sixteenth']
+const TAB_CANVAS_RENDER_ERROR_MESSAGE = 'Unable to render the current score.'
 
 function midiLabel(midi: number): string {
   const pitchClasses = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -285,6 +286,8 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
   const zoom = useEditorStore((state) => state.zoom)
   const entryDuration = useEditorStore((state) => state.entryDuration)
   const entryMode = useEditorStore((state) => state.entryMode)
+  const inspectorFocus = useEditorStore((state) => state.inspectorFocus)
+  const clearInspectorFocus = useEditorStore((state) => state.clearInspectorFocus)
   const staveProfile = editorMode === 'fineEdit' ? StaveProfile.ScoreTab : StaveProfile.Tab
 
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -301,6 +304,7 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
   const [noteDurationDraft, setNoteDurationDraft] = useState<NoteValue>('quarter')
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const syncOverlaysRef = useRef<() => void>(() => {})
+  const noteDurationSelectRef = useRef<HTMLSelectElement | null>(null)
 
   const track = document.tracks[0]
   const beatsPerBar = document.meter.numerator || 4
@@ -374,6 +378,25 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
   }, [syncOverlays])
 
   useEffect(() => {
+    if (!inspectorFocus || compact || !canOpenInspector) return
+
+    setInspectorOpen(true)
+
+    const timer = window.setTimeout(() => {
+      if (inspectorFocus === 'duration') {
+        noteDurationSelectRef.current?.focus()
+      } else {
+        const fretInput = window.document.getElementById('tab-canvas-note-fret') as HTMLInputElement | null
+        fretInput?.focus()
+        fretInput?.select()
+      }
+      clearInspectorFocus()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [canOpenInspector, clearInspectorFocus, compact, inspectorFocus])
+
+  useEffect(() => {
     if (!alphaTabRootRef.current) return
 
     const api = new AlphaTabApi(alphaTabRootRef.current, {
@@ -421,7 +444,7 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
       setRenderError(null)
     } catch (error) {
       console.error('[TabCanvas] alphaTab load failed', error)
-      setRenderError('alphaTab 暂时没能解析这份 MusicXML，当前仍保留可编辑数据模型。')
+      setRenderError(TAB_CANVAS_RENDER_ERROR_MESSAGE)
     }
   }, [exportCacheXml])
 
@@ -905,6 +928,7 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
                 <label className="mt-3 flex flex-col gap-1 text-xs text-text-secondary">
                   Duration
                   <select
+                    ref={noteDurationSelectRef}
                     className="h-8 rounded border border-border bg-surface-3 px-3 text-sm text-text-primary"
                     value={noteDurationDraft}
                     onChange={(event) => setNoteDurationDraft(event.target.value as NoteValue)}

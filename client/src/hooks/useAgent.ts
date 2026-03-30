@@ -5,9 +5,10 @@ import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useVersionStore } from '@/stores/versionStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 import { agentService } from '@/services/agentService'
+import { projectService } from '@/services/projectService'
 import { applyPatch } from '@/lib/applyPatch'
 import { parseMusicXmlToScoreDocument } from '@/lib/scoreDocument'
-import type { AgentMessage, StreamEvent, MessageChip, ArrangementId } from '@lava/shared'
+import type { AgentMessage, StreamEvent, MessageChip, ArrangementId, Version } from '@lava/shared'
 import { SPACE_ROUTES } from '@lava/shared'
 import { toAgentWorkspaceRoute, type AgentWorkspacePreview } from '@/utils/agentWorkspace'
 
@@ -49,6 +50,19 @@ export function useAgent() {
   const isHomeAgentMode = () => {
     const { currentSpace, homeMode } = useAgentStore.getState().spaceContext
     return currentSpace === 'home' && homeMode === 'agent'
+  }
+
+  const persistVersion = (version: Version, changeSummary?: string[]) => {
+    const projectId = useAgentStore.getState().spaceContext.projectId
+      ?? useProjectStore.getState().activeProject?.id
+    if (!projectId) return
+
+    void projectService.createVersion(projectId, {
+      ...version,
+      changeSummary,
+    }).catch((error) => {
+      console.error('[useAgent] Failed to persist version:', error)
+    })
   }
 
   const handleToolResult = (resultContent: string) => {
@@ -161,14 +175,16 @@ export function useAgent() {
       case 'version_created': {
         const payload = event.versionPayload
         if (payload) {
-          useVersionStore.getState().addVersion({
+          const version: Version = {
             id: payload.versionId,
             name: payload.name,
             source: 'ai-transform',
             musicXml: payload.musicXml,
             scoreSnapshot: payload.scoreSnapshot ?? parseMusicXmlToScoreDocument(payload.musicXml),
             createdAt: Date.now(),
-          })
+          }
+          useVersionStore.getState().addVersion(version)
+          persistVersion(version, payload.changeSummary)
           useVersionStore.getState().startPreview(payload.versionId)
           useAgentStore.getState().addMessage({
             id: crypto.randomUUID(),
@@ -226,6 +242,10 @@ export function useAgent() {
             payload.name,
             payload.changeSummary,
           )
+          const version = useVersionStore.getState().versions.find((entry) => entry.id === payload.versionId)
+          if (version) {
+            persistVersion(version, payload.changeSummary)
+          }
           // Add a synthetic message showing the version card (same as version_created)
           useAgentStore.getState().addMessage({
             id: crypto.randomUUID(),

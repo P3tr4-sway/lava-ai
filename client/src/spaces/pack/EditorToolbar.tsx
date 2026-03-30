@@ -128,7 +128,7 @@ function durationToDivisions(duration: NoteValue, divisions: number) {
 }
 
 function ToolDivider() {
-  return <div className="h-10 w-px bg-black/10" />
+  return <div className="h-10 w-px bg-border" />
 }
 
 function RailButton({
@@ -150,18 +150,19 @@ function RailButton({
     <button
       type="button"
       title={label}
+      aria-label={label}
       onClick={onClick}
       className={cn(
         'flex h-14 items-center gap-2 rounded-2xl px-4 text-text-primary transition-all',
         highlighted
-          ? 'bg-[#1593ff] text-white shadow-[0_14px_30px_rgba(21,147,255,0.26)]'
+          ? 'bg-accent text-white shadow-lg'
           : active
-            ? 'bg-black/6'
-            : 'hover:bg-black/5',
+            ? 'bg-surface-2'
+            : 'hover:bg-surface-1',
       )}
     >
       <Icon className="size-6" />
-      {withChevron && <ChevronDown className={cn('size-4', highlighted ? 'text-white/90' : 'text-black/55')} />}
+      {withChevron && <ChevronDown className={cn('size-4', highlighted ? 'text-white/90' : 'text-text-muted')} />}
     </button>
   )
 }
@@ -179,9 +180,10 @@ function MiniSegmentButton({
     <button
       type="button"
       onClick={onClick}
+      aria-label={typeof children === 'string' ? children : undefined}
       className={cn(
         'flex h-12 min-w-12 items-center justify-center rounded-xl px-3 text-xs font-medium transition-colors',
-        active ? 'bg-white text-[#1593ff] shadow-sm' : 'text-black/55 hover:text-black',
+        active ? 'bg-surface-0 text-accent shadow-sm' : 'text-text-muted hover:text-text-primary',
       )}
     >
       {children}
@@ -204,7 +206,7 @@ function PanelButton({
       size="sm"
       variant={active ? 'default' : 'outline'}
       onClick={onClick}
-      className={cn('h-9 rounded-xl px-3', !active && 'bg-white')}
+      className={cn('h-9 rounded-xl px-3', !active && 'bg-surface-0')}
     >
       {children}
     </Button>
@@ -224,11 +226,11 @@ function PanelSelect({
 }) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-black/55">{label}</span>
+      <span className="text-xs font-medium text-text-muted">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-xl border border-black/10 bg-white px-3 text-sm text-black outline-none transition-colors focus:border-black/20"
+        className="h-10 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none transition-colors focus:border-border-hover"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

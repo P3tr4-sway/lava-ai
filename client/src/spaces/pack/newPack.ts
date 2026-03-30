@@ -1,4 +1,4 @@
-import type { ScoreDocument } from '@lava/shared'
+import { buildPlayableArrangements, type ScoreDocument } from '@lava/shared'
 import { exportScoreDocumentToMusicXml, createEmptyScoreDocument } from '@/lib/scoreDocument'
 
 export type NewPackLayout = 'tab' | 'staff' | 'split'
@@ -176,6 +176,12 @@ export function buildNewPackProjectPayload(draft: NewPackDraft) {
   const scoreDocument = createConfiguredScoreDocument(draft)
   const musicXml = scoreDocument.lastExportedXml ?? exportScoreDocumentToMusicXml(scoreDocument)
   const sections = createSectionsForBars(draft.bars)
+  const { arrangements, defaultArrangementId } = buildPlayableArrangements({
+    key: draft.key,
+    tempo: draft.tempo,
+    timeSignature: draft.timeSignature,
+    sections,
+  })
 
   return {
     name: draft.name,
@@ -188,6 +194,8 @@ export function buildNewPackProjectPayload(draft: NewPackDraft) {
       musicXml,
       scoreDocument,
       sections,
+      arrangements,
+      selectedArrangementId: defaultArrangementId,
     },
   }
 }

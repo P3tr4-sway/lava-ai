@@ -10,6 +10,7 @@ export type SaveStatus = 'saved' | 'saving' | 'unsaved'
 export type PlaybackState = 'stopped' | 'playing' | 'paused'
 export type EditorMode = 'transform' | 'fineEdit'
 export type ActiveToolGroup = 'selection' | 'note' | 'rest' | 'notation' | 'measure' | 'playback'
+export type InspectorFocus = 'duration' | 'fretboard' | null
 
 export interface EditorCaret {
   trackId: string
@@ -81,6 +82,9 @@ interface EditorStore {
   // Clipboard
   clipboard: string | null
   setClipboard: (fragment: string | null) => void
+  inspectorFocus: InspectorFocus
+  requestInspectorFocus: (focus: Exclude<InspectorFocus, null>) => void
+  clearInspectorFocus: () => void
 
   // Training wheels
   showChordDiagrams: boolean
@@ -237,6 +241,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Clipboard
   clipboard: null,
   setClipboard: (fragment) => set({ clipboard: fragment }),
+  inspectorFocus: null,
+  requestInspectorFocus: (inspectorFocus) => set({ inspectorFocus }),
+  clearInspectorFocus: () => set({ inspectorFocus: null }),
 
   // Training wheels
   showChordDiagrams: false,

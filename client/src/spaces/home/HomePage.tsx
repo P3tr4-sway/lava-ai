@@ -5,7 +5,9 @@ import { Paperclip, X } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
 import { NewPackDialog } from '@/components/projects/NewPackDialog'
 import { Button } from '@/components/ui/Button'
+import { projectService } from '@/services/projectService'
 import { useProjectStore } from '@/stores/projectStore'
+import { buildNewPackProjectPayload } from '@/spaces/pack/newPack'
 import { cn } from '@/components/ui/utils'
 
 const STYLE_CHIPS = ['Simplified', 'Fingerpicking'] as const
@@ -23,6 +25,7 @@ export function HomePage() {
   const navigate = useNavigate()
   const chatRef = useRef<ChatInputRef>(null)
   const projects = useProjectStore((s) => s.projects)
+  const upsertProject = useProjectStore((s) => s.upsertProject)
   const [phase, setPhase] = useState<SubmitPhase>('idle')
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [newPackOpen, setNewPackOpen] = useState(false)
@@ -61,16 +64,31 @@ export function HomePage() {
   const handleSend = useCallback(async (message: string) => {
     if (!message.trim() && !attachedFile) return
 
-    // Simulated loading phases — will be wired to real agent in later iteration
     setPhase('analyzing')
-    setTimeout(() => setPhase('arranging'), 1500)
-    setTimeout(() => setPhase('building'), 3000)
-    setTimeout(() => {
+    setTimeout(() => setPhase('arranging'), 900)
+    setTimeout(() => setPhase('building'), 1800)
+
+    const draftName = message.trim().slice(0, 48) || attachedFile?.name.replace(/\.[^.]+$/, '') || 'New Practice Pack'
+
+    try {
+      const project = await projectService.create(buildNewPackProjectPayload({
+        name: draftName,
+        bars: 32,
+        tempo: 92,
+        timeSignature: '4/4',
+        key: 'C',
+        layout: 'split',
+        tuning: 'standard',
+        capo: 0,
+      }))
+      upsertProject(project)
       setPhase('idle')
-      // TODO: navigate to real pack ID from agent response
-      navigate('/pack/demo')
-    }, 4500)
-  }, [attachedFile, navigate])
+      navigate(`/pack/${project.id}`)
+    } catch (error) {
+      console.error('Failed to create AI pack shell', error)
+      setPhase('idle')
+    }
+  }, [attachedFile, navigate, upsertProject])
 
   const recentPacks = projects.slice(0, 6)
 

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import type { Version } from '@lava/shared'
+import { Button, useToast } from '@/components/ui'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -7,10 +9,12 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 import { useVersionStore } from '@/stores/versionStore'
 import { projectService } from '@/services/projectService'
+import { useEditorCommandBridge } from '@/hooks/useEditorCommandBridge'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { usePlaybackStateBridge } from '@/hooks/usePlaybackStateBridge'
 import { useTheme } from '@/hooks/useTheme'
-import { buildScoreDigest, exportScoreDocumentToMusicXml } from '@/lib/scoreDocument'
+import { buildScoreDigest } from '@/lib/scoreDocument'
 import { useAudioStore } from '@/stores/audioStore'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
@@ -18,9 +22,39 @@ import { EditorToolbar } from './EditorToolbar'
 import { EditorChatPanel } from './EditorChatPanel'
 import { PreviewBar } from './PreviewBar'
 
+type ProjectLoadState = 'loading' | 'ready' | 'error'
+
+function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string, unknown>; createdAt: number }>): Version[] {
+  return snapshots.flatMap((entry) => {
+    const snapshot = entry.snapshot
+    if (
+      typeof snapshot.id !== 'string'
+      || typeof snapshot.name !== 'string'
+      || typeof snapshot.source !== 'string'
+      || typeof snapshot.musicXml !== 'string'
+    ) {
+      return []
+    }
+
+    return [{
+      id: snapshot.id,
+      name: snapshot.name,
+      source: snapshot.source as Version['source'],
+      arrangementId: typeof snapshot.arrangementId === 'string' ? snapshot.arrangementId as Version['arrangementId'] : undefined,
+      musicXml: snapshot.musicXml,
+      scoreSnapshot: typeof snapshot.scoreSnapshot === 'object' && snapshot.scoreSnapshot !== null ? snapshot.scoreSnapshot as Version['scoreSnapshot'] : undefined,
+      parentVersionId: typeof snapshot.parentVersionId === 'string' ? snapshot.parentVersionId : undefined,
+      prompt: typeof snapshot.prompt === 'string' ? snapshot.prompt : undefined,
+      createdAt: typeof snapshot.createdAt === 'number' ? snapshot.createdAt : entry.createdAt,
+    }]
+  })
+}
+
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
+  const { toast } = useToast()
   useTheme()
 
   const projectName = useLeadSheetStore((s) => s.projectName)
@@ -30,6 +64,9 @@ export function EditorPage() {
   const playbackRate = useAudioStore((s) => s.playbackRate)
   const scoreDocument = useScoreDocumentStore((s) => s.document)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [projectLoadState, setProjectLoadState] = useState<ProjectLoadState>('loading')
+  const [projectLoadError, setProjectLoadError] = useState<string | null>(null)
+  const [reloadCount, setReloadCount] = useState(0)
 
   const { totalBars, beatsPerBar } = useMemo(() => {
     return {
@@ -47,30 +84,61 @@ export function EditorPage() {
 
   // Load project from server when navigating to /pack/:id
   useEffect(() => {
+    let cancelled = false
+
     if (!id) {
       useLeadSheetStore.getState().reset()
+      useVersionStore.getState().reset()
       useEditorStore.getState().setSaveStatus('saved')
+      setProjectLoadState('ready')
+      setProjectLoadError(null)
       return
     }
-    projectService.get(id).then((project) => {
-      useLeadSheetStore.getState().loadFromProject(project)
-      const metadata = project.metadata as Record<string, unknown>
-      const scoreSnapshot = metadata.scoreDocument
-      const musicXml = typeof metadata.musicXml === 'string' ? metadata.musicXml : null
-      if (scoreSnapshot && typeof scoreSnapshot === 'object') {
-        useScoreDocumentStore.getState().loadFromSnapshot(scoreSnapshot as typeof scoreDocument)
-      } else {
-        useScoreDocumentStore.getState().loadFromMusicXml(musicXml)
+    setProjectLoadState('loading')
+    setProjectLoadError(null)
+
+    void (async () => {
+      try {
+        const [project, persistedVersions] = await Promise.all([
+          projectService.get(id),
+          projectService.listVersions(id).catch(() => []),
+        ])
+        if (cancelled) return
+
+        useLeadSheetStore.getState().loadFromProject(project)
+        const metadata = project.metadata as Record<string, unknown>
+        const scoreSnapshot = metadata.scoreDocument
+        const musicXml = typeof metadata.musicXml === 'string' ? metadata.musicXml : null
+        if (scoreSnapshot && typeof scoreSnapshot === 'object') {
+          useScoreDocumentStore.getState().loadFromSnapshot(scoreSnapshot as typeof scoreDocument)
+        } else {
+          useScoreDocumentStore.getState().loadFromMusicXml(musicXml)
+        }
+        const scoreView = typeof metadata.scoreView === 'string' ? metadata.scoreView : 'tab'
+        useEditorStore.getState().setViewMode(scoreView === 'lead_sheet' ? 'leadSheet' : scoreView === 'tab' ? 'tab' : scoreView === 'staff' ? 'staff' : 'split')
+
+        const hydratedVersions = extractVersionsFromSnapshots(persistedVersions)
+        if (hydratedVersions.length > 0) {
+          useVersionStore.getState().hydrateVersions(hydratedVersions)
+        } else {
+          useVersionStore.getState().loadFromArrangements()
+        }
+
+        useProjectStore.getState().setActiveProject(project)
+        useEditorStore.getState().setSaveStatus('saved')
+        setProjectLoadState('ready')
+      } catch (err) {
+        if (cancelled) return
+        console.error('Failed to load project:', err)
+        setProjectLoadError('Could not load this pack. Please try again or go back to the library.')
+        setProjectLoadState('error')
       }
-      const scoreView = typeof metadata.scoreView === 'string' ? metadata.scoreView : 'tab'
-      useEditorStore.getState().setViewMode(scoreView === 'lead_sheet' ? 'leadSheet' : scoreView === 'tab' ? 'tab' : scoreView === 'staff' ? 'staff' : 'split')
-      useVersionStore.getState().loadFromArrangements()
-      useProjectStore.getState().setActiveProject(project)
-      useEditorStore.getState().setSaveStatus('saved')
-    }).catch((err) => {
-      console.error('Failed to load project:', err)
-    })
-  }, [id])
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, reloadCount])
 
   // Auto-save with 2 s debounce whenever the sheet is marked unsaved
   useEffect(() => {
@@ -90,7 +158,7 @@ export function EditorPage() {
             sections: s.sections,
             arrangements: s.arrangements,
             selectedArrangementId: s.selectedArrangementId,
-            scoreView: viewMode === 'split' ? 'tab' : viewMode === 'leadSheet' ? 'lead_sheet' : viewMode,
+            scoreView: viewMode === 'leadSheet' ? 'lead_sheet' : viewMode,
             pdfUrl: s.pdfUrl,
             musicXml: scoreState.exportCacheXml,
             scoreDocument: scoreState.document,
@@ -237,6 +305,8 @@ export function EditorPage() {
 
   // Keyboard shortcuts (stores-driven, no callbacks needed)
   useEditorKeyboard()
+  useEditorCommandBridge()
+  usePlaybackStateBridge()
 
   // Bar management
   const handleAddBar = useCallback(() => {
@@ -273,13 +343,17 @@ export function EditorPage() {
   }, [handleDeleteBars])
 
   const handleStylePicker = useCallback(() => {
-    // TODO: Open playback style picker drawer
-  }, [])
+    toast('Playback style compare is not wired in this build yet.')
+  }, [toast])
 
   const handleNameChange = useCallback((name: string) => {
     useLeadSheetStore.getState().setProjectName(name)
     useEditorStore.getState().setSaveStatus('unsaved')
   }, [])
+
+  const handleCompare = useCallback(() => {
+    toast('Compare view is still being connected.')
+  }, [toast])
 
   useEffect(() => {
     let isInitial = true
@@ -295,10 +369,54 @@ export function EditorPage() {
     return unsub
   }, [])
 
+  useEffect(() => {
+    const handleAudioError = (event: Event) => {
+      const customEvent = event as CustomEvent<{ message?: string }>
+      toast(customEvent.detail?.message ?? 'Playback could not start.', 'error')
+    }
+
+    window.addEventListener('lava-audio-error', handleAudioError as EventListener)
+    return () => window.removeEventListener('lava-audio-error', handleAudioError as EventListener)
+  }, [toast])
+
+  if (projectLoadState === 'loading') {
+    return (
+      <div className="flex h-screen w-screen flex-col bg-surface-1">
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
+            <div className="h-14 w-72 animate-pulse rounded-2xl bg-surface-2" />
+            <div className="flex-1 animate-pulse rounded-[32px] border border-border bg-surface-0" />
+            <div className="h-24 animate-pulse rounded-[28px] bg-surface-0" />
+          </div>
+          {!isMobile && <div className="hidden w-[356px] animate-pulse border-l border-border bg-surface-0 lg:block" />}
+        </div>
+      </div>
+    )
+  }
+
+  if (projectLoadState === 'error') {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-surface-1 px-6">
+        <div className="w-full max-w-md rounded-[28px] border border-border bg-surface-0 p-6 shadow-sm">
+          <h1 className="text-xl font-semibold text-text-primary">Pack unavailable</h1>
+          <p className="mt-2 text-sm text-text-secondary">{projectLoadError}</p>
+          <div className="mt-6 flex gap-3">
+            <Button type="button" onClick={() => setReloadCount((count) => count + 1)}>
+              Retry
+            </Button>
+            <Button type="button" variant="outline" onClick={() => navigate('/')}>
+              Back home
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-screen w-screen flex-col bg-[#f5f4f1]">
+    <div className="flex h-screen w-screen flex-col bg-surface-1">
       <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex min-w-0 flex-1 flex-col bg-[#f7f6f3]">
+        <div className="relative flex min-w-0 flex-1 flex-col bg-surface-1">
           <EditorTitleBar packName={projectName || 'Untitled'} onNameChange={handleNameChange} />
 
           <PreviewBar
@@ -308,8 +426,7 @@ export function EditorPage() {
             onDiscard={() => {
               useVersionStore.getState().discardPreview()
             }}
-            // TODO: implement CompareView (see spec section 2.3)
-            onCompare={() => {}}
+            onCompare={handleCompare}
           />
 
           <EditorCanvas className="flex-1" />
@@ -318,15 +435,14 @@ export function EditorPage() {
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
             onStylePicker={handleStylePicker}
-            // TODO: implement CompareView (see spec section 2.3)
-            onCompare={() => {}}
+            onCompare={handleCompare}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             className="z-10"
           />
         </div>
 
-        {!isMobile && <EditorChatPanel className="w-[356px] min-w-[356px] max-w-[356px] bg-white" />}
+        {!isMobile && <EditorChatPanel className="w-[356px] min-w-[356px] max-w-[356px] bg-surface-0" />}
       </div>
 
       {isMobile && !chatCollapsed && (

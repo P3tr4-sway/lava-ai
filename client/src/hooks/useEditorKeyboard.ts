@@ -109,11 +109,13 @@ export function useEditorKeyboard(enabled = true): void {
 
       // Cmd+C — copy
       if (meta && e.key === 'c') {
+        e.preventDefault()
         window.dispatchEvent(new CustomEvent('lava-copy'))
         return
       }
       // Cmd+V — paste
       if (meta && e.key === 'v') {
+        e.preventDefault()
         window.dispatchEvent(new CustomEvent('lava-paste'))
         return
       }

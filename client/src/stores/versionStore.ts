@@ -28,6 +28,7 @@ interface VersionStore {
   applyPreview: () => void
   applyVersion: (id: string) => void
   discardPreview: () => void
+  hydrateVersions: (versions: Version[]) => void
   loadFromArrangements: () => void
   reset: () => void
   startPatchSession: () => void
@@ -139,6 +140,39 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       patchSessionBaseSnapshot: null,
       isPatchSession: false,
       versions: versions.filter((v) => v.id !== previewVersionId),
+    })
+  },
+
+  hydrateVersions: (versions) => {
+    const arrangementVersions = (() => {
+      const { arrangements, musicXml } = useLeadSheetStore.getState()
+      const scoreSnapshot = cloneScoreDocument(useScoreDocumentStore.getState().document)
+      return arrangements.map((arrangement) => ({
+        id: arrangement.id === 'original' ? 'original' : `arrangement-${arrangement.id}`,
+        name: arrangement.id === 'original' ? 'Original' : arrangement.label,
+        source: 'arrangement' as const,
+        arrangementId: arrangement.id,
+        musicXml: musicXml ?? '',
+        scoreSnapshot,
+        createdAt: Date.now(),
+      }))
+    })()
+
+    const merged = [...versions]
+    for (const arrangementVersion of arrangementVersions) {
+      if (!merged.some((entry) => entry.id === arrangementVersion.id)) {
+        merged.push(arrangementVersion)
+      }
+    }
+
+    const activeVersionId = merged.some((entry) => entry.id === 'original')
+      ? 'original'
+      : merged[0]?.id ?? 'original'
+
+    set({
+      versions: merged.sort((a, b) => a.createdAt - b.createdAt),
+      activeVersionId,
+      previewVersionId: null,
     })
   },
 

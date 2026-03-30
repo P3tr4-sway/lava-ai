@@ -157,7 +157,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
         {selectedBars.length > 0 && (
           <div className="mb-1.5 flex">
             <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
-              Selected: bars {selectedBars.reduce((a, b) => Math.min(a, b))}–{selectedBars.reduce((a, b) => Math.max(a, b))}
+              Selected: bars {selectedBars.reduce((a, b) => Math.min(a, b)) + 1}–{selectedBars.reduce((a, b) => Math.max(a, b)) + 1}
             </span>
           </div>
         )}

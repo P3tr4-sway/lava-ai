@@ -4,6 +4,7 @@ import { startTranscriptionTool, getTranscriptionStatusTool } from './transcript
 import { addTrackTool, aiComposeTool } from './create.tool.js'
 import { uploadAudioTool, processAudioTool } from './audio.tool.js'
 import { createVersionTool } from './version.tool.js'
+import { SCORE_EDIT_TOOLS } from './scoreEdit.tool.js'
 import type { ToolDefinition } from '@lava/shared'
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -19,4 +20,5 @@ export const ALL_TOOLS: ToolDefinition[] = [
   uploadAudioTool,
   processAudioTool,
   createVersionTool,
+  ...SCORE_EDIT_TOOLS,
 ]

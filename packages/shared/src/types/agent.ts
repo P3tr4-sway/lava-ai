@@ -1,3 +1,5 @@
+import type { VersionAction } from './version.js'
+
 export type Role = 'user' | 'assistant' | 'tool'
 
 export interface AgentMessage {
@@ -7,12 +9,13 @@ export interface AgentMessage {
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
   createdAt: number
-  subtype?: 'chat' | 'onboarding' | 'highlight' | 'coachingTip' | 'practiceStatus' | 'practiceNudge' | 'practiceSummary'
+  subtype?: 'chat' | 'onboarding' | 'highlight' | 'coachingTip' | 'practiceStatus' | 'practiceNudge' | 'practiceSummary' | 'versionCreated'
   targetId?: string
   chips?: MessageChip[]
   hidden?: boolean
   localOnly?: boolean
   toneAction?: ToneAction
+  versionAction?: VersionAction
 }
 
 export interface MessageChip {

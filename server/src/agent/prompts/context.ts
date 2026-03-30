@@ -30,6 +30,15 @@ export function buildContextPrompt(ctx: SpaceContext): string {
       prompt += `\n- Use simple language centered on songs, sections, practice, and progress. Avoid product-internal space terminology.`
     }
   }
+  if (ctx.currentSpace === 'create') {
+    prompt += `\n\n## Editor Transform Mode`
+    prompt += `\nWhen the user is in the editor, you have access to the \`create_version\` tool. Use it to:`
+    prompt += `\n- Generate new song versions when the user asks for transformations ("easier", "blues version", "fingerpicking", "open chords", etc.)`
+    prompt += `\n- Respond to section-specific requests when bar numbers are provided (e.g., "simplify bars 3-4")`
+    prompt += `\n- Always call \`create_version\` with a descriptive name, the modified MusicXML, and 2-3 bullet points summarizing what changed`
+    prompt += `\n- Do NOT describe manual notation editing steps — use \`create_version\` to show the result directly`
+    prompt += `\n- For now, MusicXML transformations are mocked: take the user's request, return a brief explanatory message, and call \`create_version\` with a placeholder version of the MusicXML (you can add an XML comment to the original explaining what would change)`
+  }
   if (ctx.projectId && ctx.projectName) {
     prompt += `\nActive project: "${ctx.projectName}" (id: ${ctx.projectId})`
   } else if (ctx.projectId) {

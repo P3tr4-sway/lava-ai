@@ -123,6 +123,28 @@ function getHandler(name: string) {
       status: 'processing',
     }),
 
+    create_version: async (input) => {
+      const versionId = crypto.randomUUID()
+      const name = String(input.name)
+      const musicXml = String(input.musicXml)
+
+      const rawSummary = input.changeSummary
+      let changeSummary: string[]
+      if (Array.isArray(rawSummary)) {
+        changeSummary = rawSummary.map((item: unknown) => String(item))
+      } else {
+        changeSummary = []
+      }
+
+      return {
+        action: 'version_created',
+        versionId,
+        name,
+        musicXml,
+        changeSummary,
+      }
+    },
+
     coach_message: async (input) => {
       const { content, subtype, targetId, chipsJson } = input as {
         content: string

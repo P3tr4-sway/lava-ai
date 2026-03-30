@@ -3,6 +3,7 @@ import { createProjectTool, listProjectsTool, loadProjectTool } from './project.
 import { startTranscriptionTool, getTranscriptionStatusTool } from './transcription.tool.js'
 import { addTrackTool, aiComposeTool } from './create.tool.js'
 import { uploadAudioTool, processAudioTool } from './audio.tool.js'
+import { createVersionTool } from './version.tool.js'
 import type { ToolDefinition } from '@lava/shared'
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -17,4 +18,5 @@ export const ALL_TOOLS: ToolDefinition[] = [
   aiComposeTool,
   uploadAudioTool,
   processAudioTool,
+  createVersionTool,
 ]

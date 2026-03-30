@@ -118,6 +118,14 @@ export type StreamEventType =
   | 'message_start'
   | 'message_stop'
   | 'error'
+  | 'version_created'
+
+export interface VersionCreatedPayload {
+  versionId: string
+  name: string
+  musicXml: string
+  changeSummary: string[]
+}
 
 export interface StreamEvent {
   type: StreamEventType
@@ -125,4 +133,5 @@ export interface StreamEvent {
   toolCall?: ToolCall
   toolResult?: ToolResult
   error?: string
+  versionPayload?: VersionCreatedPayload
 }

@@ -47,6 +47,29 @@ export class AgentOrchestrator {
     for (const toolCall of pendingToolCalls) {
       const result = await this.toolExecutor.execute(toolCall)
       onEvent({ type: 'tool_result', toolResult: result })
+
+      if (toolCall.name === 'create_version' && !result.isError) {
+        try {
+          const parsed = JSON.parse(result.content) as {
+            versionId: string
+            name: string
+            musicXml: string
+            changeSummary: string[]
+          }
+          onEvent({
+            type: 'version_created',
+            versionPayload: {
+              versionId: parsed.versionId,
+              name: parsed.name,
+              musicXml: parsed.musicXml,
+              changeSummary: parsed.changeSummary,
+            },
+          })
+        } catch {
+          // Malformed result — skip the version_created event
+        }
+      }
+
       completedToolResults.push({
         name: toolCall.name,
         content: result.content,

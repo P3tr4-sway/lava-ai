@@ -147,6 +147,37 @@ function getHandler(name: string) {
       }
     },
 
+    // ── Granular score edit tools ──
+    // All return { success: true }. The orchestrator emits score_patch SSE events.
+    edit_note_pitch: async () => ({ success: true }),
+    edit_note_duration: async () => ({ success: true }),
+    edit_chord: async () => ({ success: true }),
+    edit_key_signature: async () => ({ success: true }),
+    edit_time_signature: async () => ({ success: true }),
+    add_bars: async () => ({ success: true }),
+    delete_bars: async () => ({ success: true }),
+    transpose_bars: async () => ({ success: true }),
+    add_accidental: async () => ({ success: true }),
+    toggle_rest: async () => ({ success: true }),
+    toggle_tie: async () => ({ success: true }),
+    set_annotation: async () => ({ success: true }),
+    set_lyric: async () => ({ success: true }),
+
+    end_edit_session: async (input) => {
+      const versionId = crypto.randomUUID()
+      const name = String(input.name)
+      const rawSummary = input.changeSummary
+      const changeSummary = Array.isArray(rawSummary)
+        ? rawSummary.map((item: unknown) => String(item))
+        : []
+      return {
+        action: 'score_patch_session_end',
+        versionId,
+        name,
+        changeSummary,
+      }
+    },
+
     coach_message: async (input) => {
       const { content, subtype, targetId, chipsJson } = input as {
         content: string

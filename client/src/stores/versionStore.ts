@@ -18,6 +18,7 @@ interface VersionStore {
   removeVersion: (id: string) => void
   startPreview: (id: string) => void
   applyPreview: () => void
+  applyVersion: (id: string) => void
   discardPreview: () => void
   loadFromArrangements: () => void
   reset: () => void
@@ -79,6 +80,14 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       useLeadSheetStore.getState().setMusicXml(version.musicXml)
     }
     set({ activeVersionId: previewVersionId, previewVersionId: null })
+  },
+
+  applyVersion: (id) => {
+    const { versions } = get()
+    const version = versions.find((v) => v.id === id)
+    if (!version) return
+    useLeadSheetStore.getState().setMusicXml(version.musicXml)
+    set({ activeVersionId: id, previewVersionId: null })
   },
 
   discardPreview: () => {

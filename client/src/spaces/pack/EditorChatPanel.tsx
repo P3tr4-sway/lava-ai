@@ -37,8 +37,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
   }, [])
 
   const handleApplyVersion = useCallback((versionId: string) => {
-    useVersionStore.getState().startPreview(versionId)
-    useVersionStore.getState().applyPreview()
+    useVersionStore.getState().applyVersion(versionId)
   }, [])
 
   // Auto-scroll on new messages or streaming content

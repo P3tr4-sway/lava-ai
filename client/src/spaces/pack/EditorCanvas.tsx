@@ -74,6 +74,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
 
   const editorMode = useEditorStore((s) => s.editorMode)
   const isPreview = useVersionStore((s) => s.previewVersionId !== null)
+  // Render-time reactive version of isEditingDisabled() (module-level fn uses getState() for callbacks)
   const editingDisabled = editorMode === 'transform' || isPreview
 
   const { syncHighlights, getMeasureBounds, getNoteBounds } = useScoreSync(containerRef)
@@ -273,10 +274,10 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       // Toggle each selected note to rest
       try {
         let newXml = xml
-        pushUndo(xml)
         for (const { barIndex, noteIndex } of notes) {
           newXml = toggleRest(newXml, barIndex, noteIndex)
         }
+        pushUndo(xml)
         saveXml(newXml)
         syncHighlights()
       } catch (err) { console.error('[handleContextDelete]', err) }

@@ -47,8 +47,8 @@ export function ContextPill({
         className,
       )}
       style={{ top, left }}
-      role="toolbar"
-      aria-label="Selection actions"
+      role={readOnly ? 'status' : 'toolbar'}
+      aria-label={readOnly ? 'Selection info' : 'Selection actions'}
     >
       {readOnly ? (
         <span className="px-1 text-xs text-text-secondary select-none">

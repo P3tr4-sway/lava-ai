@@ -79,6 +79,10 @@ export class AgentOrchestrator {
           }
         } catch (err) {
           logger.warn({ err }, '[AgentOrchestrator] create_version SSE: malformed tool result JSON')
+          onEvent({
+            type: 'error',
+            error: "The arrangement couldn't be generated — please try rephrasing your request.",
+          })
         }
       }
 

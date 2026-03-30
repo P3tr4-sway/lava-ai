@@ -128,9 +128,6 @@ function getHandler(name: string) {
       const name = String(input.name)
 
       const musicXml = String(input.musicXml ?? '')
-      if (!musicXml.trim() || (!musicXml.includes('<score-partwise') && !musicXml.includes('<?xml'))) {
-        return { error: 'Invalid MusicXML: document must be a valid MusicXML string' }
-      }
 
       const rawSummary = input.changeSummary
       let changeSummary: string[]

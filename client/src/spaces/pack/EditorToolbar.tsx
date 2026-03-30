@@ -155,14 +155,14 @@ function RailButton({
       className={cn(
         'flex h-14 items-center gap-2 rounded-2xl px-4 text-text-primary transition-all',
         highlighted
-          ? 'bg-accent text-white shadow-lg'
+          ? 'bg-accent text-surface-0 shadow-lg'
           : active
             ? 'bg-surface-2'
             : 'hover:bg-surface-1',
       )}
     >
       <Icon className="size-6" />
-      {withChevron && <ChevronDown className={cn('size-4', highlighted ? 'text-white/90' : 'text-text-muted')} />}
+      {withChevron && <ChevronDown className={cn('size-4', highlighted ? 'text-surface-0/90' : 'text-text-muted')} />}
     </button>
   )
 }
@@ -408,23 +408,23 @@ export function EditorToolbar({
           <div className="grid gap-4 md:grid-cols-[1.1fr_1fr]">
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">Playback</p>
-                <p className="mt-1 text-sm text-black/60">Style, transport and timing controls for practice mode.</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Playback</p>
+                <p className="mt-1 text-sm text-text-secondary">Style, transport and timing controls for practice mode.</p>
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 w-full justify-between rounded-xl bg-white"
+                className="h-10 w-full justify-between rounded-xl bg-surface-0"
                 onClick={() => {
                   onStylePicker()
                   setStylePickerOpen(true)
                 }}
               >
                 {selectedPlaybackStyle.label}
-                <ChevronDown className="size-4 text-black/45" />
+                <ChevronDown className="size-4 text-text-muted" />
               </Button>
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm text-black/60">
+                <div className="flex items-center justify-between text-sm text-text-secondary">
                   <span>Position</span>
                   <span>Bar {displayBar}</span>
                 </div>
@@ -438,10 +438,10 @@ export function EditorToolbar({
                   aria-label={`Playback position — bar ${displayBar} of ${safeTotalBars}`}
                   className={cn(
                     'block w-full cursor-pointer appearance-none bg-transparent',
-                    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-black/8',
-                    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-black/8',
-                    '[&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#1593ff]',
-                    '[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[#1593ff]',
+                    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border',
+                    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-border',
+                    '[&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
+                    '[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent',
                   )}
                 />
               </div>
@@ -465,8 +465,8 @@ export function EditorToolbar({
                 onChange={(value) => setCountInBars(Number(value))}
                 options={COUNT_IN_OPTIONS.map((option) => ({ value: String(option.value), label: option.label }))}
               />
-              <div className="flex flex-col justify-end gap-2 rounded-2xl border border-black/10 bg-white p-3">
-                <p className="text-xs font-medium text-black/55">Metronome</p>
+              <div className="flex flex-col justify-end gap-2 rounded-2xl border border-border bg-surface-0 p-3">
+                <p className="text-xs font-medium text-text-secondary">Metronome</p>
                 <PanelButton active={metronomeEnabled} onClick={() => toggleMetronome()}>
                   {metronomeEnabled ? 'On' : 'Off'}
                 </PanelButton>
@@ -478,8 +478,8 @@ export function EditorToolbar({
         return (
           <div className="space-y-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">Selection tool</p>
-              <p className="mt-1 text-sm text-black/60">Switch between note, bar, section and range targeting.</p>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Selection tool</p>
+              <p className="mt-1 text-sm text-text-secondary">Switch between note, bar, section and range targeting.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {SELECTION_SCOPE_OPTIONS.map(({ value, label, icon: Icon }) => (
@@ -496,8 +496,8 @@ export function EditorToolbar({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">Notes</p>
-                <p className="mt-1 text-sm text-black/60">Choose the active note value for direct entry or selected notes.</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Notes</p>
+                <p className="mt-1 text-sm text-text-secondary">Choose the active note value for direct entry or selected notes.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {DURATION_OPTIONS.map((option) => (
@@ -513,8 +513,8 @@ export function EditorToolbar({
             </div>
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">Rests</p>
-                <p className="mt-1 text-sm text-black/60">Swap the active entry mode to rests and keep the same duration shortcuts.</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Rests</p>
+                <p className="mt-1 text-sm text-text-secondary">Swap the active entry mode to rests and keep the same duration shortcuts.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {DURATION_OPTIONS.map((option) => (
@@ -534,8 +534,8 @@ export function EditorToolbar({
         return (
           <div className="space-y-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">Notation</p>
-              <p className="mt-1 text-sm text-black/60">Apply ties and core guitar articulations to the current note selection.</p>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Notation</p>
+              <p className="mt-1 text-sm text-text-secondary">Apply ties and core guitar articulations to the current note selection.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <PanelButton active={Boolean(primarySelectedNote?.tieStart)} onClick={toggleTie}>
@@ -558,8 +558,8 @@ export function EditorToolbar({
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">Structure</p>
-                <p className="mt-1 text-sm text-black/60">Insert bars, remove selected bars, and toggle chord diagrams for the active region.</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Structure</p>
+                <p className="mt-1 text-sm text-text-secondary">Insert bars, remove selected bars, and toggle chord diagrams for the active region.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <PanelButton
@@ -585,9 +585,9 @@ export function EditorToolbar({
                 </PanelButton>
               </div>
             </div>
-            <div className="flex min-w-[150px] flex-col justify-end rounded-2xl border border-black/10 bg-white p-3">
-              <p className="text-xs font-medium text-black/55">Selection</p>
-              <p className="mt-1 text-sm text-black/65">
+            <div className="flex min-w-[150px] flex-col justify-end rounded-2xl border border-border bg-surface-0 p-3">
+              <p className="text-xs font-medium text-text-secondary">Selection</p>
+              <p className="mt-1 text-sm text-text-secondary">
                 {selectedBarStart !== null && selectedBarEnd !== null
                   ? selectedBarStart === selectedBarEnd
                     ? `Bar ${selectedBarStart + 1}`
@@ -604,8 +604,8 @@ export function EditorToolbar({
           <div className="grid gap-4 md:grid-cols-[1fr_auto]">
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/45">View</p>
-                <p className="mt-1 text-sm text-black/60">Canvas zoom and alternate score views.</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">View</p>
+                <p className="mt-1 text-sm text-text-secondary">Canvas zoom and alternate score views.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <PanelButton active={false} onClick={() => setZoom(zoom - 10)}>
@@ -624,9 +624,9 @@ export function EditorToolbar({
                 </PanelButton>
               </div>
             </div>
-            <div className="flex min-w-[120px] flex-col justify-end rounded-2xl border border-black/10 bg-white p-3">
-              <p className="text-xs font-medium text-black/55">Zoom</p>
-              <p className="mt-1 text-2xl font-semibold text-black">{zoom}%</p>
+            <div className="flex min-w-[120px] flex-col justify-end rounded-2xl border border-border bg-surface-0 p-3">
+              <p className="text-xs font-medium text-text-secondary">Zoom</p>
+              <p className="mt-1 text-2xl font-semibold text-text-primary">{zoom}%</p>
             </div>
           </div>
         )
@@ -639,12 +639,12 @@ export function EditorToolbar({
     <>
       <div ref={toolbarRef} className={cn('pointer-events-none absolute bottom-6 left-1/2 z-30 -translate-x-1/2', className)}>
         {panelContent && (
-          <div className="pointer-events-auto absolute bottom-full left-1/2 mb-3 w-[min(92vw,720px)] -translate-x-1/2 rounded-[28px] border border-black/10 bg-white/96 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.12)] backdrop-blur">
+          <div className="pointer-events-auto absolute bottom-full left-1/2 mb-3 w-[min(92vw,720px)] -translate-x-1/2 rounded-[28px] border border-border bg-surface-0/96 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.12)] backdrop-blur">
             {panelContent}
           </div>
         )}
 
-        <div className="pointer-events-auto flex items-center gap-2 rounded-[32px] border border-black/10 bg-white/96 px-4 py-3 shadow-[0_24px_60px_rgba(0,0,0,0.12)] backdrop-blur">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-[32px] border border-border bg-surface-0/96 px-4 py-3 shadow-[0_24px_60px_rgba(0,0,0,0.12)] backdrop-blur">
           <RailButton
             icon={isPlaying ? Pause : Play}
             label={isPlaying ? 'Pause playback' : 'Play score'}
@@ -698,7 +698,7 @@ export function EditorToolbar({
 
           <ToolDivider />
 
-          <div className="flex items-center rounded-[22px] bg-[#f3f4f6] p-1">
+          <div className="flex items-center rounded-[22px] bg-surface-2 p-1">
             <MiniSegmentButton active={editorMode === 'transform' && viewMode !== 'split'} onClick={() => {
               setEditorMode('transform')
               if (viewMode === 'split') setViewMode('tab')

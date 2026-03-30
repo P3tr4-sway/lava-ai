@@ -320,28 +320,28 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
   if (!track) return null
 
   return (
-    <div className={cn('relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-black/8 bg-[#faf9f6]', className)}>
+    <div className={cn('relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-border bg-surface-1', className)}>
       <div className="absolute left-6 top-5 z-20 flex flex-wrap items-center gap-3 text-sm">
-        <span className="font-medium text-black/85">{track.name}</span>
-        <span className="text-black/28">•</span>
-        <span className="text-black/55">{document.measures.length} bars</span>
-        <span className="text-black/28">•</span>
-        <span className="text-black/55">{selectionSummary}</span>
+        <span className="font-medium text-text-primary">{track.name}</span>
+        <span className="text-text-muted/60">•</span>
+        <span className="text-text-secondary">{document.measures.length} bars</span>
+        <span className="text-text-muted/60">•</span>
+        <span className="text-text-secondary">{selectionSummary}</span>
       </div>
 
       {!compact && (selectedBars.length > 0 || selectedNoteIds.length > 0 || Boolean(caret)) && (
         <div className="absolute right-6 top-6 z-20 w-[280px] space-y-3">
-          <Card className="rounded-[24px] border-black/10 bg-white/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
+          <Card className="rounded-[24px] border-border bg-surface-0/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/40">Selection</p>
-              <p className="text-sm font-medium text-black">{selectionSummary}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Selection</p>
+              <p className="text-sm font-medium text-text-primary">{selectionSummary}</p>
               {primarySelectedNote && (
-                <p className="text-sm text-black/60">
+                <p className="text-sm text-text-secondary">
                   String {primarySelectedNote.placement?.string ?? 'R'} · Fret {primarySelectedNote.placement?.fret ?? 'R'} · {primarySelectedNote.durationType} · {durationToBeats(primarySelectedNote.durationType)} beat
                 </p>
               )}
               {!primarySelectedNote && caret && (
-                <p className="text-sm text-black/60">
+                <p className="text-sm text-text-secondary">
                   Bar {caret.measureIndex + 1} · Beat {caret.beat} · String {caret.string}
                 </p>
               )}
@@ -349,11 +349,11 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
           </Card>
 
           {selectionScope === 'section' && selectedBars.length > 0 && (
-            <Card className="rounded-[24px] border-black/10 bg-white/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
+            <Card className="rounded-[24px] border-border bg-surface-0/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/40">Section</p>
-                  <p className="mt-1 text-sm text-black/60">Name the selected phrase or section.</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Section</p>
+                  <p className="mt-1 text-sm text-text-secondary">Name the selected phrase or section.</p>
                 </div>
                 <Input
                   label="Label"
@@ -369,11 +369,11 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
           )}
 
           {caret && (
-            <Card className="rounded-[24px] border-black/10 bg-white/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
+            <Card className="rounded-[24px] border-border bg-surface-0/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/40">Note entry</p>
-                  <p className="mt-1 text-sm text-black/60">
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Note entry</p>
+                  <p className="mt-1 text-sm text-text-secondary">
                     Click a beat to place the caret, then insert a note or rest directly here.
                   </p>
                 </div>
@@ -398,7 +398,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/40">Duration</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Duration</p>
                   <div className="flex flex-wrap gap-2">
                     {durationOptions.map((duration) => (
                       <Button
@@ -434,7 +434,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/40">Quick frets</p>
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Quick frets</p>
                       <div className="grid grid-cols-5 gap-2">
                         {quickFretOptions.map((fret) => (
                           <Button
@@ -460,11 +460,11 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
           )}
 
           {showChordDiagrams && selectedBars.length > 0 && (
-            <Card className="rounded-[24px] border-black/10 bg-white/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
+            <Card className="rounded-[24px] border-border bg-surface-0/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-black/40">Chord diagrams</p>
-                  <p className="mt-1 text-sm text-black/60">Pin diagrams above or below the selected measures.</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Chord diagrams</p>
+                  <p className="mt-1 text-sm text-text-secondary">Pin diagrams above or below the selected measures.</p>
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => handleChordPlacementToggle('top')}>Top</Button>
@@ -766,17 +766,17 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
 
       {contextMenu && (
         <div
-          className="fixed z-40 min-w-[220px] rounded-[20px] border border-black/10 bg-white/98 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.12)] backdrop-blur"
+          className="fixed z-40 min-w-[220px] rounded-[20px] border border-border bg-surface-0/98 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.12)] backdrop-blur"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <Button className="h-10 w-full justify-start rounded-xl" variant="ghost" onClick={() => handleMeasureContextAction('before')}>
             Add Bar Before
           </Button>
-          <div className="mx-2 my-1 h-px bg-black/8" />
+          <div className="mx-2 my-1 h-px bg-border" />
           <Button className="h-10 w-full justify-start rounded-xl" variant="ghost" onClick={() => handleMeasureContextAction('after')}>
             Add Bar After
           </Button>
-          <div className="mx-2 my-1 h-px bg-black/8" />
+          <div className="mx-2 my-1 h-px bg-border" />
           <Button className="h-10 w-full justify-start rounded-xl" variant="ghost" onClick={() => handleMeasureContextAction('delete')}>
             Delete Bar
           </Button>

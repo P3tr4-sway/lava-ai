@@ -118,6 +118,39 @@ export interface CoachContext {
   }
 }
 
+export interface VersionCreatedPayload {
+  versionId: string
+  name: string
+  musicXml: string
+  changeSummary: string[]
+}
+
+export type ScorePatchOp =
+  | 'setNotePitch'
+  | 'setNoteDuration'
+  | 'setChord'
+  | 'setKeySig'
+  | 'setTimeSig'
+  | 'addBars'
+  | 'deleteBars'
+  | 'transposeBars'
+  | 'addAccidental'
+  | 'toggleRest'
+  | 'toggleTie'
+  | 'setAnnotation'
+  | 'setLyric'
+
+export interface ScorePatch {
+  op: ScorePatchOp
+  [key: string]: unknown
+}
+
+export interface ScorePatchSessionEndPayload {
+  versionId: string
+  name: string
+  changeSummary: string[]
+}
+
 export type StreamEventType =
   | 'text_delta'
   | 'tool_start'
@@ -126,13 +159,8 @@ export type StreamEventType =
   | 'message_stop'
   | 'error'
   | 'version_created'
-
-export interface VersionCreatedPayload {
-  versionId: string
-  name: string
-  musicXml: string
-  changeSummary: string[]
-}
+  | 'score_patch'
+  | 'score_patch_session_end'
 
 export interface StreamEvent {
   type: StreamEventType
@@ -141,4 +169,6 @@ export interface StreamEvent {
   toolResult?: ToolResult
   error?: string
   versionPayload?: VersionCreatedPayload
+  patch?: ScorePatch
+  patchSessionEndPayload?: ScorePatchSessionEndPayload
 }

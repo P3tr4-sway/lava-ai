@@ -17,7 +17,7 @@ import { TextAnnotationInput } from './TextAnnotationInput'
 import {
   clearBars, copyBars, pasteBars, duplicateBars, transposeBars,
   setNotePitch, setNoteDuration, addAccidental, toggleTie, toggleRest,
-  setLyric, setAnnotation, parseXml, getMeasures,
+  setLyric, setAnnotation, setChord, parseXml, getMeasures,
 } from '@/lib/musicXmlEngine'
 import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
 import type { Pitch } from '@/lib/pitchUtils'
@@ -170,11 +170,22 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   )
 
   const handleChordSelect = useCallback(
-    (_chord: { root: string; quality: string }) => {
-      // TODO: Apply chord to selected bar in MusicXML via leadSheetStore
+    (chord: { root: string; quality: string }) => {
+      const xml = getXml()
+      if (!xml || !popover) return
+      const { pushUndo } = useEditorStore.getState()
+      const chordSymbol = chord.quality ? `${chord.root}${chord.quality}` : chord.root
+      try {
+        const newXml = setChord(xml, popover.barIndex, 0, chordSymbol)
+        pushUndo(xml)
+        saveXml(newXml)
+        syncHighlights()
+      } catch (err) {
+        console.error('[handleChordSelect]', err)
+      }
       setPopover(null)
     },
-    [],
+    [popover, syncHighlights],
   )
 
   const handleKeySigSelect = useCallback(

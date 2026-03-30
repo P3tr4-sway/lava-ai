@@ -1,11 +1,16 @@
 import { create } from 'zustand'
 import type { Version } from '@lava/shared'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
+import { useEditorStore } from '@/stores/editorStore'
 
 interface VersionStore {
   versions: Version[]
   activeVersionId: string
   previewVersionId: string | null
+
+  // Patch session (live agent editing)
+  patchSessionBaseXml: string | null
+  isPatchSession: boolean
 
   // Queries
   getActiveVersion: () => Version | undefined
@@ -22,12 +27,17 @@ interface VersionStore {
   discardPreview: () => void
   loadFromArrangements: () => void
   reset: () => void
+  startPatchSession: () => void
+  endPatchSession: (versionId: string, name: string, changeSummary: string[]) => void
+  rollbackPatchSession: () => void
 }
 
 export const useVersionStore = create<VersionStore>((set, get) => ({
   versions: [],
   activeVersionId: 'original',
   previewVersionId: null,
+  patchSessionBaseXml: null,
+  isPatchSession: false,
 
   getActiveVersion: () => {
     const { versions, activeVersionId } = get()
@@ -73,13 +83,17 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   },
 
   applyPreview: () => {
-    const { previewVersionId, versions } = get()
+    const { previewVersionId, versions, patchSessionBaseXml } = get()
     if (!previewVersionId) return
     const version = versions.find((v) => v.id === previewVersionId)
     if (version) {
       useLeadSheetStore.getState().setMusicXml(version.musicXml)
     }
-    set({ activeVersionId: previewVersionId, previewVersionId: null })
+    // If this was a patch session, push the pre-session XML as a single undo entry
+    if (patchSessionBaseXml !== null) {
+      useEditorStore.getState().pushUndo(patchSessionBaseXml)
+    }
+    set({ activeVersionId: previewVersionId, previewVersionId: null, patchSessionBaseXml: null })
   },
 
   applyVersion: (id) => {
@@ -91,14 +105,23 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   },
 
   discardPreview: () => {
-    const { previewVersionId, versions, activeVersionId } = get()
+    const { previewVersionId, versions, activeVersionId, patchSessionBaseXml } = get()
     if (!previewVersionId) return
-    const activeVersion = versions.find((v) => v.id === activeVersionId)
-    if (activeVersion) {
-      useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
+
+    // If this was a patch session, restore the pre-session XML
+    if (patchSessionBaseXml !== null) {
+      useLeadSheetStore.getState().setMusicXml(patchSessionBaseXml)
+    } else {
+      const activeVersion = versions.find((v) => v.id === activeVersionId)
+      if (activeVersion) {
+        useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
+      }
     }
+
     set({
       previewVersionId: null,
+      patchSessionBaseXml: null,
+      isPatchSession: false,
       versions: versions.filter((v) => v.id !== previewVersionId),
     })
   },
@@ -135,5 +158,47 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     set({ versions, activeVersionId: 'original', previewVersionId: null })
   },
 
-  reset: () => set({ versions: [], activeVersionId: 'original', previewVersionId: null }),
+  reset: () =>
+    set({
+      versions: [],
+      activeVersionId: 'original',
+      previewVersionId: null,
+      patchSessionBaseXml: null,
+      isPatchSession: false,
+    }),
+
+  startPatchSession: () => {
+    const currentXml = useLeadSheetStore.getState().musicXml
+    set({ patchSessionBaseXml: currentXml, isPatchSession: true })
+  },
+
+  endPatchSession: (versionId, name, changeSummary) => {
+    const finalXml = useLeadSheetStore.getState().musicXml ?? ''
+
+    // Create the version from the current (patched) XML
+    const version: Version = {
+      id: versionId,
+      name,
+      source: 'ai-transform',
+      musicXml: finalXml,
+      createdAt: Date.now(),
+    }
+
+    set((s) => ({
+      versions: [...s.versions, version],
+      isPatchSession: false,
+      // Keep patchSessionBaseXml — needed for undo if user applies
+    }))
+
+    // Enter preview mode (shows PreviewBar with Apply/Discard)
+    get().startPreview(versionId)
+  },
+
+  rollbackPatchSession: () => {
+    const { patchSessionBaseXml } = get()
+    if (patchSessionBaseXml !== null) {
+      useLeadSheetStore.getState().setMusicXml(patchSessionBaseXml)
+    }
+    set({ patchSessionBaseXml: null, isPatchSession: false })
+  },
 }))

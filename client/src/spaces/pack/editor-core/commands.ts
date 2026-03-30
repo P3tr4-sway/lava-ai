@@ -20,6 +20,8 @@ export function moveCaretByStep(
   beatsPerMeasure: number,
   step = 0.25,
 ): EditorCaret {
+  const snapToQuarterGrid = (value: number) => Math.round(value * 4) / 4
+
   if (direction === 'up' || direction === 'down') {
     return {
       ...caret,
@@ -28,11 +30,12 @@ export function moveCaretByStep(
   }
 
   let nextMeasureIndex = caret.measureIndex
-  let nextBeat = Number((caret.beat + (direction === 'left' ? -step : step)).toFixed(2))
+  const maxBeat = Math.max(0, snapToQuarterGrid(beatsPerMeasure - step))
+  let nextBeat = snapToQuarterGrid(caret.beat + (direction === 'left' ? -step : step))
 
   if (nextBeat < 0 && nextMeasureIndex > 0) {
     nextMeasureIndex -= 1
-    nextBeat = Math.max(0, Number((beatsPerMeasure - step).toFixed(2)))
+    nextBeat = maxBeat
   } else if (nextBeat >= beatsPerMeasure && nextMeasureIndex < measureCount - 1) {
     nextMeasureIndex += 1
     nextBeat = 0
@@ -41,7 +44,7 @@ export function moveCaretByStep(
   return {
     ...caret,
     measureIndex: Math.max(0, Math.min(measureCount - 1, nextMeasureIndex)),
-    beat: Math.max(0, Math.min(beatsPerMeasure - step, nextBeat)),
+    beat: Math.max(0, Math.min(maxBeat, nextBeat)),
   }
 }
 

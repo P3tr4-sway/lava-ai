@@ -2,17 +2,20 @@ import type { ComponentType } from 'react'
 import {
   Play, Pause, RotateCcw, MousePointer2, BoxSelect,
   Hash, Music, Type, Undo2, Redo2,
-  Plus, Trash2, Disc3, ZoomOut, ZoomIn, Layers,
-  Guitar, Grid3x3,
+  Plus, Trash2, ZoomOut, ZoomIn, Layers,
+  Guitar, Grid3x3, Columns2,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore, type ViewMode } from '@/stores/editorStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useVersionStore } from '@/stores/versionStore'
+import { VersionPicker } from './VersionPicker'
 
 interface EditorToolbarProps {
   onAddBar: () => void
   onDeleteBars: () => void
   onStylePicker: () => void
+  onCompare: () => void
   totalBars?: number
   beatsPerBar?: number
   className?: string
@@ -67,10 +70,19 @@ function isRunningState(state: string) {
   return state !== 'stopped' && state !== 'paused' && state !== 'locating'
 }
 
+const VIEW_MODE_LABELS: Record<string, string> = {
+  staff: 'Staff view',
+  leadSheet: 'Lead sheet',
+  tab: 'Tab view',
+}
+
+const VIEW_MODES: ViewMode[] = ['staff', 'leadSheet', 'tab']
+
 export function EditorToolbar({
   onAddBar,
   onDeleteBars,
-  onStylePicker,
+  onStylePicker: _onStylePicker,
+  onCompare,
   totalBars = 16,
   beatsPerBar = 4,
   className,
@@ -90,6 +102,10 @@ export function EditorToolbar({
   const showBeatMarkers = useEditorStore((s) => s.showBeatMarkers)
   const toggleChordDiagrams = useEditorStore((s) => s.toggleChordDiagrams)
   const toggleBeatMarkers = useEditorStore((s) => s.toggleBeatMarkers)
+  const editorMode = useEditorStore((s) => s.editorMode)
+  const setEditorMode = useEditorStore((s) => s.setEditorMode)
+  const isPreview = useVersionStore((s) => s.previewVersionId !== null)
+  const versionCount = useVersionStore((s) => s.versions.length)
 
   const transportState = useAudioStore((s) => s.transportState)
   const setTransportState = useAudioStore((s) => s.setTransportState)
@@ -136,12 +152,6 @@ export function EditorToolbar({
     setCurrentTime(0)
   }
 
-  const viewModeLabel: Record<string, string> = {
-    staff: 'Staff view',
-    leadSheet: 'Lead sheet',
-    tab: 'Tab view',
-  }
-
   return (
     <div
       className={cn(
@@ -173,7 +183,37 @@ export function EditorToolbar({
 
       {/* Toolbar pill */}
       <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface-0 px-2 py-1.5 shadow-lg">
-        {/* Playback */}
+        {/* Mode switch — always visible */}
+        <div className="flex items-center rounded-lg bg-surface-2 p-0.5">
+          <button
+            type="button"
+            onClick={() => setEditorMode('transform')}
+            className={cn(
+              'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+              editorMode === 'transform'
+                ? 'bg-surface-0 text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            Transform
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditorMode('fineEdit')}
+            className={cn(
+              'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+              editorMode === 'fineEdit'
+                ? 'bg-surface-0 text-text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            Fine Edit
+          </button>
+        </div>
+
+        <Divider />
+
+        {/* Playback — always visible */}
         <ToolButton
           icon={isPlaying ? Pause : Play}
           onClick={handleTogglePlayback}
@@ -189,7 +229,7 @@ export function EditorToolbar({
 
         <Divider />
 
-        {/* Selection tools */}
+        {/* Selection — always visible */}
         <ToolButton
           icon={MousePointer2}
           active={toolMode === 'pointer'}
@@ -203,87 +243,101 @@ export function EditorToolbar({
           label="Range select"
         />
 
+        {editorMode === 'transform' && (
+          <>
+            <Divider />
+            {/* Version picker */}
+            <VersionPicker />
+
+            {/* Compare */}
+            <ToolButton
+              icon={Columns2}
+              onClick={onCompare}
+              disabled={versionCount <= 1 || isPreview}
+              label="Compare with original"
+            />
+          </>
+        )}
+
+        {editorMode === 'fineEdit' && (
+          <>
+            <Divider />
+
+            {/* Editing tools */}
+            <ToolButton
+              icon={Hash}
+              active={toolMode === 'chord'}
+              onClick={() => setToolMode('chord')}
+              label="Edit chord"
+            />
+            <ToolButton
+              icon={Music}
+              active={toolMode === 'keySig'}
+              onClick={() => setToolMode('keySig')}
+              label="Key & time sig"
+            />
+            <ToolButton
+              icon={Type}
+              active={toolMode === 'text'}
+              onClick={() => setToolMode('text')}
+              label="Add annotation"
+            />
+
+            <Divider />
+
+            {/* History */}
+            <ToolButton icon={Undo2} onClick={undo} disabled={!canUndo} label="Undo" />
+            <ToolButton icon={Redo2} onClick={redo} disabled={!canRedo} label="Redo" />
+
+            <Divider />
+
+            {/* Bar management */}
+            <ToolButton icon={Plus} onClick={onAddBar} label="Add bar" />
+            <ToolButton
+              icon={Trash2}
+              onClick={onDeleteBars}
+              disabled={selectedBars.length === 0}
+              label="Delete bar"
+            />
+
+            <Divider />
+
+            {/* View mode cycle */}
+            <ToolButton
+              icon={Layers}
+              label={VIEW_MODE_LABELS[viewMode] ?? 'View mode'}
+              onClick={() => {
+                const next = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length]
+                setViewMode(next)
+              }}
+            />
+
+            <Divider />
+
+            {/* Training wheels */}
+            <ToolButton
+              icon={Guitar}
+              label="Chord shapes"
+              active={showChordDiagrams}
+              onClick={toggleChordDiagrams}
+            />
+            <ToolButton
+              icon={Grid3x3}
+              label="Beat grid"
+              active={showBeatMarkers}
+              onClick={toggleBeatMarkers}
+            />
+          </>
+        )}
+
         <Divider />
 
-        {/* Editing tools */}
-        <ToolButton
-          icon={Hash}
-          active={toolMode === 'chord'}
-          onClick={() => setToolMode('chord')}
-          label="Edit chord"
-        />
-        <ToolButton
-          icon={Music}
-          active={toolMode === 'keySig'}
-          onClick={() => setToolMode('keySig')}
-          label="Key & time sig"
-        />
-        <ToolButton
-          icon={Type}
-          active={toolMode === 'text'}
-          onClick={() => setToolMode('text')}
-          label="Add annotation"
-        />
-
-        <Divider />
-
-        {/* History */}
-        <ToolButton icon={Undo2} onClick={undo} disabled={!canUndo} label="Undo" />
-        <ToolButton icon={Redo2} onClick={redo} disabled={!canRedo} label="Redo" />
-
-        <Divider />
-
-        {/* Bar management */}
-        <ToolButton icon={Plus} onClick={onAddBar} label="Add bar" />
-        <ToolButton
-          icon={Trash2}
-          onClick={onDeleteBars}
-          disabled={selectedBars.length === 0}
-          label="Delete bar"
-        />
-
-        <Divider />
-
-        {/* Playback style */}
-        <ToolButton icon={Disc3} onClick={onStylePicker} label="Sound style" />
-
-        <Divider />
-
-        {/* Zoom */}
+        {/* Zoom — always visible */}
         <ToolButton icon={ZoomOut} onClick={() => setZoom(zoom - 10)} disabled={zoom <= 50} label="Zoom out" />
         <span className="min-w-[2.5rem] text-center text-xs font-mono text-text-secondary">
           {zoom}%
         </span>
         <ToolButton icon={ZoomIn} onClick={() => setZoom(zoom + 10)} disabled={zoom >= 200} label="Zoom in" />
-
-        <Divider />
-
-        {/* View mode cycle */}
-        <ToolButton
-          icon={Layers}
-          label={viewModeLabel[viewMode] ?? 'View mode'}
-          onClick={() => {
-            const modes: ViewMode[] = ['staff', 'leadSheet', 'tab']
-            const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
-            setViewMode(next)
-          }}
-        />
-
-        <Divider />
-
-        {/* Training wheels */}
-        <ToolButton
-          icon={Guitar}
-          label="Chord shapes"
-          active={showChordDiagrams}
-          onClick={toggleChordDiagrams}
-        />
-        <ToolButton
-          icon={Grid3x3}
-          label="Beat grid"
-          active={showBeatMarkers}
-          onClick={toggleBeatMarkers}
-        />
       </div>
     </div>
   )

@@ -167,6 +167,7 @@ export function EditorPage() {
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
             onStylePicker={handleStylePicker}
+            onCompare={() => {}}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             className="z-20"

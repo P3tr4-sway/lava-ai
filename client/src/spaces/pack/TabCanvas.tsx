@@ -193,7 +193,7 @@ function beatToQuarterGrid(value: number, beatsPerBar: number) {
 function resolveBeatFromPointer(api: AlphaTabApi, measureIndex: number, pointerX: number, beatsPerBar: number) {
   const bounds = resolveTabStaffBounds(api, measureIndex)
   if (!bounds) return 0
-  const ratio = clamp((pointerX - bounds.x) / Math.max(bounds.w, 1), 0, 0.999)
+  const ratio = clamp((pointerX - bounds.x) / Math.max(bounds.w, 1), 0, 1)
   return beatToQuarterGrid(ratio * beatsPerBar, beatsPerBar)
 }
 

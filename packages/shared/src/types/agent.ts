@@ -79,6 +79,12 @@ export interface ToneAction {
 export type SpaceType = 'home' | 'learn' | 'jam' | 'tone' | 'create' | 'tools' | 'library' | 'projects'
 export type HomeMode = 'discovery' | 'agent'
 
+export interface EditorContext {
+  musicXml: string
+  scoreSummary: string
+  selectedBars?: number[]
+}
+
 export interface SpaceContext {
   currentSpace: SpaceType
   homeMode?: HomeMode
@@ -86,6 +92,7 @@ export interface SpaceContext {
   projectName?: string
   coachContext?: CoachContext
   toneContext?: ToneContext
+  editorContext?: EditorContext
 }
 
 export type CoachingStyle = 'passive' | 'active' | 'checkpoint'

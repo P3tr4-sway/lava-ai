@@ -1,3 +1,4 @@
+import type { EditorSelection, ScoreCommandPatch, ScorePatch, ScoreSnapshot } from './score.js'
 import type { VersionAction } from './version.js'
 
 export type Role = 'user' | 'assistant' | 'tool'
@@ -82,7 +83,13 @@ export type HomeMode = 'discovery' | 'agent'
 export interface EditorContext {
   musicXml: string
   scoreSummary: string
+  scoreDigest?: string
+  scoreSnapshot?: ScoreSnapshot
   selectedBars?: number[]
+  selection?: EditorSelection
+  selectionScope?: 'note' | 'bar' | 'section' | 'range'
+  tuning?: number[]
+  capo?: number
 }
 
 export interface SpaceContext {
@@ -122,27 +129,8 @@ export interface VersionCreatedPayload {
   versionId: string
   name: string
   musicXml: string
+  scoreSnapshot?: ScoreSnapshot
   changeSummary: string[]
-}
-
-export type ScorePatchOp =
-  | 'setNotePitch'
-  | 'setNoteDuration'
-  | 'setChord'
-  | 'setKeySig'
-  | 'setTimeSig'
-  | 'addBars'
-  | 'deleteBars'
-  | 'transposeBars'
-  | 'addAccidental'
-  | 'toggleRest'
-  | 'toggleTie'
-  | 'setAnnotation'
-  | 'setLyric'
-
-export interface ScorePatch {
-  op: ScorePatchOp
-  [key: string]: unknown
 }
 
 export interface ScorePatchSessionEndPayload {
@@ -160,6 +148,7 @@ export type StreamEventType =
   | 'error'
   | 'version_created'
   | 'score_patch'
+  | 'score_command_patch'
   | 'score_patch_session_end'
 
 export interface StreamEvent {
@@ -170,5 +159,6 @@ export interface StreamEvent {
   error?: string
   versionPayload?: VersionCreatedPayload
   patch?: ScorePatch
+  commandPatch?: ScoreCommandPatch
   patchSessionEndPayload?: ScorePatchSessionEndPayload
 }

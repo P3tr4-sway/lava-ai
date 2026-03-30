@@ -1,16 +1,17 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Plus, PanelLeft, PanelLeftOpen } from 'lucide-react'
 import { SIDEBAR_NAV_ITEMS, HOME_NAV_RESET_EVENT } from './navItems'
 import { LavaLogo } from './LavaLogo'
 import { useUIStore } from '@/stores/uiStore'
 import { cn } from '@/components/ui/utils'
-import { projectService } from '@/services/projectService'
+import { NewPackDialog } from '@/components/projects/NewPackDialog'
 
 export function Sidebar() {
   const { pathname } = useLocation()
-  const navigate = useNavigate()
   const collapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const [newPackOpen, setNewPackOpen] = useState(false)
 
   const handleNavClick = (to: string) => {
     if (to === '/' && pathname === '/') {
@@ -18,22 +19,14 @@ export function Sidebar() {
     }
   }
 
-  const handleNewPack = async () => {
-    try {
-      const project = await projectService.create({ name: 'Untitled Pack', space: 'learn', metadata: {} })
-      navigate(`/pack/${project.id}`)
-    } catch {
-      navigate('/pack/new')
-    }
-  }
-
   return (
-    <nav
-      className={cn(
-        'flex flex-col shrink-0 border-r border-border bg-surface-0 py-4 transition-[width] duration-200 overflow-hidden',
-        collapsed ? 'w-14 items-center' : 'w-52 items-stretch'
-      )}
-    >
+    <>
+      <nav
+        className={cn(
+          'flex flex-col shrink-0 border-r border-border bg-surface-0 py-4 transition-[width] duration-200 overflow-hidden',
+          collapsed ? 'w-14 items-center' : 'w-52 items-stretch'
+        )}
+      >
       {/* ── Top: logo + collapse button ── */}
       <div className={cn('flex items-center mb-4', collapsed ? 'justify-center px-0' : 'justify-between px-3')}>
         <Link to="/" className="flex items-center gap-2 min-w-0">
@@ -56,7 +49,7 @@ export function Sidebar() {
       {/* ── New pack button ── */}
       <div className={cn('mb-2', collapsed ? 'px-0 flex justify-center' : 'px-3')}>
         <button
-          onClick={handleNewPack}
+          onClick={() => setNewPackOpen(true)}
           title={collapsed ? 'New Pack' : undefined}
           className={cn(
             'flex items-center gap-2 rounded-lg bg-accent text-surface-0 hover:opacity-90 transition-opacity',
@@ -105,6 +98,9 @@ export function Sidebar() {
           </button>
         </div>
       )}
-    </nav>
+      </nav>
+
+      <NewPackDialog open={newPackOpen} onClose={() => setNewPackOpen(false)} />
+    </>
   )
 }

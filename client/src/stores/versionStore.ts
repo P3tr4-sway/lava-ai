@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { Version } from '@lava/shared'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useEditorStore } from '@/stores/editorStore'
+import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
+import { cloneScoreDocument, exportScoreDocumentToMusicXml, parseMusicXmlToScoreDocument } from '@/lib/scoreDocument'
 
 interface VersionStore {
   versions: Version[]
@@ -10,6 +12,7 @@ interface VersionStore {
 
   // Patch session (live agent editing)
   patchSessionBaseXml: string | null
+  patchSessionBaseSnapshot: Version['scoreSnapshot'] | null
   isPatchSession: boolean
 
   // Queries
@@ -37,6 +40,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   activeVersionId: 'original',
   previewVersionId: null,
   patchSessionBaseXml: null,
+  patchSessionBaseSnapshot: null,
   isPatchSession: false,
 
   getActiveVersion: () => {
@@ -58,6 +62,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     if (!version) return
     set({ activeVersionId: id })
     useLeadSheetStore.getState().setMusicXml(version.musicXml)
+    useScoreDocumentStore.getState().loadFromSnapshot(version.scoreSnapshot ?? parseMusicXmlToScoreDocument(version.musicXml))
     // Sync arrangement selection for tier 1 versions
     if (version.source === 'arrangement' && version.arrangementId) {
       useLeadSheetStore.getState().selectArrangement(version.arrangementId)
@@ -80,20 +85,27 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     if (!version) return
     set({ previewVersionId: id })
     useLeadSheetStore.getState().setMusicXml(version.musicXml)
+    useScoreDocumentStore.getState().loadFromSnapshot(version.scoreSnapshot ?? parseMusicXmlToScoreDocument(version.musicXml))
   },
 
   applyPreview: () => {
-    const { previewVersionId, versions, patchSessionBaseXml } = get()
+    const { previewVersionId, versions, patchSessionBaseXml, patchSessionBaseSnapshot } = get()
     if (!previewVersionId) return
     const version = versions.find((v) => v.id === previewVersionId)
     if (version) {
       useLeadSheetStore.getState().setMusicXml(version.musicXml)
+      useScoreDocumentStore.getState().loadFromSnapshot(version.scoreSnapshot ?? parseMusicXmlToScoreDocument(version.musicXml))
     }
     // If this was a patch session, push the pre-session XML as a single undo entry
-    if (patchSessionBaseXml !== null) {
-      useEditorStore.getState().pushUndo(patchSessionBaseXml)
+    if (patchSessionBaseSnapshot) {
+      useScoreDocumentStore.getState().pushUndoSnapshot(patchSessionBaseSnapshot)
     }
-    set({ activeVersionId: previewVersionId, previewVersionId: null, patchSessionBaseXml: null })
+    set({
+      activeVersionId: previewVersionId,
+      previewVersionId: null,
+      patchSessionBaseXml: null,
+      patchSessionBaseSnapshot: null,
+    })
   },
 
   applyVersion: (id) => {
@@ -101,26 +113,30 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     const version = versions.find((v) => v.id === id)
     if (!version) return
     useLeadSheetStore.getState().setMusicXml(version.musicXml)
+    useScoreDocumentStore.getState().loadFromSnapshot(version.scoreSnapshot ?? parseMusicXmlToScoreDocument(version.musicXml))
     set({ activeVersionId: id, previewVersionId: null })
   },
 
   discardPreview: () => {
-    const { previewVersionId, versions, activeVersionId, patchSessionBaseXml } = get()
+    const { previewVersionId, versions, activeVersionId, patchSessionBaseXml, patchSessionBaseSnapshot } = get()
     if (!previewVersionId) return
 
     // If this was a patch session, restore the pre-session XML
-    if (patchSessionBaseXml !== null) {
+    if (patchSessionBaseXml !== null && patchSessionBaseSnapshot !== null) {
       useLeadSheetStore.getState().setMusicXml(patchSessionBaseXml)
+      useScoreDocumentStore.getState().loadFromSnapshot(patchSessionBaseSnapshot)
     } else {
       const activeVersion = versions.find((v) => v.id === activeVersionId)
       if (activeVersion) {
         useLeadSheetStore.getState().setMusicXml(activeVersion.musicXml)
+        useScoreDocumentStore.getState().loadFromSnapshot(activeVersion.scoreSnapshot ?? parseMusicXmlToScoreDocument(activeVersion.musicXml))
       }
     }
 
     set({
       previewVersionId: null,
       patchSessionBaseXml: null,
+      patchSessionBaseSnapshot: null,
       isPatchSession: false,
       versions: versions.filter((v) => v.id !== previewVersionId),
     })
@@ -128,6 +144,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
 
   loadFromArrangements: () => {
     const { arrangements, musicXml } = useLeadSheetStore.getState()
+    const scoreSnapshot = cloneScoreDocument(useScoreDocumentStore.getState().document)
     const versions: Version[] = []
 
     // Always create an "Original" version from the current MusicXML
@@ -138,6 +155,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
         source: 'arrangement',
         arrangementId: 'original',
         musicXml,
+        scoreSnapshot,
         createdAt: Date.now(),
       })
     }
@@ -151,6 +169,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
         source: 'arrangement',
         arrangementId: arr.id,
         musicXml: musicXml ?? '',
+        scoreSnapshot,
         createdAt: Date.now(),
       })
     }
@@ -164,16 +183,19 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       activeVersionId: 'original',
       previewVersionId: null,
       patchSessionBaseXml: null,
+      patchSessionBaseSnapshot: null,
       isPatchSession: false,
     }),
 
   startPatchSession: () => {
     const currentXml = useLeadSheetStore.getState().musicXml
-    set({ patchSessionBaseXml: currentXml, isPatchSession: true })
+    const currentSnapshot = cloneScoreDocument(useScoreDocumentStore.getState().document)
+    set({ patchSessionBaseXml: currentXml, patchSessionBaseSnapshot: currentSnapshot, isPatchSession: true })
   },
 
   endPatchSession: (versionId, name, changeSummary) => {
-    const finalXml = useLeadSheetStore.getState().musicXml ?? ''
+    const scoreSnapshot = cloneScoreDocument(useScoreDocumentStore.getState().document)
+    const finalXml = exportScoreDocumentToMusicXml(scoreSnapshot)
 
     // Create the version from the current (patched) XML
     const version: Version = {
@@ -181,6 +203,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       name,
       source: 'ai-transform',
       musicXml: finalXml,
+      scoreSnapshot,
       createdAt: Date.now(),
     }
 
@@ -195,10 +218,11 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   },
 
   rollbackPatchSession: () => {
-    const { patchSessionBaseXml } = get()
-    if (patchSessionBaseXml !== null) {
+    const { patchSessionBaseXml, patchSessionBaseSnapshot } = get()
+    if (patchSessionBaseXml !== null && patchSessionBaseSnapshot !== null) {
       useLeadSheetStore.getState().setMusicXml(patchSessionBaseXml)
+      useScoreDocumentStore.getState().loadFromSnapshot(patchSessionBaseSnapshot)
     }
-    set({ patchSessionBaseXml: null, isPatchSession: false })
+    set({ patchSessionBaseXml: null, patchSessionBaseSnapshot: null, isPatchSession: false })
   },
 }))

@@ -162,6 +162,22 @@ function getHandler(name: string) {
     toggle_tie: async () => ({ success: true }),
     set_annotation: async () => ({ success: true }),
     set_lyric: async () => ({ success: true }),
+    insert_note: async () => ({ success: true }),
+    insert_rest: async () => ({ success: true }),
+    delete_note: async () => ({ success: true }),
+    set_duration: async () => ({ success: true }),
+    set_string_fret: async () => ({ success: true }),
+    add_measure_before: async () => ({ success: true }),
+    add_measure_after: async () => ({ success: true }),
+    set_section_label: async () => ({ success: true }),
+    set_chord_diagram_placement: async () => ({ success: true }),
+    transpose_selection: async () => ({ success: true }),
+    change_tuning: async () => ({ success: true }),
+    set_capo: async () => ({ success: true }),
+    simplify_fingering: async () => ({ success: true }),
+    reharmonize_selection: async () => ({ success: true }),
+    add_technique: async () => ({ success: true }),
+    remove_technique: async () => ({ success: true }),
 
     end_edit_session: async (input) => {
       const versionId = crypto.randomUUID()

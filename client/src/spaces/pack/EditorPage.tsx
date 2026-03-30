@@ -4,12 +4,13 @@ import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useProjectStore } from '@/stores/projectStore'
+import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 import { useVersionStore } from '@/stores/versionStore'
 import { projectService } from '@/services/projectService'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
-import { addBars, deleteBars, parseXml, getMeasures, buildScoreSummary } from '@/lib/musicXmlEngine'
+import { buildScoreDigest, exportScoreDocumentToMusicXml } from '@/lib/scoreDocument'
 import { useAudioStore } from '@/stores/audioStore'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
@@ -23,32 +24,26 @@ export function EditorPage() {
   useTheme()
 
   const projectName = useLeadSheetStore((s) => s.projectName)
-  const musicXml = useLeadSheetStore((s) => s.musicXml)
   const chatCollapsed = useEditorStore((s) => s.chatPanelCollapsed)
   const saveStatus = useEditorStore((s) => s.saveStatus)
   const bpm = useAudioStore((s) => s.bpm)
+  const playbackRate = useAudioStore((s) => s.playbackRate)
+  const scoreDocument = useScoreDocumentStore((s) => s.document)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { totalBars, beatsPerBar } = useMemo(() => {
-    if (!musicXml) return { totalBars: 16, beatsPerBar: 4 }
-    try {
-      const doc = parseXml(musicXml)
-      const bars = getMeasures(doc).length
-      const beats = parseInt(doc.querySelector('time > beats')?.textContent ?? '4', 10)
-      return {
-        totalBars: bars || 16,
-        beatsPerBar: isNaN(beats) ? 4 : beats,
-      }
-    } catch {
-      return { totalBars: 16, beatsPerBar: 4 }
+    return {
+      totalBars: scoreDocument.measures.length || 16,
+      beatsPerBar: scoreDocument.meter.numerator || 4,
     }
-  }, [musicXml])
+  }, [scoreDocument])
 
   useEffect(() => {
     if (bpm <= 0) return
-    const durationSeconds = totalBars * beatsPerBar * (60 / bpm)
+    const effectiveBpm = bpm * playbackRate
+    const durationSeconds = totalBars * beatsPerBar * (60 / effectiveBpm)
     useAudioStore.getState().setDuration(durationSeconds)
-  }, [totalBars, beatsPerBar, bpm])
+  }, [totalBars, beatsPerBar, bpm, playbackRate])
 
   // Load project from server when navigating to /pack/:id
   useEffect(() => {
@@ -59,6 +54,16 @@ export function EditorPage() {
     }
     projectService.get(id).then((project) => {
       useLeadSheetStore.getState().loadFromProject(project)
+      const metadata = project.metadata as Record<string, unknown>
+      const scoreSnapshot = metadata.scoreDocument
+      const musicXml = typeof metadata.musicXml === 'string' ? metadata.musicXml : null
+      if (scoreSnapshot && typeof scoreSnapshot === 'object') {
+        useScoreDocumentStore.getState().loadFromSnapshot(scoreSnapshot as typeof scoreDocument)
+      } else {
+        useScoreDocumentStore.getState().loadFromMusicXml(musicXml)
+      }
+      const scoreView = typeof metadata.scoreView === 'string' ? metadata.scoreView : 'tab'
+      useEditorStore.getState().setViewMode(scoreView === 'lead_sheet' ? 'leadSheet' : scoreView === 'tab' ? 'tab' : scoreView === 'staff' ? 'staff' : 'split')
       useVersionStore.getState().loadFromArrangements()
       useProjectStore.getState().setActiveProject(project)
       useEditorStore.getState().setSaveStatus('saved')
@@ -73,6 +78,8 @@ export function EditorPage() {
     saveTimerRef.current = setTimeout(async () => {
       useEditorStore.getState().setSaveStatus('saving')
       const s = useLeadSheetStore.getState()
+      const scoreState = useScoreDocumentStore.getState()
+      const viewMode = useEditorStore.getState().viewMode
       try {
         const updated = await projectService.update(id, {
           name: s.projectName,
@@ -83,9 +90,10 @@ export function EditorPage() {
             sections: s.sections,
             arrangements: s.arrangements,
             selectedArrangementId: s.selectedArrangementId,
-            scoreView: s.scoreView,
+            scoreView: viewMode === 'split' ? 'tab' : viewMode === 'leadSheet' ? 'lead_sheet' : viewMode,
             pdfUrl: s.pdfUrl,
-            musicXml: s.musicXml,
+            musicXml: scoreState.exportCacheXml,
+            scoreDocument: scoreState.document,
           },
         })
         useProjectStore.getState().upsertProject(updated)
@@ -101,45 +109,56 @@ export function EditorPage() {
 
   // Sync editor context to agent store — Trigger 1: musicXml changes (debounced)
   const contextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prevXmlRef = useRef<string | null>(null)
+  const prevDigestRef = useRef<string | null>(null)
   useEffect(() => {
     const sync = () => {
-      const xml = useLeadSheetStore.getState().musicXml
       const selectedBars = useEditorStore.getState().selectedBars
+      const selectedNoteIds = useEditorStore.getState().selectedNoteIds
+      const cursorNoteId = useEditorStore.getState().cursorNoteId
+      const caret = useEditorStore.getState().caret
+      const selectionScope = useEditorStore.getState().selectionScope
       const name = useLeadSheetStore.getState().projectName
-      if (xml) {
-        try {
-          const scoreSummary = buildScoreSummary(xml)
-          useAgentStore.getState().setSpaceContext({
-            currentSpace: 'create',
-            projectId: id,
-            projectName: name,
-            editorContext: { musicXml: xml, scoreSummary, selectedBars },
-          })
-        } catch {
-          useAgentStore.getState().setSpaceContext({
-            currentSpace: 'create',
-            projectId: id,
-            projectName: name,
-          })
-        }
-      } else {
-        useAgentStore.getState().setSpaceContext({
-          currentSpace: 'create',
-          projectId: id,
-          projectName: name,
-        })
-      }
+      const scoreState = useScoreDocumentStore.getState()
+      const track = scoreState.document.tracks[0]
+      const scoreDigest = buildScoreDigest(scoreState.document)
+      useAgentStore.getState().setSpaceContext({
+        currentSpace: 'create',
+        projectId: id,
+        projectName: name,
+        editorContext: {
+          musicXml: scoreState.exportCacheXml,
+          scoreSummary: scoreDigest,
+          scoreDigest,
+          scoreSnapshot: scoreState.document,
+          selectedBars,
+          selection: {
+            measureRange: selectedBars.length > 0 ? [Math.min(...selectedBars), Math.max(...selectedBars)] : null,
+            noteIds: selectedNoteIds,
+            cursor: track
+              ? {
+                  trackId: track.id,
+                  noteId: cursorNoteId,
+                  measureIndex: caret?.measureIndex ?? selectedBars[0] ?? 0,
+                  beat: caret?.beat,
+                  string: caret?.string,
+                }
+              : null,
+          },
+          tuning: track?.tuning,
+          capo: track?.capo,
+          selectionScope,
+        },
+      })
     }
 
     // Immediate sync on mount / when xml first loads
     sync()
-    prevXmlRef.current = useLeadSheetStore.getState().musicXml
+    prevDigestRef.current = useScoreDocumentStore.getState().getDigest()
 
-    // Debounced sync on subsequent changes (Zustand subscribe takes a single listener)
-    const unsub = useLeadSheetStore.subscribe((state) => {
-      if (state.musicXml !== prevXmlRef.current) {
-        prevXmlRef.current = state.musicXml
+    const unsub = useScoreDocumentStore.subscribe((state) => {
+      const digest = buildScoreDigest(state.document)
+      if (digest !== prevDigestRef.current) {
+        prevDigestRef.current = digest
         if (contextTimerRef.current) clearTimeout(contextTimerRef.current)
         contextTimerRef.current = setTimeout(sync, 500)
       }
@@ -151,18 +170,66 @@ export function EditorPage() {
   }, [id])
 
   // Sync editor context to agent store — Trigger 2: selectedBars changes (immediate)
-  const prevBarsRef = useRef<number[]>([])
+  const prevSelectionRef = useRef<{
+    selectedBars: number[]
+    selectedNoteIds: string[]
+    cursorNoteId: string | null
+    caretKey: string | null
+    selectionScope: string
+  }>({
+    selectedBars: [],
+    selectedNoteIds: [],
+    cursorNoteId: null,
+    caretKey: null,
+    selectionScope: 'note',
+  })
   useEffect(() => {
     const unsub = useEditorStore.subscribe((state) => {
-      if (state.selectedBars !== prevBarsRef.current) {
-        prevBarsRef.current = state.selectedBars
-        const prev = useAgentStore.getState().spaceContext
-        if (prev.editorContext) {
-          useAgentStore.getState().setSpaceContext({
-            ...prev,
-            editorContext: { ...prev.editorContext, selectedBars: state.selectedBars },
-          })
-        }
+      const caretKey = state.caret
+        ? `${state.caret.trackId}:${state.caret.measureIndex}:${state.caret.beat}:${state.caret.string}`
+        : null
+      const prevSelection = prevSelectionRef.current
+      const selectionChanged =
+        prevSelection.selectedBars.join(',') !== state.selectedBars.join(',')
+        || prevSelection.selectedNoteIds.join(',') !== state.selectedNoteIds.join(',')
+        || prevSelection.cursorNoteId !== state.cursorNoteId
+        || prevSelection.caretKey !== caretKey
+        || prevSelection.selectionScope !== state.selectionScope
+
+      if (!selectionChanged) return
+
+      prevSelectionRef.current = {
+        selectedBars: state.selectedBars,
+        selectedNoteIds: state.selectedNoteIds,
+        cursorNoteId: state.cursorNoteId,
+        caretKey,
+        selectionScope: state.selectionScope,
+      }
+
+      const prev = useAgentStore.getState().spaceContext
+      if (prev.editorContext) {
+        useAgentStore.getState().setSpaceContext({
+          ...prev,
+          editorContext: {
+            ...prev.editorContext,
+            selectedBars: state.selectedBars,
+            selection: {
+              ...prev.editorContext.selection,
+              measureRange: state.selectedBars.length > 0 ? [Math.min(...state.selectedBars), Math.max(...state.selectedBars)] : null,
+              noteIds: state.selectedNoteIds,
+              cursor: prev.editorContext.selection?.cursor
+                ? {
+                    ...prev.editorContext.selection.cursor,
+                    noteId: state.cursorNoteId,
+                    measureIndex: state.caret?.measureIndex ?? prev.editorContext.selection.cursor.measureIndex,
+                    beat: state.caret?.beat,
+                    string: state.caret?.string,
+                  }
+                : null,
+            },
+            selectionScope: state.selectionScope,
+          },
+        })
       }
     })
     return unsub
@@ -173,33 +240,31 @@ export function EditorPage() {
 
   // Bar management
   const handleAddBar = useCallback(() => {
-    const xml = useLeadSheetStore.getState().musicXml
-    if (!xml) return
-    const { selectedBars, pushUndo } = useEditorStore.getState()
-    const afterIndex = selectedBars.length > 0 ? Math.max(...selectedBars) : -1
-    try {
-      const newXml = addBars(xml, Math.max(afterIndex, 0), 1)
-      pushUndo(xml)
-      useLeadSheetStore.getState().setMusicXml(newXml)
-      useEditorStore.getState().setSaveStatus('unsaved')
-    } catch (err) {
-      console.error('[handleAddBar] addBars failed:', err)
-    }
-  }, [])
+    const { selectedBars, caret, selectBar } = useEditorStore.getState()
+    const afterIndex = selectedBars.length > 0
+      ? Math.max(...selectedBars)
+      : caret
+        ? caret.measureIndex
+        : Math.max(scoreDocument.measures.length - 1, 0)
+    useScoreDocumentStore.getState().applyCommand({
+      type: 'addMeasureAfter',
+      afterIndex: Math.max(afterIndex, 0),
+      count: 1,
+    })
+    selectBar(Math.max(afterIndex + 1, 0))
+    useEditorStore.getState().setSaveStatus('unsaved')
+  }, [scoreDocument.measures.length])
 
   const handleDeleteBars = useCallback(() => {
-    const xml = useLeadSheetStore.getState().musicXml
-    const { selectedBars, clearSelection, pushUndo } = useEditorStore.getState()
-    if (!xml || selectedBars.length === 0) return
-    try {
-      const newXml = deleteBars(xml, selectedBars)
-      pushUndo(xml)
-      useLeadSheetStore.getState().setMusicXml(newXml)
-      clearSelection()
-      useEditorStore.getState().setSaveStatus('unsaved')
-    } catch (err) {
-      console.error('[handleDeleteBars] deleteBars failed:', err)
-    }
+    const { selectedBars, clearSelection } = useEditorStore.getState()
+    if (selectedBars.length === 0) return
+    useScoreDocumentStore.getState().applyCommand({
+      type: 'deleteMeasureRange',
+      start: Math.min(...selectedBars),
+      end: Math.max(...selectedBars),
+    })
+    clearSelection()
+    useEditorStore.getState().setSaveStatus('unsaved')
   }, [])
 
   useEffect(() => {
@@ -216,11 +281,24 @@ export function EditorPage() {
     useEditorStore.getState().setSaveStatus('unsaved')
   }, [])
 
+  useEffect(() => {
+    let isInitial = true
+    const unsub = useScoreDocumentStore.subscribe((state) => {
+      if (isInitial) {
+        isInitial = false
+        return
+      }
+      if (state.exportCacheXml) {
+        useEditorStore.getState().setSaveStatus('unsaved')
+      }
+    })
+    return unsub
+  }, [])
+
   return (
-    <div className="flex h-screen w-screen flex-col bg-surface-0">
+    <div className="flex h-screen w-screen flex-col bg-[#f5f4f1]">
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Editor area */}
-        <div className="relative flex flex-1 flex-col">
+        <div className="relative flex min-w-0 flex-1 flex-col bg-[#f7f6f3]">
           <EditorTitleBar packName={projectName || 'Untitled'} onNameChange={handleNameChange} />
 
           <PreviewBar
@@ -233,9 +311,9 @@ export function EditorPage() {
             // TODO: implement CompareView (see spec section 2.3)
             onCompare={() => {}}
           />
+
           <EditorCanvas className="flex-1" />
 
-          {/* Unified floating toolbar with embedded playback controls */}
           <EditorToolbar
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
@@ -244,15 +322,13 @@ export function EditorPage() {
             onCompare={() => {}}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
-            className="z-20"
+            className="z-10"
           />
         </div>
 
-        {/* Right: Chat panel (desktop only) */}
-        {!isMobile && <EditorChatPanel />}
+        {!isMobile && <EditorChatPanel className="w-[356px] min-w-[356px] max-w-[356px] bg-white" />}
       </div>
 
-      {/* Mobile: Chat as bottom sheet */}
       {isMobile && !chatCollapsed && (
         <div className="h-[40vh] border-t border-border">
           <EditorChatPanel />

@@ -72,6 +72,7 @@ export class AudioController {
     let prevTransportState = useAudioStore.getState().transportState
     let prevMasterVolume = useAudioStore.getState().masterVolume
     let prevBpm = useAudioStore.getState().bpm
+    let prevPlaybackRate = useAudioStore.getState().playbackRate
     let prevMetronomeMode = useAudioStore.getState().metronomeMode
     let prevLoop = useAudioStore.getState().loop
 
@@ -86,10 +87,12 @@ export class AudioController {
         this.engine.setMasterVolume(state.masterVolume)
       }
 
-      if (state.bpm !== prevBpm) {
+      if (state.bpm !== prevBpm || state.playbackRate !== prevPlaybackRate) {
         prevBpm = state.bpm
-        this.engine.setBpm(state.bpm)
-        this.metronome.setBpm(state.bpm)
+        prevPlaybackRate = state.playbackRate
+        const effectiveBpm = state.bpm * state.playbackRate
+        this.engine.setBpm(effectiveBpm)
+        this.metronome.setBpm(effectiveBpm)
       }
 
       if (
@@ -109,11 +112,11 @@ export class AudioController {
     })
     this.unsubscribers.push(unsubTracks)
 
-    const { masterVolume, bpm, loop } = useAudioStore.getState()
+    const { masterVolume, bpm, playbackRate, loop } = useAudioStore.getState()
     this.engine.setMasterVolume(masterVolume)
-    this.engine.setBpm(bpm)
+    this.engine.setBpm(bpm * playbackRate)
     this.engine.setLoopRange(loop)
-    this.metronome.setBpm(bpm)
+    this.metronome.setBpm(bpm * playbackRate)
 
     const { tracks } = useDawPanelStore.getState()
     if (tracks.length > 0) {

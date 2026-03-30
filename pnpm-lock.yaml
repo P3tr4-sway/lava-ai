@@ -26,6 +26,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.27.3
         version: 0.27.3(encoding@0.1.13)
+      '@coderline/alphatab':
+        specifier: ^1.8.1
+        version: 1.8.1
       '@lava/shared':
         specifier: workspace:*
         version: link:../packages/shared
@@ -293,6 +296,10 @@ packages:
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
+
+  '@coderline/alphatab@1.8.1':
+    resolution: {integrity: sha512-sbhSUnuMew3k7I2ulNNunyaqOFIeELOtPAZCQkZo7tPaK/dnWzVk7XSx+nNlakbMqd5zpJZwUnOv5KexkEgz2Q==}
+    engines: {node: '>=6.0.0'}
 
   '@csstools/color-helpers@6.0.2':
     resolution: {integrity: sha512-LMGQLS9EuADloEFkcTBR3BwV/CGHV7zyDxVRtVDTwdI2Ca4it0CCVTT9wCkxSgokjE5Ho41hEPgb8OEUwoXr6Q==}
@@ -3172,6 +3179,8 @@ snapshots:
   '@bramus/specificity@2.4.2':
     dependencies:
       css-tree: 3.2.1
+
+  '@coderline/alphatab@1.8.1': {}
 
   '@csstools/color-helpers@6.0.2': {}
 

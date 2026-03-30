@@ -36,7 +36,7 @@ export function buildContextPrompt(ctx: SpaceContext): string {
     if (ctx.editorContext) {
       const ec = ctx.editorContext
       prompt += `\n\n### Current Score`
-      prompt += `\n${ec.scoreSummary}`
+      prompt += `\n${ec.scoreDigest ?? ec.scoreSummary}`
       prompt += `\n\n### Score XML (your editing target)`
       prompt += `\n${ec.musicXml}`
 
@@ -44,12 +44,27 @@ export function buildContextPrompt(ctx: SpaceContext): string {
         const uiBars = ec.selectedBars.map((b) => b + 1).join(', ')
         prompt += `\n\nSelected bars (0-indexed): ${ec.selectedBars.join(', ')}  →  bars ${uiBars} in the UI`
       }
+      if (ec.selectionScope) {
+        prompt += `\nSelection scope: ${ec.selectionScope}`
+      }
+      if (ec.tuning && ec.tuning.length > 0) {
+        prompt += `\nTuning (MIDI string 1→6): ${ec.tuning.join(', ')}`
+      }
+      if (typeof ec.capo === 'number') {
+        prompt += `\nCapo: fret ${ec.capo}`
+      }
+      if (ec.selection?.noteIds?.length) {
+        prompt += `\nSelected note ids: ${ec.selection.noteIds.join(', ')}`
+      }
+      if (ec.selection?.cursor) {
+        prompt += `\nCursor: bar ${ec.selection.cursor.measureIndex}, beat ${ec.selection.cursor.beat ?? 0}, string ${ec.selection.cursor.string ?? 'n/a'}`
+      }
     }
 
     prompt += `\n\n### Editing Strategy — pick ONE approach per response`
-    prompt += `\n- For SURGICAL edits (delete a bar, change a chord, adjust a few notes, transpose a section, fix a pitch):`
-    prompt += `\n  → Use the granular editing tools (\`delete_bars\`, \`edit_note_pitch\`, \`edit_chord\`, \`transpose_bars\`, etc.)`
-    prompt += `\n  → Each edit renders live in the score — the user watches changes appear in real-time.`
+    prompt += `\n- For SURGICAL guitar edits (change string/fret, delete notes, adjust duration, transpose a phrase, change tuning/capo, simplify fingering):`
+    prompt += `\n  → Use the structured guitar editing tools (\`insert_note\`, \`insert_rest\`, \`delete_note\`, \`set_duration\`, \`set_string_fret\`, \`add_measure_before\`, \`add_measure_after\`, \`set_section_label\`, \`set_chord_diagram_placement\`, \`transpose_selection\`, \`change_tuning\`, \`set_capo\`, \`simplify_fingering\`, \`add_technique\`, \`remove_technique\`, \`reharmonize_selection\`).`
+    prompt += `\n  → These tools operate on the live guitar score model, not raw XML.`
     prompt += `\n  → Always call \`end_edit_session\` when done to finalize the version.`
     prompt += `\n  → Prefer this when the request targets specific bars, notes, or small parts of the score.`
     prompt += `\n- For WHOLESALE transformations (new arrangement, complete restyle, full reharmonization, changes across most of the score):`

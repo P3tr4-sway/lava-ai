@@ -1,4 +1,4 @@
-import type { ArrangementId } from './score.js'
+import type { ArrangementId, ScoreSnapshot } from './score.js'
 
 export type VersionSource = 'arrangement' | 'ai-transform'
 
@@ -8,6 +8,7 @@ export interface Version {
   source: VersionSource
   arrangementId?: ArrangementId
   musicXml: string
+  scoreSnapshot?: ScoreSnapshot
   parentVersionId?: string
   createdAt: number
   prompt?: string

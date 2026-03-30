@@ -24,6 +24,8 @@ export const ChatRequestSchema = z.object({
     projectId: z.string().optional(),
     projectName: z.string().optional(),
     toneContext: ToneContextSchema.optional(),
+    coachContext: z.any().optional(),
+    editorContext: z.any().optional(),
   }),
 })
 

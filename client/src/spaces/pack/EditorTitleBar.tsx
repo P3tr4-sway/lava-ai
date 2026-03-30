@@ -34,13 +34,13 @@ export function EditorTitleBar({ packName, onNameChange, className }: EditorTitl
   return (
     <div
       className={cn(
-        'flex h-[var(--editor-titlebar-height)] items-center gap-3 border-b border-border bg-surface-0 px-4',
+        'flex h-[var(--editor-titlebar-height)] items-center gap-3 bg-transparent px-5',
         className,
       )}
     >
       <button
         onClick={() => navigate(-1)}
-        className="flex size-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+        className="flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-black/5 hover:text-text-primary"
         aria-label="Go back"
       >
         <ArrowLeft className="size-4" />
@@ -56,7 +56,7 @@ export function EditorTitleBar({ packName, onNameChange, className }: EditorTitl
             if (e.key === 'Enter') commitName()
             if (e.key === 'Escape') { setDraft(packName); setEditing(false) }
           }}
-          className="h-7 rounded border border-border bg-surface-1 px-2 text-sm text-text-primary outline-none focus:border-border-hover"
+          className="h-8 rounded-xl border border-black/10 bg-white px-3 text-sm text-text-primary outline-none focus:border-black/20"
         />
       ) : (
         <button

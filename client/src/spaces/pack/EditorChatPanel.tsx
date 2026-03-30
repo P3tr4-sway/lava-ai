@@ -95,7 +95,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
   // Collapsed state — thin 40px strip with toggle icon
   if (collapsed) {
     return (
-      <div className={cn('flex w-10 flex-col items-center border-l border-border bg-surface-0 pt-3', className)}>
+      <div className={cn('flex w-10 flex-col items-center border-l border-black/8 bg-white pt-3', className)}>
         <button
           onClick={toggleChat}
           className="flex size-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
@@ -110,7 +110,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
 
   return (
     <div
-      className={cn('relative flex flex-col border-l border-border bg-surface-0', className)}
+      className={cn('relative flex flex-col border-l border-black/8 bg-white', className)}
       style={{ width, minWidth: 320, maxWidth: '50vw' }}
     >
       {/* Resize handle — left edge drag target */}
@@ -123,7 +123,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
       />
 
       {/* Header */}
-      <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border px-4">
+      <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-black/8 px-5">
         <span className="text-sm font-semibold text-text-primary">New chat</span>
         <div className="flex items-center gap-1">
           <button
@@ -147,7 +147,7 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
 
       {/* Body */}
       {hasMessages ? (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
           <div className="flex flex-col gap-4">
             {visibleMessages.map((msg) => (
               <ChatMessage
@@ -173,10 +173,10 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
       )}
 
       {/* Footer */}
-      <div className="flex-shrink-0 border-t border-border px-3 py-2">
+      <div className="flex-shrink-0 border-t border-black/8 px-4 py-3">
         {selectedBars.length > 0 && (
           <div className="mb-1.5 flex">
-            <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-text-secondary">
+            <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs text-text-secondary">
               Selected: bars {selectedBars.reduce((a, b) => Math.min(a, b)) + 1}–{selectedBars.reduce((a, b) => Math.max(a, b)) + 1}
             </span>
           </div>

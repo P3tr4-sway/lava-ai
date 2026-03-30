@@ -3,8 +3,10 @@ import { useAgentStore } from '@/stores/agentStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useVersionStore } from '@/stores/versionStore'
+import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 import { agentService } from '@/services/agentService'
 import { applyPatch } from '@/lib/applyPatch'
+import { parseMusicXmlToScoreDocument } from '@/lib/scoreDocument'
 import type { AgentMessage, StreamEvent, MessageChip, ArrangementId } from '@lava/shared'
 import { SPACE_ROUTES } from '@lava/shared'
 import { toAgentWorkspaceRoute, type AgentWorkspacePreview } from '@/utils/agentWorkspace'
@@ -164,6 +166,7 @@ export function useAgent() {
             name: payload.name,
             source: 'ai-transform',
             musicXml: payload.musicXml,
+            scoreSnapshot: payload.scoreSnapshot ?? parseMusicXmlToScoreDocument(payload.musicXml),
             createdAt: Date.now(),
           })
           useVersionStore.getState().startPreview(payload.versionId)
@@ -196,10 +199,22 @@ export function useAgent() {
             try {
               const newXml = applyPatch(currentXml, patch)
               useLeadSheetStore.getState().setMusicXml(newXml)
+              useScoreDocumentStore.getState().loadFromMusicXml(newXml)
             } catch (err) {
               console.error('[score_patch] Failed to apply patch:', err)
             }
           }
+        }
+        break
+      }
+      case 'score_command_patch': {
+        const commandPatch = event.commandPatch
+        if (commandPatch) {
+          const versionState = useVersionStore.getState()
+          if (!versionState.isPatchSession) {
+            versionState.startPatchSession()
+          }
+          useScoreDocumentStore.getState().applyCommandPatch(commandPatch, false)
         }
         break
       }

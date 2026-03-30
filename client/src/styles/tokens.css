@@ -91,6 +91,23 @@
   transition: stroke 100ms ease-out, opacity 100ms ease-out;
 }
 
+.lava-note-hover .vf-notehead path {
+  fill: var(--accent);
+  opacity: 0.7;
+}
+
+.lava-note-hover .vf-stem path,
+.lava-note-hover .vf-flag path {
+  stroke: var(--accent);
+  opacity: 0.7;
+}
+
+.lava-bar-hover > rect:first-child,
+.lava-bar-hover > path:first-child {
+  fill: var(--accent);
+  opacity: 0.06;
+}
+
 /* Bar selection — subtle background tint */
 .lava-bar-selected > rect:first-child,
 .lava-bar-selected > path:first-child {

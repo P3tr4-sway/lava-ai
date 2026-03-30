@@ -148,6 +148,12 @@ export function useAgent() {
         }
         break
       case 'message_stop':
+        // If a patch session is still open when the stream ends normally, roll back
+        // (this means end_edit_session was never received)
+        if (useVersionStore.getState().isPatchSession) {
+          useVersionStore.getState().rollbackPatchSession()
+          console.warn('[useAgent] Stream ended with open patch session — rolling back')
+        }
         finalizeStream()
         break
       case 'version_created': {
@@ -285,6 +291,10 @@ export function useAgent() {
         handleStreamEvent,
       )
     } catch {
+      // Rollback any active patch session on network error
+      if (useVersionStore.getState().isPatchSession) {
+        useVersionStore.getState().rollbackPatchSession()
+      }
       finalizeStream()
     }
   }

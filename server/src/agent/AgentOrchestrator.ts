@@ -6,6 +6,7 @@ import { SYSTEM_PROMPT } from './prompts/system.js'
 import { buildContextPrompt } from './prompts/context.js'
 import type { LLMProvider, NormalizedMessage } from './providers/types.js'
 import { logger } from '../utils/logger.js'
+import { SCORE_PATCH_TOOL_NAMES } from './tools/definitions/scoreEdit.tool.js'
 
 export class AgentOrchestrator {
   private provider: LLMProvider
@@ -86,6 +87,35 @@ export class AgentOrchestrator {
         }
       }
 
+      // ── Granular score editing tools → score_patch SSE ──
+      if (SCORE_PATCH_TOOL_NAMES.has(toolCall.name) && !result.isError) {
+        onEvent({
+          type: 'score_patch',
+          patch: toolCallToPatch(toolCall),
+        })
+      }
+
+      // ── end_edit_session → score_patch_session_end SSE ──
+      if (toolCall.name === 'end_edit_session' && !result.isError) {
+        try {
+          const parsed = JSON.parse(result.content) as {
+            versionId: string
+            name: string
+            changeSummary: string[]
+          }
+          onEvent({
+            type: 'score_patch_session_end',
+            patchSessionEndPayload: {
+              versionId: parsed.versionId,
+              name: parsed.name,
+              changeSummary: parsed.changeSummary,
+            },
+          })
+        } catch (err) {
+          logger.warn({ err }, '[AgentOrchestrator] end_edit_session SSE: malformed tool result JSON')
+        }
+      }
+
       completedToolResults.push({
         name: toolCall.name,
         content: result.content,
@@ -113,6 +143,8 @@ function shouldSendToolFollowUp(
   if (toolResults.length === 0) return false
   if (spaceContext.coachContext) return false
   if (toolResults.some((result) => result.name === 'coach_message')) return false
+  // Skip follow-up if all tools are granular score edits (not end_edit_session)
+  if (toolResults.every((result) => SCORE_PATCH_TOOL_NAMES.has(result.name))) return false
   return true
 }
 
@@ -187,4 +219,26 @@ function isValidMusicXml(xml: string): boolean {
   if (!xml.includes('</score-partwise>')) return false
   if (!xml.includes('<measure')) return false
   return true
+}
+
+/** Map tool name + input to a ScorePatch with the correct `op` field. */
+function toolCallToPatch(toolCall: ToolCall): import('@lava/shared').ScorePatch {
+  const TOOL_TO_OP: Record<string, import('@lava/shared').ScorePatchOp> = {
+    edit_note_pitch: 'setNotePitch',
+    edit_note_duration: 'setNoteDuration',
+    edit_chord: 'setChord',
+    edit_key_signature: 'setKeySig',
+    edit_time_signature: 'setTimeSig',
+    add_bars: 'addBars',
+    delete_bars: 'deleteBars',
+    transpose_bars: 'transposeBars',
+    add_accidental: 'addAccidental',
+    toggle_rest: 'toggleRest',
+    toggle_tie: 'toggleTie',
+    set_annotation: 'setAnnotation',
+    set_lyric: 'setLyric',
+  }
+  const op = TOOL_TO_OP[toolCall.name]
+  if (!op) throw new Error(`No patch op mapping for tool: ${toolCall.name}`)
+  return { op, ...toolCall.input }
 }

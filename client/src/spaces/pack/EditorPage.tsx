@@ -9,7 +9,7 @@ import { projectService } from '@/services/projectService'
 import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
-import { addBars, deleteBars, parseXml, getMeasures } from '@/lib/musicXmlEngine'
+import { addBars, deleteBars, parseXml, getMeasures, buildScoreSummary } from '@/lib/musicXmlEngine'
 import { useAudioStore } from '@/stores/audioStore'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
@@ -99,14 +99,66 @@ export function EditorPage() {
     }
   }, [id, saveStatus])
 
-  // Set agent space context
+  // Sync editor context to agent store — Trigger 1: musicXml changes (debounced)
+  const contextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prevXmlRef = useRef<string | null>(null)
   useEffect(() => {
-    useAgentStore.getState().setSpaceContext({
-      currentSpace: 'create',
-      projectId: id,
-      projectName,
+    const sync = () => {
+      const xml = useLeadSheetStore.getState().musicXml
+      const selectedBars = useEditorStore.getState().selectedBars
+      const name = useLeadSheetStore.getState().projectName
+      if (xml) {
+        const scoreSummary = buildScoreSummary(xml)
+        useAgentStore.getState().setSpaceContext({
+          currentSpace: 'create',
+          projectId: id,
+          projectName: name,
+          editorContext: { musicXml: xml, scoreSummary, selectedBars },
+        })
+      } else {
+        useAgentStore.getState().setSpaceContext({
+          currentSpace: 'create',
+          projectId: id,
+          projectName: name,
+        })
+      }
+    }
+
+    // Immediate sync on mount / when xml first loads
+    sync()
+    prevXmlRef.current = useLeadSheetStore.getState().musicXml
+
+    // Debounced sync on subsequent changes (Zustand subscribe takes a single listener)
+    const unsub = useLeadSheetStore.subscribe((state) => {
+      if (state.musicXml !== prevXmlRef.current) {
+        prevXmlRef.current = state.musicXml
+        if (contextTimerRef.current) clearTimeout(contextTimerRef.current)
+        contextTimerRef.current = setTimeout(sync, 500)
+      }
     })
-  }, [id, projectName])
+    return () => {
+      unsub()
+      if (contextTimerRef.current) clearTimeout(contextTimerRef.current)
+    }
+  }, [id])
+
+  // Sync editor context to agent store — Trigger 2: selectedBars changes (immediate)
+  const prevBarsRef = useRef<number[]>([])
+  useEffect(() => {
+    const unsub = useEditorStore.subscribe((state) => {
+      if (state.selectedBars !== prevBarsRef.current) {
+        prevBarsRef.current = state.selectedBars
+        const prev = useAgentStore.getState().spaceContext
+        if (prev.editorContext) {
+          useAgentStore.getState().setSpaceContext({
+            ...prev,
+            editorContext: { ...prev.editorContext, selectedBars: state.selectedBars },
+          })
+        }
+      }
+    })
+    return unsub
+  }, [])
 
   // Keyboard shortcuts (stores-driven, no callbacks needed)
   useEditorKeyboard()

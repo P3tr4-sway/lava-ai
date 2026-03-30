@@ -659,8 +659,14 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
 
           {hoverTarget?.kind === 'beat' && (() => {
             const measure = layout.measures[hoverTarget.measureIndex]
-            if (!measure || hoverTarget.beat == null || hoverTarget.string == null) return null
-            const anchor = measure.beatAnchors.find((entry) => Math.abs(entry.beat - hoverTarget.beat!) < 0.001)
+            if (!measure || measure.beatAnchors.length === 0 || hoverTarget.beat == null || hoverTarget.string == null) return null
+            const hoverBeat = hoverTarget.beat
+            let anchor = measure.beatAnchors.find((entry) => Math.abs(entry.beat - hoverBeat) < 0.02)
+            if (!anchor) {
+              anchor = measure.beatAnchors.reduce((best, entry) =>
+                Math.abs(entry.beat - hoverBeat) < Math.abs(best.beat - hoverBeat) ? entry : best,
+              )
+            }
             if (!anchor) return null
             const stringCenter = measure.stringCenters[Math.max(0, Math.min(5, hoverTarget.string - 1))]
             const cx = anchor.x + anchor.width / 2
@@ -679,8 +685,13 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
 
           {caret && (() => {
             const measure = layout.measures[caret.measureIndex]
-            if (!measure) return null
-            const anchor = measure.beatAnchors.find((entry) => Math.abs(entry.beat - caret.beat) < 0.001)
+            if (!measure || measure.beatAnchors.length === 0) return null
+            let anchor = measure.beatAnchors.find((entry) => Math.abs(entry.beat - caret.beat) < 0.02)
+            if (!anchor) {
+              anchor = measure.beatAnchors.reduce((best, entry) =>
+                Math.abs(entry.beat - caret.beat) < Math.abs(best.beat - caret.beat) ? entry : best,
+              )
+            }
             if (!anchor) return null
             const stringCenter = measure.stringCenters[Math.max(0, Math.min(5, caret.string - 1))]
             const cx = anchor.x + anchor.width / 2

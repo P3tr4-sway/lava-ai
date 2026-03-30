@@ -5,6 +5,7 @@ export type ToolMode = 'pointer' | 'range' | 'chord' | 'keySig' | 'text'
 export type ViewMode = 'staff' | 'tab' | 'leadSheet'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved'
 export type PlaybackState = 'stopped' | 'playing' | 'paused'
+export type EditorMode = 'transform' | 'fineEdit'
 
 export interface NoteRef {
   barIndex: number
@@ -17,6 +18,10 @@ interface EditorStore {
   // Tool
   toolMode: ToolMode
   setToolMode: (mode: ToolMode) => void
+
+  // Mode
+  editorMode: EditorMode
+  setEditorMode: (mode: EditorMode) => void
 
   // Selection
   selectedBars: number[]
@@ -74,6 +79,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Tool
   toolMode: 'pointer',
   setToolMode: (mode) => set({ toolMode: mode }),
+
+  // Mode
+  editorMode: 'transform',
+  setEditorMode: (mode) => set({ editorMode: mode }),
 
   // Selection
   selectedBars: [],

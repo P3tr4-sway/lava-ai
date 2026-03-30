@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useVersionStore } from '@/stores/versionStore'
 import { agentService } from '@/services/agentService'
+import { applyPatch } from '@/lib/applyPatch'
 import type { AgentMessage, StreamEvent, MessageChip, ArrangementId } from '@lava/shared'
 import { SPACE_ROUTES } from '@lava/shared'
 import { toAgentWorkspaceRoute, type AgentWorkspacePreview } from '@/utils/agentWorkspace'
@@ -175,7 +176,56 @@ export function useAgent() {
         }
         break
       }
+      case 'score_patch': {
+        const patch = event.patch
+        if (patch) {
+          // Start a patch session on the first patch in a turn
+          const versionState = useVersionStore.getState()
+          if (!versionState.isPatchSession) {
+            versionState.startPatchSession()
+          }
+          // Apply the patch to the current score XML
+          const currentXml = useLeadSheetStore.getState().musicXml
+          if (currentXml) {
+            try {
+              const newXml = applyPatch(currentXml, patch)
+              useLeadSheetStore.getState().setMusicXml(newXml)
+            } catch (err) {
+              console.error('[score_patch] Failed to apply patch:', err)
+            }
+          }
+        }
+        break
+      }
+      case 'score_patch_session_end': {
+        const payload = event.patchSessionEndPayload
+        if (payload) {
+          useVersionStore.getState().endPatchSession(
+            payload.versionId,
+            payload.name,
+            payload.changeSummary,
+          )
+          // Add a synthetic message showing the version card (same as version_created)
+          useAgentStore.getState().addMessage({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: '',
+            subtype: 'versionCreated',
+            versionAction: {
+              versionId: payload.versionId,
+              name: payload.name,
+              changeSummary: payload.changeSummary,
+            },
+            createdAt: Date.now(),
+          })
+        }
+        break
+      }
       case 'error':
+        // Rollback any active patch session on stream error
+        if (useVersionStore.getState().isPatchSession) {
+          useVersionStore.getState().rollbackPatchSession()
+        }
         finalizeStream()
         addMessage({
           id: crypto.randomUUID(),
@@ -203,6 +253,10 @@ export function useAgent() {
 
       await agentService.streamChat(allMessages, useAgentStore.getState().spaceContext, handleStreamEvent)
     } catch (err) {
+      // Rollback any active patch session on network error
+      if (useVersionStore.getState().isPatchSession) {
+        useVersionStore.getState().rollbackPatchSession()
+      }
       finalizeStream()
       const errorMsg: AgentMessage = {
         id: crypto.randomUUID(),

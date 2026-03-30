@@ -669,7 +669,7 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
       }
       const existing = track.notes.find((note) =>
         note.measureIndex === command.measureIndex
-        && Math.abs(note.beat - command.beat) < 0.001
+        && Math.abs(note.beat - command.beat) < 0.02
         && note.placement?.string === command.string,
       )
       if (existing) {
@@ -719,7 +719,7 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
     case 'insertRestAtCaret': {
       const durationType = command.durationType ?? 'quarter'
       const existing = track.notes.find((note) =>
-        note.measureIndex === command.measureIndex && Math.abs(note.beat - command.beat) < 0.001,
+        note.measureIndex === command.measureIndex && Math.abs(note.beat - command.beat) < 0.02,
       )
       if (existing) {
         track.notes = track.notes.map((note) => note.id === existing.id

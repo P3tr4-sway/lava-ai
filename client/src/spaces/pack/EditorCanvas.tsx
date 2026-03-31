@@ -5,6 +5,7 @@ import { PracticeSurface } from './PracticeSurface'
 import { StaffPreview } from './StaffPreview'
 import { CursorOverlay } from '@/components/score/CursorOverlay'
 import { useCursorEngine } from '@/hooks/useCursorEngine'
+import { useRangeSelect } from '@/hooks/useRangeSelect'
 import { noteCursorUrl, restCursorUrl } from '@/lib/cursorIcons'
 import type { GetMeasureBounds } from '@/lib/cursorMath'
 
@@ -57,6 +58,19 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     snapPoints,
   )
 
+  // Range select for staff/leadSheet view (tab view handles it internally in EditSurface)
+  const getMeasureBoundsCb = useCallback((i: number) => getMeasureBoundsRef.current(i), [])
+  const rangeSelect = useRangeSelect(containerRef, getMeasureBoundsCb)
+  const isStaffView = viewMode === 'staff' || viewMode === 'leadSheet'
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      cursor.onMouseMove(e)
+      if (isStaffView) rangeSelect.onMouseMove(e)
+    },
+    [cursor.onMouseMove, rangeSelect.onMouseMove, isStaffView],
+  )
+
   // CSS cursor for note entry mode
   const cursorStyle: React.CSSProperties | undefined =
     cursor.cursorMode === 'noteEntry'
@@ -70,7 +84,9 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       ref={containerRef}
       className={cn('relative grid min-h-0 w-full flex-1 gap-5 overflow-auto px-5 pb-24 pt-4', className)}
       style={cursorStyle}
-      onMouseMove={cursor.onMouseMove}
+      onMouseDown={isStaffView ? rangeSelect.onMouseDown : undefined}
+      onMouseMove={handleMouseMove}
+      onMouseUp={isStaffView ? rangeSelect.onMouseUp : undefined}
       onMouseLeave={cursor.onMouseLeave}
     >
       {viewMode === 'staff' && (
@@ -92,6 +108,18 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
           className="min-h-0"
           getMeasureBoundsRef={getMeasureBoundsRef}
           onScoreRerender={onScoreRerender}
+        />
+      )}
+
+      {isStaffView && rangeSelect.isDragging && rangeSelect.selectionBox && (
+        <div
+          className="absolute pointer-events-none border border-accent bg-accent/10 rounded"
+          style={{
+            left: rangeSelect.selectionBox.x,
+            top: rangeSelect.selectionBox.y,
+            width: rangeSelect.selectionBox.width,
+            height: rangeSelect.selectionBox.height,
+          }}
         />
       )}
 

@@ -67,7 +67,7 @@ export function useCursorEngine(
     const container = containerRef.current
     if (!container) return
     const update = () => {
-      setDisplayY({ top: 0, bottom: container.scrollHeight })
+      setDisplayY({ top: 0, bottom: container.clientHeight })
     }
     update()
     const observer = new ResizeObserver(update)

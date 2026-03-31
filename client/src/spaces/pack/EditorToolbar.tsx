@@ -121,9 +121,9 @@ function durationToDivisions(duration: NoteValue, divisions: number) {
     case 'quarter':
       return divisions
     case 'eighth':
-      return Math.max(1, divisions / 2)
+      return Math.max(1, Math.round(divisions / 2))
     case 'sixteenth':
-      return Math.max(1, divisions / 4)
+      return Math.max(1, Math.round(divisions / 4))
   }
 }
 
@@ -169,10 +169,12 @@ function RailButton({
 
 function MiniSegmentButton({
   active,
+  label,
   children,
   onClick,
 }: {
   active?: boolean
+  label: string
   children: ReactNode
   onClick: () => void
 }) {
@@ -180,7 +182,7 @@ function MiniSegmentButton({
     <button
       type="button"
       onClick={onClick}
-      aria-label={typeof children === 'string' ? children : undefined}
+      aria-label={label}
       className={cn(
         'flex h-12 min-w-12 items-center justify-center rounded-xl px-3 text-xs font-medium transition-colors',
         active ? 'bg-surface-0 text-accent shadow-sm' : 'text-text-muted hover:text-text-primary',
@@ -319,9 +321,18 @@ export function EditorToolbar({
         setOpenPanel(null)
       }
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && openPanel) {
+        setOpenPanel(null)
+      }
+    }
     window.addEventListener('pointerdown', handlePointerDown)
-    return () => window.removeEventListener('pointerdown', handlePointerDown)
-  }, [])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openPanel])
 
   const locateToBar = (bar: number) => {
     const nextBar = Math.max(0, Math.min(bar, safeTotalBars))
@@ -655,41 +666,45 @@ export function EditorToolbar({
           <ToolDivider />
 
           <RailButton
-            icon={editorMode === 'transform' ? Music2 : MousePointer2}
-            label={editorMode === 'transform' ? 'Playback options' : 'Selection tools'}
-            active={openPanel === (editorMode === 'transform' ? 'playback' : 'selection')}
+            icon={MousePointer2}
+            label="Selection tools"
+            active={openPanel === 'selection'}
             withChevron
-            onClick={() => setOpenPanel((current) => current === (editorMode === 'transform' ? 'playback' : 'selection') ? null : (editorMode === 'transform' ? 'playback' : 'selection'))}
+            onClick={() => setOpenPanel((current) => current === 'selection' ? null : 'selection')}
           />
 
-          {editorMode === 'fineEdit' && (
-            <>
-              <RailButton
-                icon={Square}
-                label="Note and rest durations"
-                active={openPanel === 'note'}
-                withChevron
-                onClick={() => setOpenPanel((current) => current === 'note' ? null : 'note')}
-              />
-              <RailButton
-                icon={Link2}
-                label="Notation tools"
-                active={openPanel === 'notation'}
-                withChevron
-                onClick={() => setOpenPanel((current) => current === 'notation' ? null : 'notation')}
-              />
-              <RailButton
-                icon={Grid2x2}
-                label="Measure and chord tools"
-                active={openPanel === 'structure'}
-                withChevron
-                onClick={() => setOpenPanel((current) => current === 'structure' ? null : 'structure')}
-              />
-            </>
-          )}
+          <RailButton
+            icon={Music2}
+            label="Playback options"
+            active={openPanel === 'playback'}
+            withChevron
+            onClick={() => setOpenPanel((current) => current === 'playback' ? null : 'playback')}
+          />
 
           <RailButton
-            icon={editorMode === 'transform' ? Grid2x2 : ZoomIn}
+            icon={Square}
+            label="Note and rest durations"
+            active={openPanel === 'note'}
+            withChevron
+            onClick={() => setOpenPanel((current) => current === 'note' ? null : 'note')}
+          />
+          <RailButton
+            icon={Link2}
+            label="Notation tools"
+            active={openPanel === 'notation'}
+            withChevron
+            onClick={() => setOpenPanel((current) => current === 'notation' ? null : 'notation')}
+          />
+          <RailButton
+            icon={Grid2x2}
+            label="Measure and chord tools"
+            active={openPanel === 'structure'}
+            withChevron
+            onClick={() => setOpenPanel((current) => current === 'structure' ? null : 'structure')}
+          />
+
+          <RailButton
+            icon={ZoomIn}
             label="View controls"
             active={openPanel === 'view'}
             withChevron
@@ -699,20 +714,23 @@ export function EditorToolbar({
           <ToolDivider />
 
           <div className="flex items-center rounded-[22px] bg-surface-2 p-1">
-            <MiniSegmentButton active={editorMode === 'transform' && viewMode !== 'split'} onClick={() => {
+            <MiniSegmentButton label="Play mode" active={editorMode === 'transform' && viewMode !== 'split'} onClick={() => {
               setEditorMode('transform')
               if (viewMode === 'split') setViewMode('tab')
             }}>
               <Music2 className="size-4" />
+              <span className="ml-1 text-[11px]">Play</span>
             </MiniSegmentButton>
-            <MiniSegmentButton active={editorMode === 'fineEdit' && viewMode !== 'split'} onClick={() => {
+            <MiniSegmentButton label="Edit mode" active={editorMode === 'fineEdit' && viewMode !== 'split'} onClick={() => {
               setEditorMode('fineEdit')
               if (viewMode === 'split') setViewMode('tab')
             }}>
               <MousePointer2 className="size-4" />
+              <span className="ml-1 text-[11px]">Edit</span>
             </MiniSegmentButton>
-            <MiniSegmentButton active={viewMode === 'split'} onClick={() => setViewMode(viewMode === 'split' ? 'tab' : 'split')}>
+            <MiniSegmentButton label="Split view" active={viewMode === 'split'} onClick={() => setViewMode(viewMode === 'split' ? 'tab' : 'split')}>
               <Grid2x2 className="size-4" />
+              <span className="ml-1 text-[11px]">Split</span>
             </MiniSegmentButton>
           </div>
         </div>

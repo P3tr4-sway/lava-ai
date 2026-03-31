@@ -874,6 +874,11 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
         ? { ...note, tieStart: !note.tieStart }
         : note)
       break
+    case 'toggleSlur':
+      track.notes = track.notes.map((note) => note.id === command.noteId
+        ? { ...note, slurStart: !note.slurStart }
+        : note)
+      break
     case 'transposeSelection': {
       const targetNotes = new Set(
         command.noteIds

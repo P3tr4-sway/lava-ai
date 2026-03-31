@@ -69,11 +69,9 @@ export interface TechniqueSet {
   palmMute?: boolean
   harmonic?: boolean
   vibrato?: boolean
-  // --- new articulations ---
   accent?: boolean
   staccato?: boolean
   tenuto?: boolean
-  slur?: boolean
 }
 
 export interface ScorePitch {
@@ -103,6 +101,7 @@ export interface ScoreNoteEvent {
   lyric?: string
   tieStart?: boolean
   tieStop?: boolean
+  slurStart?: boolean
   displayHints?: {
     staffVisible?: boolean
     tabVisible?: boolean

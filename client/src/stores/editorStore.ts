@@ -4,7 +4,6 @@ import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
 export type ToolMode = 'pointer' | 'range' | 'chord' | 'keySig' | 'text'
-export type SelectionScope = 'note' | 'bar' | 'section' | 'range'
 export type ViewMode = 'staff' | 'tab' | 'split' | 'leadSheet'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved'
 export type PlaybackState = 'stopped' | 'playing' | 'paused'
@@ -45,8 +44,6 @@ interface EditorStore {
   // Tool
   toolMode: ToolMode
   setToolMode: (mode: ToolMode) => void
-  selectionScope: SelectionScope
-  setSelectionScope: (scope: SelectionScope) => void
   activeToolGroup: ActiveToolGroup
   setActiveToolGroup: (group: ActiveToolGroup) => void
   entryDuration: NoteValue
@@ -129,8 +126,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Tool
   toolMode: 'pointer',
   setToolMode: (mode) => set({ toolMode: mode }),
-  selectionScope: 'note',
-  setSelectionScope: (selectionScope) => set({ selectionScope }),
   activeToolGroup: 'selection',
   setActiveToolGroup: (activeToolGroup) => set({ activeToolGroup }),
   entryDuration: 'quarter',

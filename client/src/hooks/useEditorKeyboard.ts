@@ -313,7 +313,7 @@ export function useEditorKeyboard(enabled = true): void {
         switch (e.key.toLowerCase()) {
           case 'v':
             useEditorStore.getState().setToolMode('pointer')
-            useEditorStore.getState().setSelectionScope('note')
+            useEditorStore.getState().setActiveToolGroup('selection')
             break
           case 'c':
             useEditorStore.getState().setToolMode('chord')
@@ -340,7 +340,6 @@ export function useEditorKeyboard(enabled = true): void {
               useEditorStore.getState().setEntryMode('rest')
             } else {
               setToolMode(toolMode === 'range' ? 'pointer' : 'range')
-              useEditorStore.getState().setSelectionScope(toolMode === 'range' ? 'note' : 'range')
             }
             break
           }

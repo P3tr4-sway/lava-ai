@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import {
   ChevronDown,
-  Grid2x2,
-  Link2,
+  Guitar,
   MousePointer2,
   Music,
   Music2,
   Pause,
   Play,
   SlidersHorizontal,
-  Square,
+  Spline,
   Timer,
   ZoomIn,
   ZoomOut,
@@ -19,7 +18,7 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/components/ui/utils'
 import { PlaybackStylePickerDrawer, type PlaybackStyleOption } from '@/components/score'
 import { useAudioStore } from '@/stores/audioStore'
-import { useEditorStore, type SelectionScope } from '@/stores/editorStore'
+import { useEditorStore } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
 interface EditorToolbarProps {
@@ -30,13 +29,13 @@ interface EditorToolbarProps {
 
 type ToolbarPanel =
   | 'playbackSettings'
-  | 'selection'
   | 'note'
-  | 'rest'
   | 'notation'
   | 'chords'
   | 'view'
   | null
+
+type PanelAnchor = { left: number; width: number } | null
 
 const PLAYBACK_STYLE_OPTIONS: PlaybackStyleOption[] = [
   {
@@ -98,13 +97,6 @@ const DURATION_OPTIONS: Array<{ value: NoteValue; label: string }> = [
   { value: 'sixteenth', label: '1/16' },
 ]
 
-const SELECTION_SCOPE_OPTIONS: Array<{ value: SelectionScope; label: string; icon?: ComponentType<{ className?: string }> }> = [
-  { value: 'note', label: 'Note', icon: MousePointer2 },
-  { value: 'bar', label: 'Bar', icon: Grid2x2 },
-  { value: 'section', label: 'Section' },
-  { value: 'range', label: 'Range' },
-]
-
 const TECHNIQUE_OPTIONS: Array<{ value: keyof TechniqueSet; label: string }> = [
   { value: 'accent', label: 'Accent' },
   { value: 'staccato', label: 'Staccato' },
@@ -147,23 +139,24 @@ function RailButton({
   active,
   highlighted,
   withChevron = false,
+  panelOpen,
   onClick,
+  onChevronClick,
 }: {
   icon: ComponentType<{ className?: string }>
   label: string
   active?: boolean
   highlighted?: boolean
   withChevron?: boolean
+  panelOpen?: boolean
   onClick: () => void
+  onChevronClick?: (e: ReactMouseEvent) => void
 }) {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
+    <div
+      data-rail-button
       className={cn(
-        'flex h-14 items-center gap-2 rounded-2xl px-4 text-text-primary transition-all',
+        'flex h-14 items-center rounded-2xl transition-all',
         highlighted
           ? 'bg-accent text-surface-0 shadow-lg'
           : active
@@ -171,9 +164,35 @@ function RailButton({
             : 'hover:bg-surface-1',
       )}
     >
-      <Icon className="size-6" />
-      {withChevron && <ChevronDown className={cn('size-4', highlighted ? 'text-surface-0/90' : 'text-text-muted')} />}
-    </button>
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        onClick={onClick}
+        className={cn(
+          'flex h-full items-center px-4',
+          highlighted ? 'text-surface-0' : 'text-text-primary',
+        )}
+      >
+        <Icon className="size-6" />
+      </button>
+      {withChevron && (
+        <button
+          type="button"
+          aria-label={`${label} options`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onChevronClick?.(e)
+          }}
+          className={cn(
+            'flex h-full items-center pr-3 pl-0',
+            highlighted ? 'text-surface-0/90' : 'text-text-muted hover:text-text-primary',
+          )}
+        >
+          <ChevronDown className={cn('size-4 transition-transform', panelOpen && 'rotate-180')} />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -218,7 +237,7 @@ function PanelButton({
       size="sm"
       variant={active ? 'default' : 'outline'}
       onClick={onClick}
-      className={cn('h-9 rounded-xl px-3', !active && 'bg-surface-0')}
+      className={cn('h-7 rounded-lg px-2.5 text-xs', !active && 'bg-surface-0')}
     >
       {children}
     </Button>
@@ -237,12 +256,12 @@ function PanelSelect({
   options: Array<{ value: string; label: string }>
 }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-text-muted">{label}</span>
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-medium text-text-muted">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none transition-colors focus:border-border-hover"
+        className="h-8 rounded-lg border border-border bg-surface-0 px-2 text-xs text-text-primary outline-none transition-colors focus:border-border-hover"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -261,14 +280,35 @@ export function EditorToolbar({
 }: EditorToolbarProps) {
   const [stylePickerOpen, setStylePickerOpen] = useState(false)
   const [openPanel, setOpenPanel] = useState<ToolbarPanel>(null)
+  const [panelAnchor, setPanelAnchor] = useState<PanelAnchor>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  const openPanelAt = (panel: ToolbarPanel, event: ReactMouseEvent) => {
+    const toolbarEl = toolbarRef.current
+    const buttonEl = (event.currentTarget as HTMLElement).closest('[data-rail-button]') as HTMLElement | null
+    if (!toolbarEl || !buttonEl) {
+      setOpenPanel((p) => p === panel ? null : panel)
+      return
+    }
+    if (openPanel === panel) {
+      setOpenPanel(null)
+      setPanelAnchor(null)
+      return
+    }
+    const toolbarRect = toolbarEl.getBoundingClientRect()
+    const buttonRect = buttonEl.getBoundingClientRect()
+    setPanelAnchor({
+      left: buttonRect.left - toolbarRect.left + buttonRect.width / 2,
+      width: buttonRect.width,
+    })
+    setOpenPanel(panel)
+  }
 
   const editorMode = useEditorStore((s) => s.editorMode)
   const setEditorMode = useEditorStore((s) => s.setEditorMode)
   const viewMode = useEditorStore((s) => s.viewMode)
   const setViewMode = useEditorStore((s) => s.setViewMode)
-  const selectionScope = useEditorStore((s) => s.selectionScope)
-  const setSelectionScope = useEditorStore((s) => s.setSelectionScope)
   const setToolMode = useEditorStore((s) => s.setToolMode)
   const setActiveToolGroup = useEditorStore((s) => s.setActiveToolGroup)
   const zoom = useEditorStore((s) => s.zoom)
@@ -277,10 +317,12 @@ export function EditorToolbar({
   const toggleChordDiagrams = useEditorStore((s) => s.toggleChordDiagrams)
   const chordDiagramGlobal = useEditorStore((s) => s.chordDiagramGlobal)
   const setChordDiagramGlobal = useEditorStore((s) => s.setChordDiagramGlobal)
+  const activeToolGroup = useEditorStore((s) => s.activeToolGroup)
   const entryDuration = useEditorStore((s) => s.entryDuration)
   const setEntryDuration = useEditorStore((s) => s.setEntryDuration)
   const entryMode = useEditorStore((s) => s.entryMode)
   const setEntryMode = useEditorStore((s) => s.setEntryMode)
+  const setCaret = useEditorStore((s) => s.setCaret)
 
   const document = useScoreDocumentStore((s) => s.document)
   const applyCommand = useScoreDocumentStore((s) => s.applyCommand)
@@ -326,11 +368,13 @@ export function EditorToolbar({
     function handlePointerDown(event: PointerEvent) {
       if (!toolbarRef.current?.contains(event.target as Node)) {
         setOpenPanel(null)
+        setPanelAnchor(null)
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape' && openPanel) {
         setOpenPanel(null)
+        setPanelAnchor(null)
       }
     }
     window.addEventListener('pointerdown', handlePointerDown)
@@ -365,12 +409,6 @@ export function EditorToolbar({
       setCurrentTime(0)
     }
     setTransportState('rolling')
-  }
-
-  const handleScopeChange = (scope: SelectionScope) => {
-    setSelectionScope(scope)
-    setToolMode(scope === 'range' || scope === 'section' ? 'range' : 'pointer')
-    setActiveToolGroup('selection')
   }
 
   const applyDurationToSelection = (duration: NoteValue, restMode: boolean) => {
@@ -429,45 +467,39 @@ export function EditorToolbar({
     switch (openPanel) {
       case 'playbackSettings':
         return (
-          <div className="grid gap-4 md:grid-cols-[1.1fr_1fr]">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Playback</p>
-                <p className="mt-1 text-sm text-text-secondary">Style, transport and timing controls for practice mode.</p>
+          <div className="space-y-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 w-full justify-between rounded-lg bg-surface-0 text-sm"
+              onClick={() => setStylePickerOpen(true)}
+            >
+              {selectedPlaybackStyle.label}
+              <ChevronDown className="size-3.5 text-text-muted" />
+            </Button>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-text-secondary">
+                <span>Position</span>
+                <span>Bar {displayBar}</span>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 w-full justify-between rounded-xl bg-surface-0"
-                onClick={() => setStylePickerOpen(true)}
-              >
-                {selectedPlaybackStyle.label}
-                <ChevronDown className="size-4 text-text-muted" />
-              </Button>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm text-text-secondary">
-                  <span>Position</span>
-                  <span>Bar {displayBar}</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={1000}
-                  step={1}
-                  value={sliderValue}
-                  onChange={(event) => locateToBar((Number(event.target.value) / 1000) * safeTotalBars)}
-                  aria-label={`Playback position — bar ${displayBar} of ${safeTotalBars}`}
-                  className={cn(
-                    'block w-full cursor-pointer appearance-none bg-transparent',
-                    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border',
-                    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-border',
-                    '[&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
-                    '[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent',
-                  )}
-                />
-              </div>
+              <input
+                type="range"
+                min={0}
+                max={1000}
+                step={1}
+                value={sliderValue}
+                onChange={(event) => locateToBar((Number(event.target.value) / 1000) * safeTotalBars)}
+                aria-label={`Playback position — bar ${displayBar} of ${safeTotalBars}`}
+                className={cn(
+                  'block w-full cursor-pointer appearance-none bg-transparent',
+                  '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border',
+                  '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-border',
+                  '[&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
+                  '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent',
+                )}
+              />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-2">
               <PanelSelect
                 label="Instrument"
                 value={playbackInstrument}
@@ -486,8 +518,8 @@ export function EditorToolbar({
                 onChange={(value) => setCountInBars(Number(value))}
                 options={COUNT_IN_OPTIONS.map((option) => ({ value: String(option.value), label: option.label }))}
               />
-              <div className="flex flex-col justify-end gap-2 rounded-2xl border border-border bg-surface-0 p-3">
-                <p className="text-xs font-medium text-text-secondary">Metronome</p>
+              <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-0 p-2">
+                <p className="text-[10px] font-medium text-text-secondary">Metronome</p>
                 <PanelButton active={metronomeEnabled} onClick={() => toggleMetronome()}>
                   {metronomeEnabled ? 'On' : 'Off'}
                 </PanelButton>
@@ -495,31 +527,11 @@ export function EditorToolbar({
             </div>
           </div>
         )
-      case 'selection':
-        return (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Selection tool</p>
-              <p className="mt-1 text-sm text-text-secondary">Switch between note, bar, section and range targeting.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SELECTION_SCOPE_OPTIONS.map(({ value, label, icon: Icon }) => (
-                <PanelButton key={value} active={selectionScope === value} onClick={() => handleScopeChange(value)}>
-                  {Icon && <span className="mr-1 inline-flex"><Icon className="size-4" /></span>}
-                  {label}
-                </PanelButton>
-              ))}
-            </div>
-          </div>
-        )
       case 'note':
         return (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Notes</p>
-              <p className="mt-1 text-sm text-text-secondary">Choose the active note value for direct entry or selected notes.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Notes</p>
+            <div className="flex gap-1">
               {DURATION_OPTIONS.map((option) => (
                 <PanelButton
                   key={`note-${option.value}`}
@@ -530,16 +542,8 @@ export function EditorToolbar({
                 </PanelButton>
               ))}
             </div>
-          </div>
-        )
-      case 'rest':
-        return (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Rests</p>
-              <p className="mt-1 text-sm text-text-secondary">Swap the active entry mode to rests and keep the same duration shortcuts.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Rests</p>
+            <div className="flex gap-1">
               {DURATION_OPTIONS.map((option) => (
                 <PanelButton
                   key={`rest-${option.value}`}
@@ -554,78 +558,66 @@ export function EditorToolbar({
         )
       case 'notation':
         return (
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Ties & Slurs</p>
-                <p className="mt-1 text-sm text-text-secondary">Connect notes with ties or slurs.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <PanelButton active={Boolean(primarySelectedNote?.tieStart)} onClick={toggleTie}>
-                  Tie
-                </PanelButton>
-                <PanelButton active={Boolean(primarySelectedNote?.slurStart)} onClick={toggleSlur}>
-                  Slur
-                </PanelButton>
-              </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Ties & Slurs</p>
+            <div className="flex gap-1">
+              <PanelButton active={Boolean(primarySelectedNote?.tieStart)} onClick={toggleTie}>
+                Tie
+              </PanelButton>
+              <PanelButton active={Boolean(primarySelectedNote?.slurStart)} onClick={toggleSlur}>
+                Slur
+              </PanelButton>
             </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Articulations</p>
-                <p className="mt-1 text-sm text-text-secondary">Apply accents and articulation marks to selected notes.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {TECHNIQUE_OPTIONS.map((option) => (
-                  <PanelButton
-                    key={option.value}
-                    active={Boolean(primarySelectedNote?.techniques[option.value])}
-                    onClick={() => toggleTechnique(option.value)}
-                  >
-                    {option.label}
-                  </PanelButton>
-                ))}
-              </div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Articulations</p>
+            <div className="flex flex-wrap gap-1">
+              {TECHNIQUE_OPTIONS.map((option) => (
+                <PanelButton
+                  key={option.value}
+                  active={Boolean(primarySelectedNote?.techniques[option.value])}
+                  onClick={() => toggleTechnique(option.value)}
+                >
+                  {option.label}
+                </PanelButton>
+              ))}
             </div>
           </div>
         )
       case 'chords':
         return (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Chord diagrams</p>
-              <p className="mt-1 text-sm text-text-secondary">Control chord diagram placement on the score.</p>
-            </div>
-            <div className="flex gap-2">
-              <PanelButton active={chordDiagramGlobal === 'hidden'} onClick={() => { setChordDiagramGlobal('hidden'); if (showChordDiagrams) toggleChordDiagrams() }}>
-                Off
-              </PanelButton>
-              <PanelButton active={chordDiagramGlobal === 'top'} onClick={() => { setChordDiagramGlobal('top'); if (!showChordDiagrams) toggleChordDiagrams() }}>
-                Top
-              </PanelButton>
-              <PanelButton active={chordDiagramGlobal === 'bottom'} onClick={() => { setChordDiagramGlobal('bottom'); if (!showChordDiagrams) toggleChordDiagrams() }}>
-                Bottom
-              </PanelButton>
-              <PanelButton active={chordDiagramGlobal === 'both'} onClick={() => { setChordDiagramGlobal('both'); if (!showChordDiagrams) toggleChordDiagrams() }}>
-                Both
-              </PanelButton>
-            </div>
+          <div className="space-y-1.5">
+            {(['hidden', 'top', 'bottom', 'both'] as const).map((placement) => (
+              <button
+                key={placement}
+                type="button"
+                onClick={() => {
+                  setChordDiagramGlobal(placement)
+                  if (placement === 'hidden' && showChordDiagrams) toggleChordDiagrams()
+                  if (placement !== 'hidden' && !showChordDiagrams) toggleChordDiagrams()
+                  setOpenPanel(null)
+                }}
+                className={cn(
+                  'flex w-full items-center rounded-lg px-2.5 py-1.5 text-sm transition-colors',
+                  chordDiagramGlobal === placement
+                    ? 'bg-surface-2 text-text-primary font-medium'
+                    : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary',
+                )}
+              >
+                {placement === 'hidden' ? 'Off' : placement.charAt(0).toUpperCase() + placement.slice(1)}
+              </button>
+            ))}
           </div>
         )
       case 'view':
         return (
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">View</p>
-              <p className="mt-1 text-sm text-text-secondary">Canvas zoom and alternate score views.</p>
-            </div>
-            <div className="flex items-center gap-3">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setZoom(zoom - 10)}
-                className="flex size-9 items-center justify-center rounded-xl border border-border text-text-primary hover:bg-surface-1"
+                className="flex size-7 items-center justify-center rounded-lg border border-border text-text-primary hover:bg-surface-1"
                 aria-label="Zoom out"
               >
-                <ZoomOut className="size-4" />
+                <ZoomOut className="size-3.5" />
               </button>
               <input
                 type="range"
@@ -637,19 +629,19 @@ export function EditorToolbar({
                 aria-label={`Zoom level ${zoom}%`}
                 className={cn(
                   'flex-1 cursor-pointer appearance-none bg-transparent',
-                  '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border',
-                  '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-border',
-                  '[&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
-                  '[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent',
+                  '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border',
+                  '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-border',
+                  '[&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
+                  '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent',
                 )}
               />
               <button
                 type="button"
                 onClick={() => setZoom(zoom + 10)}
-                className="flex size-9 items-center justify-center rounded-xl border border-border text-text-primary hover:bg-surface-1"
+                className="flex size-7 items-center justify-center rounded-lg border border-border text-text-primary hover:bg-surface-1"
                 aria-label="Zoom in"
               >
-                <ZoomIn className="size-4" />
+                <ZoomIn className="size-3.5" />
               </button>
               <input
                 type="number"
@@ -658,17 +650,17 @@ export function EditorToolbar({
                 step={5}
                 value={zoom}
                 onChange={(e) => setZoom(Number(e.target.value))}
-                className="h-9 w-16 rounded-xl border border-border bg-surface-0 px-2 text-center text-sm text-text-primary outline-none focus:border-border-hover"
+                className="h-7 w-14 rounded-lg border border-border bg-surface-0 px-1.5 text-center text-xs text-text-primary outline-none focus:border-border-hover"
                 aria-label="Zoom percentage"
               />
-              <span className="text-sm text-text-muted">%</span>
+              <span className="text-xs text-text-muted">%</span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-1">
               <PanelButton active={viewMode === 'tab'} onClick={() => setViewMode('tab')}>
-                Tab view
+                Tab
               </PanelButton>
               <PanelButton active={viewMode === 'staff'} onClick={() => setViewMode('staff')}>
-                Staff view
+                Staff
               </PanelButton>
             </div>
           </div>
@@ -689,7 +681,17 @@ export function EditorToolbar({
     <>
       <div ref={toolbarRef} className={cn('pointer-events-none absolute bottom-6 left-1/2 z-30 -translate-x-1/2', className)}>
         {activePanelContent && (
-          <div className="pointer-events-auto absolute bottom-full left-1/2 mb-3 w-[min(92vw,720px)] -translate-x-1/2 rounded-[28px] border border-border bg-surface-0/96 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.12)] backdrop-blur">
+          <div
+            ref={panelRef}
+            className="pointer-events-auto absolute bottom-full mb-3 w-auto min-w-[180px] max-w-[min(92vw,380px)] rounded-2xl border border-border bg-surface-0/96 p-3 shadow-[0_8px_32px_rgba(0,0,0,0.16)] backdrop-blur"
+            style={panelAnchor ? {
+              left: `${panelAnchor.left}px`,
+              transform: 'translateX(-50%)',
+            } : {
+              left: '50%',
+              transform: 'translateX(-50%)',
+            }}
+          >
             {activePanelContent}
           </div>
         )}
@@ -716,7 +718,9 @@ export function EditorToolbar({
                 label="Playback settings"
                 active={openPanel === 'playbackSettings'}
                 withChevron
+                panelOpen={openPanel === 'playbackSettings'}
                 onClick={() => setOpenPanel((p) => p === 'playbackSettings' ? null : 'playbackSettings')}
+                onChevronClick={(e) => openPanelAt('playbackSettings', e)}
               />
               <RailButton
                 icon={Timer}
@@ -730,44 +734,58 @@ export function EditorToolbar({
               <RailButton
                 icon={MousePointer2}
                 label="Selection tools"
-                active={openPanel === 'selection'}
-                withChevron
-                onClick={() => setOpenPanel((p) => p === 'selection' ? null : 'selection')}
+                active={activeToolGroup === 'selection'}
+                onClick={() => {
+                  setActiveToolGroup('selection')
+                  setToolMode('pointer')
+                  setCaret(null)
+                  setOpenPanel(null)
+                }}
               />
               <RailButton
                 icon={Music}
-                label="Note durations"
-                active={openPanel === 'note'}
+                label="Notes & rests"
+                active={activeToolGroup === 'note' || activeToolGroup === 'rest'}
                 withChevron
-                onClick={() => setOpenPanel((p) => p === 'note' ? null : 'note')}
+                panelOpen={openPanel === 'note'}
+                onClick={() => {
+                  setActiveToolGroup('note')
+                  setOpenPanel(null)
+                }}
+                onChevronClick={(e) => openPanelAt('note', e)}
               />
               <RailButton
-                icon={Square}
-                label="Rest durations"
-                active={openPanel === 'rest'}
-                withChevron
-                onClick={() => setOpenPanel((p) => p === 'rest' ? null : 'rest')}
-              />
-              <RailButton
-                icon={Link2}
+                icon={Spline}
                 label="Ties, slurs & articulations"
-                active={openPanel === 'notation'}
+                active={activeToolGroup === 'notation'}
                 withChevron
-                onClick={() => setOpenPanel((p) => p === 'notation' ? null : 'notation')}
+                panelOpen={openPanel === 'notation'}
+                onClick={() => {
+                  setActiveToolGroup('notation')
+                  setOpenPanel(null)
+                }}
+                onChevronClick={(e) => openPanelAt('notation', e)}
               />
               <RailButton
-                icon={Grid2x2}
+                icon={Guitar}
                 label="Chord diagrams"
-                active={openPanel === 'chords'}
+                active={showChordDiagrams}
                 withChevron
-                onClick={() => setOpenPanel((p) => p === 'chords' ? null : 'chords')}
+                panelOpen={openPanel === 'chords'}
+                onClick={() => {
+                  toggleChordDiagrams()
+                  setOpenPanel(null)
+                }}
+                onChevronClick={(e) => openPanelAt('chords', e)}
               />
               <RailButton
                 icon={ZoomIn}
                 label="Zoom"
                 active={openPanel === 'view'}
                 withChevron
-                onClick={() => setOpenPanel((p) => p === 'view' ? null : 'view')}
+                panelOpen={openPanel === 'view'}
+                onClick={() => setOpenPanel(null)}
+                onChevronClick={(e) => openPanelAt('view', e)}
               />
             </>
           )}

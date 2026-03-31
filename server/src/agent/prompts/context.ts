@@ -44,9 +44,6 @@ export function buildContextPrompt(ctx: SpaceContext): string {
         const uiBars = ec.selectedBars.map((b) => b + 1).join(', ')
         prompt += `\n\nSelected bars (0-indexed): ${ec.selectedBars.join(', ')}  →  bars ${uiBars} in the UI`
       }
-      if (ec.selectionScope) {
-        prompt += `\nSelection scope: ${ec.selectionScope}`
-      }
       if (ec.tuning && ec.tuning.length > 0) {
         prompt += `\nTuning (MIDI string 1→6): ${ec.tuning.join(', ')}`
       }

@@ -5,7 +5,7 @@ import { useEditorStore } from '@/stores/editorStore'
 
 describe('useRangeSelect', () => {
   beforeEach(() => {
-    useEditorStore.setState({ toolMode: 'pointer', selectedBars: [] })
+    useEditorStore.setState({ activeToolGroup: 'note', selectedBars: [] })
   })
 
   it('isDragging starts false', () => {
@@ -22,8 +22,8 @@ describe('useRangeSelect', () => {
     expect(result.current.selectionBox).toBeNull()
   })
 
-  it('onMouseDown in range mode sets isDragging', () => {
-    useEditorStore.setState({ toolMode: 'range' })
+  it('onMouseDown in selection group sets isDragging', () => {
+    useEditorStore.setState({ activeToolGroup: 'selection' })
     const getMeasureBounds = vi.fn()
     const containerRef = { current: document.createElement('div') }
     vi.spyOn(containerRef.current, 'getBoundingClientRect').mockReturnValue(
@@ -38,8 +38,8 @@ describe('useRangeSelect', () => {
     expect(result.current.isDragging).toBe(true)
   })
 
-  it('onMouseDown in pointer mode does NOT set isDragging', () => {
-    useEditorStore.setState({ toolMode: 'pointer' })
+  it('onMouseDown in non-selection group does NOT set isDragging', () => {
+    useEditorStore.setState({ activeToolGroup: 'note' })
     const getMeasureBounds = vi.fn()
     const containerRef = { current: document.createElement('div') }
     const { result } = renderHook(() => useRangeSelect(containerRef, getMeasureBounds))
@@ -51,8 +51,8 @@ describe('useRangeSelect', () => {
     expect(result.current.isDragging).toBe(false)
   })
 
-  it('onMouseUp in range mode clears isDragging', () => {
-    useEditorStore.setState({ toolMode: 'range' })
+  it('onMouseUp in selection group clears isDragging', () => {
+    useEditorStore.setState({ activeToolGroup: 'selection' })
     const getMeasureBounds = vi.fn().mockReturnValue(null)
     const containerRef = { current: document.createElement('div') }
     vi.spyOn(containerRef.current, 'getBoundingClientRect').mockReturnValue(

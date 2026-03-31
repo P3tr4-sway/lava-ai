@@ -100,8 +100,16 @@ function findDocumentNoteForAlphaNote(track: ScoreTrack, alphaNote: AlphaTabNote
   return pitchMatches[alphaNote.beat.index] ?? measureNotes[alphaNote.beat.index] ?? pitchMatches[0] ?? measureNotes[0] ?? null
 }
 
-function getPointerPosition(surface: HTMLElement, event: ReactMouseEvent<HTMLDivElement>) {
-  const rect = surface.getBoundingClientRect()
+function findDocumentNoteAtPlacement(track: ScoreTrack, measureIndex: number, beat: number, string: number): ScoreNoteEvent | null {
+  return track.notes.find((note) =>
+    note.measureIndex === measureIndex
+    && Math.abs(note.beat - beat) < 0.02
+    && note.placement?.string === string,
+  ) ?? null
+}
+
+function getPointerPosition(reference: HTMLElement, event: ReactMouseEvent<HTMLDivElement>) {
+  const rect = reference.getBoundingClientRect()
   return {
     x: event.clientX - rect.left,
     y: event.clientY - rect.top,
@@ -112,7 +120,7 @@ function getPreferredBounds(entry: { lineAlignedBounds?: BoundsLike; realBounds?
   return entry?.lineAlignedBounds ?? entry?.realBounds ?? entry?.visualBounds ?? null
 }
 
-function resolveTabStaffBounds(api: AlphaTabApi, measureIndex: number): BoundsLike | null {
+function resolveTabStaffBounds(api: AlphaTabApi, measureIndex: number, pointerY?: number): BoundsLike | null {
   const masterBar = api.boundsLookup?.findMasterBarByIndex(measureIndex) as
     | ({ bars?: Array<{ lineAlignedBounds?: BoundsLike; realBounds?: BoundsLike; visualBounds?: BoundsLike }> } & {
         lineAlignedBounds?: BoundsLike
@@ -122,11 +130,31 @@ function resolveTabStaffBounds(api: AlphaTabApi, measureIndex: number): BoundsLi
     | null
     | undefined
 
-  const tabBar = Array.isArray(masterBar?.bars) && masterBar.bars.length > 0
-    ? masterBar.bars[masterBar.bars.length - 1]
-    : null
+  if (Array.isArray(masterBar?.bars) && masterBar.bars.length > 0) {
+    const preferredBounds = masterBar.bars
+      .map((bar) => getPreferredBounds(bar))
+      .filter((bounds): bounds is BoundsLike => Boolean(bounds))
 
-  return getPreferredBounds(tabBar) ?? getPreferredBounds(masterBar)
+    if (preferredBounds.length > 0) {
+      if (pointerY !== undefined && preferredBounds.length > 1) {
+        const containingBounds = preferredBounds.find(
+          (bounds) => pointerY >= bounds.y && pointerY <= bounds.y + bounds.h,
+        )
+        if (containingBounds) return containingBounds
+
+        // ScoreTab 同時有五線譜與 TAB，指針落在兩者之間時取最近的 stave。
+        return preferredBounds.reduce((closest, bounds) => {
+          const closestCenter = closest.y + closest.h / 2
+          const nextCenter = bounds.y + bounds.h / 2
+          return Math.abs(nextCenter - pointerY) < Math.abs(closestCenter - pointerY) ? bounds : closest
+        })
+      }
+
+      return preferredBounds[preferredBounds.length - 1] ?? null
+    }
+  }
+
+  return getPreferredBounds(masterBar)
 }
 
 function buildNoteOverlayRects(api: AlphaTabApi, track: ScoreTrack, selectedNoteIds: string[]): OverlayRect[] {
@@ -190,8 +218,8 @@ function beatToQuarterGrid(value: number, beatsPerBar: number) {
   return clamp(Math.round(value * 4) / 4, 0, Math.max(0, beatsPerBar - 0.25))
 }
 
-function resolveBeatFromPointer(api: AlphaTabApi, measureIndex: number, pointerX: number, beatsPerBar: number) {
-  const bounds = resolveTabStaffBounds(api, measureIndex)
+function resolveBeatFromPointer(api: AlphaTabApi, measureIndex: number, pointerX: number, beatsPerBar: number, pointerY?: number) {
+  const bounds = resolveTabStaffBounds(api, measureIndex, pointerY)
   if (!bounds) return 0
   const ratio = clamp((pointerX - bounds.x) / Math.max(bounds.w, 1), 0, 1)
   return beatToQuarterGrid(ratio * beatsPerBar, beatsPerBar)
@@ -225,7 +253,7 @@ function buildCaretOverlayRect(
 }
 
 function resolveStringFromPointer(api: AlphaTabApi, measureIndex: number, pointerY: number, stringCount: number) {
-  const bounds = resolveTabStaffBounds(api, measureIndex)
+  const bounds = resolveTabStaffBounds(api, measureIndex, pointerY)
   if (!bounds || stringCount <= 1) return 1
 
   const ratio = clamp((pointerY - bounds.y) / Math.max(bounds.h, 1), 0, 1)
@@ -239,8 +267,9 @@ function buildBeatHoverRect(
   string: number,
   beatsPerBar: number,
   stringCount: number,
+  pointerY?: number,
 ): OverlayRect | null {
-  const bounds = resolveTabStaffBounds(api, measureIndex)
+  const bounds = resolveTabStaffBounds(api, measureIndex, pointerY)
   if (!bounds) return null
 
   const normalizedString = clamp(string, 1, Math.max(1, stringCount))
@@ -282,8 +311,8 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
   const hoverTarget = useEditorStore((state) => state.hoverTarget)
   const setHoverTarget = useEditorStore((state) => state.setHoverTarget)
   const editorMode = useEditorStore((state) => state.editorMode)
-  const selectionScope = useEditorStore((state) => state.selectionScope)
   const zoom = useEditorStore((state) => state.zoom)
+  const activeToolGroup = useEditorStore((state) => state.activeToolGroup)
   const entryDuration = useEditorStore((state) => state.entryDuration)
   const entryMode = useEditorStore((state) => state.entryMode)
   const inspectorFocus = useEditorStore((state) => state.inspectorFocus)
@@ -303,6 +332,7 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
   const [noteFretDraft, setNoteFretDraft] = useState('0')
   const [noteDurationDraft, setNoteDurationDraft] = useState<NoteValue>('quarter')
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [editHintDismissed, setEditHintDismissed] = useState(false)
   const syncOverlaysRef = useRef<() => void>(() => {})
   const noteDurationSelectRef = useRef<HTMLSelectElement | null>(null)
 
@@ -428,6 +458,18 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
 
     apiRef.current = api
 
+    // Load the current XML into the freshly created API so switching
+    // staveProfile (transform ↔ fineEdit) doesn't leave a blank canvas.
+    const currentXml = useScoreDocumentStore.getState().exportCacheXml
+    if (currentXml) {
+      try {
+        api.load(new TextEncoder().encode(currentXml))
+      } catch (error) {
+        console.error('[TabCanvas] alphaTab initial load failed', error)
+        setRenderError(TAB_CANVAS_RENDER_ERROR_MESSAGE)
+      }
+    }
+
     return () => {
       offRenderFinished()
       api.destroy()
@@ -481,6 +523,15 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
     }
   }, [canOpenInspector])
 
+  useEffect(() => {
+    if (editorMode === 'fineEdit') {
+      setEditHintDismissed(false)
+      const timer = setTimeout(() => setEditHintDismissed(true), 5000)
+      return () => clearTimeout(timer)
+    }
+    setEditHintDismissed(true)
+  }, [editorMode])
+
   const resolveHoverState = useCallback((x: number, y: number) => {
     const api = apiRef.current
     if (!api?.boundsLookup || !track) {
@@ -492,40 +543,36 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
       return { rect: null, target: null }
     }
 
-    if (selectionScope === 'note') {
-      const note = api.boundsLookup.getNoteAtPos(beat, x, y)
-      if (note) {
-        const documentNote = findDocumentNoteForAlphaNote(track, note)
-        if (!documentNote) return { rect: null, target: null }
-        const rect = findNoteOverlayRect(api, track, documentNote.id)
-        return {
-          rect: rect ? { ...rect, id: `hover-note-${documentNote.id}` } : null,
-          target: {
-            kind: 'note' as const,
-            noteId: documentNote.id,
-            measureIndex: documentNote.measureIndex,
-            beat: documentNote.beat,
-            string: documentNote.placement?.string,
-          },
-        }
+    const note = api.boundsLookup.getNoteAtPos(beat, x, y)
+    if (note) {
+      const documentNote = findDocumentNoteForAlphaNote(track, note)
+      if (!documentNote) return { rect: null, target: null }
+      const rect = findNoteOverlayRect(api, track, documentNote.id)
+      return {
+        rect: rect ? { ...rect, id: `hover-note-${documentNote.id}` } : null,
+        target: {
+          kind: 'note' as const,
+          noteId: documentNote.id,
+          measureIndex: documentNote.measureIndex,
+          beat: documentNote.beat,
+          string: documentNote.placement?.string,
+        },
       }
+    }
 
-      if (editorMode === 'fineEdit') {
-        const measureIndex = beat.voice.bar.index
-        const targetBeat = resolveBeatFromPointer(api, measureIndex, x, beatsPerBar)
-        const targetString = resolveStringFromPointer(api, measureIndex, y, track.tuning.length)
-        return {
-          rect: buildBeatHoverRect(api, measureIndex, targetBeat, targetString, beatsPerBar, track.tuning.length),
-          target: {
-            kind: 'beat' as const,
-            measureIndex,
-            beat: targetBeat,
-            string: targetString,
-          },
-        }
+    if (editorMode === 'fineEdit') {
+      const measureIndex = beat.voice.bar.index
+      const targetBeat = resolveBeatFromPointer(api, measureIndex, x, beatsPerBar, y)
+      const targetString = resolveStringFromPointer(api, measureIndex, y, track.tuning.length)
+      return {
+        rect: buildBeatHoverRect(api, measureIndex, targetBeat, targetString, beatsPerBar, track.tuning.length, y),
+        target: {
+          kind: 'beat' as const,
+          measureIndex,
+          beat: targetBeat,
+          string: targetString,
+        },
       }
-
-      return { rect: null, target: null }
     }
 
     const barBounds = api.boundsLookup.findMasterBarByIndex(beat.voice.bar.index)
@@ -543,12 +590,12 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
         measureIndex: beat.voice.bar.index,
       },
     }
-  }, [beatsPerBar, editorMode, selectionScope, track])
+  }, [beatsPerBar, editorMode, track])
 
   const handleSurfaceMouseMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    const surface = surfaceRef.current
-    if (!surface) return
-    const { x, y } = getPointerPosition(surface, event)
+    const alphaTabRoot = alphaTabRootRef.current
+    if (!alphaTabRoot) return
+    const { x, y } = getPointerPosition(alphaTabRoot, event)
     const { rect, target } = resolveHoverState(x, y)
     setHoverRect(rect)
     setHoverTarget(target)
@@ -556,10 +603,10 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
 
   const handleSurfaceClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const api = apiRef.current
-    const surface = surfaceRef.current
-    if (!api?.boundsLookup || !surface || !track) return
+    const alphaTabRoot = alphaTabRootRef.current
+    if (!api?.boundsLookup || !alphaTabRoot || !track) return
 
-    const { x, y } = getPointerPosition(surface, event)
+    const { x, y } = getPointerPosition(alphaTabRoot, event)
     const beat = api.boundsLookup.getBeatAtPos(x, y)
     if (!beat) {
       clearSelection()
@@ -567,75 +614,111 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
       return
     }
 
+    const isNoteEntryToolActive = activeToolGroup === 'note' || activeToolGroup === 'rest'
+    const isFineEditNoteEntry = editorMode === 'fineEdit' && isNoteEntryToolActive
+    const pointerTarget = editorMode === 'fineEdit'
+      ? {
+          trackId: track.id,
+          measureIndex: beat.voice.bar.index,
+          beat: resolveBeatFromPointer(api, beat.voice.bar.index, x, beatsPerBar, y),
+          string: resolveStringFromPointer(api, beat.voice.bar.index, y, track.tuning.length),
+        }
+      : null
+    const isChordAddGesture = isFineEditNoteEntry && entryMode === 'note' && event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
+
     const note = api.boundsLookup.getNoteAtPos(beat, x, y)
-    if (selectionScope === 'note' && note) {
+    if (note) {
       const documentNote = findDocumentNoteForAlphaNote(track, note)
-      if (documentNote) {
+      // Shift+click 落在同拍不同弦時，優先加到和弦，而不是被既有音符攔截成 selection。
+      if (
+        isChordAddGesture
+        && pointerTarget
+        && documentNote
+        && (documentNote.measureIndex !== pointerTarget.measureIndex
+          || Math.abs(documentNote.beat - pointerTarget.beat) >= 0.02
+          || documentNote.placement?.string !== pointerTarget.string)
+      ) {
+        setCaret(pointerTarget)
+        setHoverTarget({
+          kind: 'beat',
+          measureIndex: pointerTarget.measureIndex,
+          beat: pointerTarget.beat,
+          string: pointerTarget.string,
+        })
+      } else if (documentNote) {
         selectNoteById(documentNote.id, event.shiftKey)
         if (editorMode === 'fineEdit' && !compact) setInspectorOpen(true)
         return
       }
     }
 
-    if (selectionScope === 'note') {
-      if (editorMode === 'fineEdit') {
-        const measureIndex = beat.voice.bar.index
-        const nextCaret = {
-          trackId: track.id,
-          measureIndex,
-          beat: resolveBeatFromPointer(api, measureIndex, x, beatsPerBar),
-          string: resolveStringFromPointer(api, measureIndex, y, track.tuning.length),
-        }
-        setCaret(nextCaret)
-        setHoverTarget({
-          kind: 'beat',
-          measureIndex: nextCaret.measureIndex,
-          beat: nextCaret.beat,
-          string: nextCaret.string,
-        })
-        if (event.altKey || event.metaKey || event.ctrlKey) {
-          return
-        }
-
-        applyCommand(
-          entryMode === 'rest'
-            ? {
-                type: 'insertRestAtCaret',
-                trackId: track.id,
-                measureIndex: nextCaret.measureIndex,
-                beat: nextCaret.beat,
-                durationType: entryDuration,
-              }
-            : {
-                type: 'insertNoteAtCaret',
-                trackId: track.id,
-                measureIndex: nextCaret.measureIndex,
-                beat: nextCaret.beat,
-                string: nextCaret.string,
-                fret: 0,
-                durationType: entryDuration,
-              },
-        )
-        setCaret({
-          ...moveCaretByStep(
-            nextCaret,
-            'right',
-            document.measures.length,
-            document.meter.numerator,
-            durationToBeats(entryDuration),
-          ),
-          trackId: track.id,
-          string: nextCaret.string,
-        })
+    if (editorMode === 'fineEdit') {
+      const nextCaret = pointerTarget ?? {
+        trackId: track.id,
+        measureIndex: beat.voice.bar.index,
+        beat: resolveBeatFromPointer(api, beat.voice.bar.index, x, beatsPerBar, y),
+        string: resolveStringFromPointer(api, beat.voice.bar.index, y, track.tuning.length),
+      }
+      setCaret(nextCaret)
+      setHoverTarget({
+        kind: 'beat',
+        measureIndex: nextCaret.measureIndex,
+        beat: nextCaret.beat,
+        string: nextCaret.string,
+      })
+      if (event.altKey || event.metaKey || event.ctrlKey || !isNoteEntryToolActive) {
         return
       }
-      clearSelection()
+
+      applyCommand(
+        entryMode === 'rest'
+          ? {
+              type: 'insertRestAtCaret',
+              trackId: track.id,
+              measureIndex: nextCaret.measureIndex,
+              beat: nextCaret.beat,
+              durationType: entryDuration,
+            }
+          : {
+              type: 'insertNoteAtCaret',
+              trackId: track.id,
+              measureIndex: nextCaret.measureIndex,
+              beat: nextCaret.beat,
+              string: nextCaret.string,
+              fret: 0,
+              durationType: entryDuration,
+            },
+      )
+      if (isChordAddGesture && entryMode === 'note') {
+        setCaret(nextCaret)
+        return
+      }
+      if (entryMode === 'note') {
+        const insertedTrack = useScoreDocumentStore.getState().document.tracks[0]
+        const insertedNote = insertedTrack
+          ? findDocumentNoteAtPlacement(insertedTrack, nextCaret.measureIndex, nextCaret.beat, nextCaret.string)
+          : null
+        if (insertedNote) {
+          selectNoteById(insertedNote.id)
+          return
+        }
+      }
+      setCaret({
+        ...moveCaretByStep(
+          nextCaret,
+          'right',
+          document.measures.length,
+          document.meter.numerator,
+          durationToBeats(entryDuration),
+        ),
+        trackId: track.id,
+        string: nextCaret.string,
+      })
       return
     }
 
     selectBar(beat.voice.bar.index, event.shiftKey)
-    if (editorMode === 'fineEdit' && !compact) setInspectorOpen(true)
-  }, [applyCommand, beatsPerBar, clearSelection, compact, document.measures.length, document.meter.numerator, editorMode, entryDuration, entryMode, selectBar, selectNoteById, selectionScope, setCaret, setHoverTarget, track])
+  }, [activeToolGroup, applyCommand, beatsPerBar, clearSelection, compact, document.measures.length, document.meter.numerator, editorMode, entryDuration, entryMode, selectBar, selectNoteById, setCaret, setHoverTarget, track])
 
   const handleApplySelectedNote = useCallback(() => {
     if (!track || !selectedNote) return
@@ -758,102 +841,104 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
         )}
 
         <div className="pt-10">
-          <div ref={alphaTabRootRef} className="relative min-h-full min-w-[720px]" />
+          <div className="relative min-h-full min-w-[720px]">
+            <div ref={alphaTabRootRef} className="score-paper-bg relative min-h-full min-w-[720px]" />
 
-          <div className="pointer-events-none absolute inset-4">
-            {hoverRect && (
-              <div
-                className={cn(
-                  'absolute bg-accent/8',
-                  selectionScope === 'note' && hoverTarget?.kind === 'note'
-                    ? 'rounded-full border border-border-hover'
-                    : selectionScope === 'note'
-                      ? 'rounded-full border border-dashed border-border-hover'
-                      : 'rounded-xl border border-border-hover',
-                )}
-                style={{
-                  left: hoverRect.x,
-                  top: hoverRect.y,
-                  width: hoverRect.width,
-                  height: hoverRect.height,
-                }}
-              />
-            )}
+            <div className="pointer-events-none absolute inset-0">
+              {hoverRect && (
+                <div
+                  className={cn(
+                    'absolute bg-accent/8',
+                    hoverTarget?.kind === 'note'
+                      ? 'rounded-full border border-border-hover'
+                      : hoverTarget?.kind === 'beat'
+                        ? 'rounded-full border border-dashed border-border-hover'
+                        : 'rounded-xl border border-border-hover',
+                  )}
+                  style={{
+                    left: hoverRect.x,
+                    top: hoverRect.y,
+                    width: hoverRect.width,
+                    height: hoverRect.height,
+                  }}
+                />
+              )}
 
-            {hoverRect && hoverTarget?.kind === 'beat' && editorMode === 'fineEdit' && (
-              <div
-                className="absolute flex items-center justify-center rounded-full border border-dashed border-border-hover bg-surface-0/95 text-xs font-semibold text-text-primary shadow-sm"
-                style={{
-                  left: hoverRect.x,
-                  top: hoverRect.y,
-                  width: hoverRect.width,
-                  height: hoverRect.height,
-                }}
-              >
-                {entryPreviewLabel(entryMode)}
-              </div>
-            )}
+              {hoverRect && hoverTarget?.kind === 'beat' && editorMode === 'fineEdit' && (
+                <div
+                  className="absolute flex items-center justify-center rounded-full border border-dashed border-border-hover bg-surface-0/95 text-xs font-semibold text-text-primary shadow-sm"
+                  style={{
+                    left: hoverRect.x,
+                    top: hoverRect.y,
+                    width: hoverRect.width,
+                    height: hoverRect.height,
+                  }}
+                >
+                  {entryPreviewLabel(entryMode)}
+                </div>
+              )}
 
-            {barRects.map((rect) => (
-              <div
-                key={rect.id}
-                className="absolute rounded-xl border border-accent/70 bg-accent/10"
-                style={{
-                  left: rect.x,
-                  top: rect.y,
-                  width: rect.width,
-                  height: rect.height,
-                }}
-              />
-            ))}
+              {barRects.map((rect) => (
+                <div
+                  key={rect.id}
+                  className="absolute rounded-xl border border-accent/70 bg-accent/10"
+                  style={{
+                    left: rect.x,
+                    top: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                  }}
+                />
+              ))}
 
-            {noteRects.map((rect) => (
-              <div
-                key={rect.id}
-                className="absolute rounded-full border-2 border-accent bg-accent/10 shadow-[0_0_0_4px_rgba(255,255,255,0.08)]"
-                style={{
-                  left: rect.x,
-                  top: rect.y,
-                  width: rect.width,
-                  height: rect.height,
-                }}
-              />
-            ))}
+              {noteRects.map((rect) => (
+                <div
+                  key={rect.id}
+                  className="absolute rounded-full border-2 border-accent bg-accent/10 shadow-[0_0_0_4px_rgba(255,255,255,0.08)]"
+                  style={{
+                    left: rect.x,
+                    top: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                  }}
+                />
+              ))}
 
-            {caretRect && editorMode === 'fineEdit' && (
-              <div
-                className="absolute flex items-center justify-center rounded-full border-2 border-accent bg-surface-0/98 text-xs font-semibold text-accent shadow-[0_0_0_4px_rgba(255,255,255,0.18)]"
-                style={{
-                  left: caretRect.x,
-                  top: caretRect.y,
-                  width: caretRect.width,
-                  height: caretRect.height,
-                }}
-              >
-                {entryPreviewLabel(entryMode)}
-              </div>
-            )}
+              {caretRect && editorMode === 'fineEdit' && (
+                <div
+                  className="absolute flex items-center justify-center rounded-full border-2 border-accent bg-surface-0/98 text-xs font-semibold text-accent shadow-[0_0_0_4px_rgba(255,255,255,0.18)]"
+                  style={{
+                    left: caretRect.x,
+                    top: caretRect.y,
+                    width: caretRect.width,
+                    height: caretRect.height,
+                  }}
+                >
+                  {entryPreviewLabel(entryMode)}
+                </div>
+              )}
 
-            {addBarRect && editorMode === 'fineEdit' && (
-              <button
-                type="button"
-                className="pointer-events-auto absolute flex items-center justify-center rounded-full border border-border bg-surface-0 text-sm font-semibold text-text-primary shadow-sm transition-colors hover:border-border-hover hover:bg-surface-1"
-                style={{
-                  left: addBarRect.x,
-                  top: addBarRect.y,
-                  width: addBarRect.width,
-                  height: addBarRect.height,
-                }}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleAddBarAfterFocused()
-                }}
-                aria-label="Add bar after current bar"
-                title="Add bar after current bar"
-              >
-                +
-              </button>
-            )}
+              {addBarRect && editorMode === 'fineEdit' && (
+                <button
+                  type="button"
+                  className="pointer-events-auto absolute flex items-center justify-center rounded-full border border-border bg-surface-0 text-sm font-semibold text-text-primary shadow-sm transition-colors hover:border-border-hover hover:bg-surface-1"
+                  style={{
+                    left: addBarRect.x,
+                    top: addBarRect.y,
+                    width: addBarRect.width,
+                    height: addBarRect.height,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleAddBarAfterFocused()
+                  }}
+                  aria-label="Add bar after current bar"
+                  title="Add bar after current bar"
+                >
+                  +
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1077,15 +1162,19 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
         </aside>
       )}
 
-      {!compact && !inspectorOpen && editorMode === 'fineEdit' && (
-        <div className="pointer-events-none absolute bottom-6 right-6 z-20">
-          <div className="pointer-events-auto rounded-full border border-border bg-surface-0 px-3 py-2 text-xs text-text-secondary shadow-sm">
+      {!compact && !inspectorOpen && editorMode === 'fineEdit' && !editHintDismissed && (
+        <div className="pointer-events-none absolute bottom-6 right-6 z-20 animate-fade-in">
+          <button
+            type="button"
+            onClick={() => setEditHintDismissed(true)}
+            className="pointer-events-auto rounded-full border border-border bg-surface-0 px-3 py-2 text-xs text-text-secondary shadow-sm transition-opacity hover:opacity-70"
+          >
             {caret
               ? 'The ring marks the next input spot. Choose a value in Note tools, hover a string, and click to write. Use Alt/Cmd/Ctrl-click to move only.'
               : canOpenInspector
                 ? 'Select Edit Selection to adjust the chosen note or bar.'
                 : 'Choose a note value in the toolbar, hover the target string, and click directly on the score to write.'}
-          </div>
+          </button>
         </div>
       )}
     </div>

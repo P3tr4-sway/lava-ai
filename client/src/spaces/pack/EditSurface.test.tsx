@@ -20,7 +20,7 @@ describe('EditSurface note entry', () => {
       selectedNotes: [],
       selectedNoteIds: [],
       cursorNoteId: null,
-      selectionScope: 'note',
+      activeToolGroup: 'note',
       entryMode: 'note',
       entryDuration: 'quarter',
       caret: {

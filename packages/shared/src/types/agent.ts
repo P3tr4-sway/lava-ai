@@ -87,7 +87,6 @@ export interface EditorContext {
   scoreSnapshot?: ScoreSnapshot
   selectedBars?: number[]
   selection?: EditorSelection
-  selectionScope?: 'note' | 'bar' | 'section' | 'range'
   tuning?: number[]
   capo?: number
 }

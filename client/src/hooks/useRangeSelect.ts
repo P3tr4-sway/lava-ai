@@ -25,7 +25,7 @@ interface RangeSelectState {
 
 /**
  * Handles mouse-drag range selection on the score.
- * Only activates when toolMode === 'range'.
+ * Only activates when activeToolGroup === 'selection'.
  * Reads measure bounds via getMeasureBounds to determine which bars are covered.
  *
  * Drag state (isDraggingRef, startPtRef, selectionBoxRef) is stored in refs so
@@ -37,7 +37,7 @@ export function useRangeSelect(
   containerRef: RefObject<HTMLElement | null>,
   getMeasureBounds: GetMeasureBounds,
 ): RangeSelectState {
-  const toolMode = useEditorStore((s) => s.toolMode)
+  const activeToolGroup = useEditorStore((s) => s.activeToolGroup)
   const selectRange = useEditorStore((s) => s.selectRange)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
@@ -52,7 +52,7 @@ export function useRangeSelect(
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (toolMode !== 'range') return
+      if (activeToolGroup !== 'selection') return
       const container = containerRef.current
       if (!container) return
       const rect = container.getBoundingClientRect()
@@ -66,7 +66,7 @@ export function useRangeSelect(
       setSelectionBox(box)
       clearSelection()
     },
-    [toolMode, containerRef, clearSelection],
+    [activeToolGroup, containerRef, clearSelection],
   )
 
   const onMouseMove = useCallback(

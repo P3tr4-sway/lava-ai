@@ -28,7 +28,6 @@ export function StaffPreview({ className }: StaffPreviewProps) {
   const selectBar = useEditorStore((state) => state.selectBar)
   const selectNoteById = useEditorStore((state) => state.selectNoteById)
   const clearSelection = useEditorStore((state) => state.clearSelection)
-  const selectionScope = useEditorStore((state) => state.selectionScope)
   const zoom = useEditorStore((state) => state.zoom)
   const showChordDiagrams = useEditorStore((state) => state.showChordDiagrams)
   const chordDiagramGlobal = useEditorStore((state) => state.chordDiagramGlobal)
@@ -126,8 +125,9 @@ export function StaffPreview({ className }: StaffPreviewProps) {
         onMouseMove={(event) => {
           clearHoverHighlights()
           const target = event.target as HTMLElement
-          if (selectionScope === 'note') {
-            target.closest<SVGGElement>('.vf-stavenote')?.classList.add('lava-note-hover')
+          const noteEl = target.closest<SVGGElement>('.vf-stavenote')
+          if (noteEl) {
+            noteEl.classList.add('lava-note-hover')
             return
           }
           target.closest<SVGGElement>('.vf-measure')?.classList.add('lava-bar-hover')
@@ -139,7 +139,7 @@ export function StaffPreview({ className }: StaffPreviewProps) {
           const measureEl = target.closest<SVGGElement>('.vf-measure')
           const measureId = measureEl?.id ? parseInt(measureEl.id, 10) - 1 : null
 
-          if (selectionScope === 'note' && noteEl?.dataset.scoreNoteId) {
+          if (noteEl?.dataset.scoreNoteId) {
             selectNoteById(noteEl.dataset.scoreNoteId, event.shiftKey)
             return
           }

@@ -185,7 +185,6 @@ export function EditorPage() {
       const selectedNoteIds = useEditorStore.getState().selectedNoteIds
       const cursorNoteId = useEditorStore.getState().cursorNoteId
       const caret = useEditorStore.getState().caret
-      const selectionScope = useEditorStore.getState().selectionScope
       const name = useLeadSheetStore.getState().projectName
       const scoreState = useScoreDocumentStore.getState()
       const track = scoreState.document.tracks[0]
@@ -215,7 +214,6 @@ export function EditorPage() {
           },
           tuning: track?.tuning,
           capo: track?.capo,
-          selectionScope,
         },
       })
     }
@@ -244,13 +242,11 @@ export function EditorPage() {
     selectedNoteIds: string[]
     cursorNoteId: string | null
     caretKey: string | null
-    selectionScope: string
   }>({
     selectedBars: [],
     selectedNoteIds: [],
     cursorNoteId: null,
     caretKey: null,
-    selectionScope: 'note',
   })
   useEffect(() => {
     const unsub = useEditorStore.subscribe((state) => {
@@ -263,7 +259,6 @@ export function EditorPage() {
         || prevSelection.selectedNoteIds.join(',') !== state.selectedNoteIds.join(',')
         || prevSelection.cursorNoteId !== state.cursorNoteId
         || prevSelection.caretKey !== caretKey
-        || prevSelection.selectionScope !== state.selectionScope
 
       if (!selectionChanged) return
 
@@ -272,7 +267,6 @@ export function EditorPage() {
         selectedNoteIds: state.selectedNoteIds,
         cursorNoteId: state.cursorNoteId,
         caretKey,
-        selectionScope: state.selectionScope,
       }
 
       const prev = useAgentStore.getState().spaceContext
@@ -296,7 +290,6 @@ export function EditorPage() {
                   }
                 : null,
             },
-            selectionScope: state.selectionScope,
           },
         })
       }

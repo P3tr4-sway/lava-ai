@@ -70,7 +70,6 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
   const selectRange = useEditorStore((state) => state.selectRange)
   const selectNoteById = useEditorStore((state) => state.selectNoteById)
   const clearSelection = useEditorStore((state) => state.clearSelection)
-  const selectionScope = useEditorStore((state) => state.selectionScope)
   const zoom = useEditorStore((state) => state.zoom)
   const showChordDiagrams = useEditorStore((state) => state.showChordDiagrams)
   const caret = useEditorStore((state) => state.caret)
@@ -81,6 +80,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
   const setHoverTarget = useEditorStore((state) => state.setHoverTarget)
   const dragState = useEditorStore((state) => state.dragState)
   const setDragState = useEditorStore((state) => state.setDragState)
+  const activeToolGroup = useEditorStore((state) => state.activeToolGroup)
   const entryDuration = useEditorStore((state) => state.entryDuration)
   const entryMode = useEditorStore((state) => state.entryMode)
   const track = document.tracks[0]
@@ -89,17 +89,11 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
   const layout = useMemo(() => buildTabLayout(document, zoom), [document, zoom])
   const [marquee, setMarquee] = useState<{ start: LayoutPointer; end: LayoutPointer } | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; measureIndex: number } | null>(null)
-  const [sectionDraft, setSectionDraft] = useState('')
   const [entryStringDraft, setEntryStringDraft] = useState('1')
   const [entryFretDraft, setEntryFretDraft] = useState('0')
 
   const durationOptions = ['whole', 'half', 'quarter', 'eighth', 'sixteenth'] as const
   const quickFretOptions = Array.from({ length: 13 }, (_, index) => index)
-
-  useEffect(() => {
-    const firstBar = selectedBars[0]
-    setSectionDraft(firstBar !== undefined ? document.measures[firstBar]?.sectionLabel ?? '' : '')
-  }, [document.measures, selectedBars])
 
   useEffect(() => {
     if (!caret) return
@@ -139,16 +133,6 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
     setContextMenu(null)
   }, [applyCommand, clearSelection, contextMenu, selectBar])
 
-  const handleSectionApply = useCallback(() => {
-    if (selectedBars.length === 0) return
-    applyCommand({
-      type: 'setSectionLabel',
-      startMeasureIndex: Math.min(...selectedBars),
-      endMeasureIndex: Math.max(...selectedBars),
-      label: sectionDraft,
-    })
-  }, [applyCommand, sectionDraft, selectedBars])
-
   const handleChordPlacementToggle = useCallback((anchor: 'top' | 'bottom') => {
     if (selectedBars.length === 0) return
     selectedBars.forEach((measureIndex) => {
@@ -162,9 +146,11 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
     })
   }, [applyCommand, document.measures, selectedBars])
 
+  const isNoteEntryToolActive = activeToolGroup === 'note' || activeToolGroup === 'rest'
+
   // 这里统一处理真正的落音逻辑，避免界面上看到的是 caret 预览，但实际并没有把 note 写进文档。
   const commitEntryAtTarget = useCallback((target: EntryTarget, overrideFret?: number) => {
-    if (!track) return
+    if (!track || !isNoteEntryToolActive) return
 
     const nextString = Math.max(1, Math.min(track.tuning.length, Number(entryStringDraft) || target.string || 1))
     const nextFret = Math.max(0, overrideFret ?? (Number(entryFretDraft) || 0))
@@ -206,7 +192,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
       trackId: track.id,
       string: nextString,
     })
-  }, [applyCommand, document.measures.length, document.meter.numerator, entryDuration, entryFretDraft, entryMode, entryStringDraft, setCaret, track])
+  }, [applyCommand, document.measures.length, document.meter.numerator, entryDuration, entryFretDraft, entryMode, entryStringDraft, isNoteEntryToolActive, setCaret, track])
 
   const handleInsertAtCaret = useCallback((overrideFret?: number) => {
     if (!caret) return
@@ -236,7 +222,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
     const beat = hitTestBeat(layout, pointer)
     if (beat) {
       setHoverTarget({
-        kind: selectionScope === 'note' ? 'beat' : 'bar',
+        kind: 'beat',
         measureIndex: beat.measureIndex,
         beat: beat.beat,
         string: inferStringFromPointer(beat, pointer.y),
@@ -244,7 +230,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
       return
     }
     setHoverTarget(null)
-  }, [dragState.active, layout, selectRange, selectionScope, setDragState, setHoverTarget])
+  }, [dragState.active, layout, selectRange, setDragState, setHoverTarget])
 
   const handleMouseDown = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
@@ -254,33 +240,30 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
     const note = hitTestNote(layout, pointer)
     const beat = hitTestBeat(layout, pointer)
 
-    if (selectionScope === 'note') {
-      if (note) {
-        selectNoteById(note.noteId, event.shiftKey)
+    if (note) {
+      selectNoteById(note.noteId, event.shiftKey)
+      return
+    }
+
+    if (beat && track && activeToolGroup === 'note') {
+      const target = {
+        trackId: track.id,
+        measureIndex: beat.measureIndex,
+        beat: beat.beat,
+        string: inferStringFromPointer(beat, pointer.y),
+      }
+      setCaret(target)
+      if (event.altKey || event.metaKey || event.ctrlKey) {
         return
       }
-      if (beat && track) {
-        const target = {
-          trackId: track.id,
-          measureIndex: beat.measureIndex,
-          beat: beat.beat,
-          string: inferStringFromPointer(beat, pointer.y),
-        }
-        if (event.altKey || event.metaKey || event.ctrlKey) {
-          setCaret(target)
-          return
-        }
-        commitEntryAtTarget(target)
-        return
-      }
-      clearSelection()
-      setCaret(null)
+      commitEntryAtTarget(target)
       return
     }
 
     const measure = hitTestMeasure(layout, pointer)
     if (!measure) {
       clearSelection()
+      setCaret(null)
       return
     }
 
@@ -288,12 +271,12 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
     setMarquee({ start: pointer, end: pointer })
     setDragState({
       active: true,
-      mode: selectionScope,
+      mode: 'bar',
       startMeasureIndex: measure.index,
       currentMeasureIndex: measure.index,
     })
     selectBar(measure.index, event.shiftKey)
-  }, [clearSelection, commitEntryAtTarget, layout, selectBar, selectNoteById, selectionScope, setCaret, setDragState, track])
+  }, [activeToolGroup, clearSelection, commitEntryAtTarget, layout, selectBar, selectNoteById, setCaret, setDragState, track])
 
   const handleMouseUp = useCallback(() => {
     dragStartRef.current = null
@@ -348,25 +331,6 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
             </div>
           </Card>
 
-          {selectionScope === 'section' && selectedBars.length > 0 && (
-            <Card className="rounded-[24px] border-border bg-surface-0/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Section</p>
-                  <p className="mt-1 text-sm text-text-secondary">Name the selected phrase or section.</p>
-                </div>
-                <Input
-                  label="Label"
-                  value={sectionDraft}
-                  onChange={(event) => setSectionDraft(event.target.value)}
-                  placeholder="Verse, Chorus, Bridge"
-                />
-                <Button size="default" variant="outline" className="w-full rounded-xl" onClick={handleSectionApply}>
-                  Apply section
-                </Button>
-              </div>
-            </Card>
-          )}
 
           {caret && (
             <Card className="rounded-[24px] border-border bg-surface-0/96 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur">

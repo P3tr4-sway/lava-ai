@@ -30,6 +30,8 @@ export function StaffPreview({ className }: StaffPreviewProps) {
   const clearSelection = useEditorStore((state) => state.clearSelection)
   const selectionScope = useEditorStore((state) => state.selectionScope)
   const zoom = useEditorStore((state) => state.zoom)
+  const showChordDiagrams = useEditorStore((state) => state.showChordDiagrams)
+  const chordDiagramGlobal = useEditorStore((state) => state.chordDiagramGlobal)
   const currentBar = useAudioStore((state) => state.currentBar)
 
   const orderedNoteIds = useMemo(
@@ -40,6 +42,15 @@ export function StaffPreview({ className }: StaffPreviewProps) {
         .map((note) => note.id),
     [document],
   )
+
+  const chordOverlays = useMemo(() => {
+    if (!showChordDiagrams || chordDiagramGlobal === 'hidden') return []
+    return document.measures.flatMap((measure) => {
+      const symbol = measure.harmony[0]?.symbol
+      if (!symbol) return []
+      return [{ measureIndex: measure.index, symbol }]
+    })
+  }, [document.measures, showChordDiagrams, chordDiagramGlobal])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -100,38 +111,58 @@ export function StaffPreview({ className }: StaffPreviewProps) {
   }
 
   return (
-    <div
-      className={cn('h-full overflow-auto rounded-2xl border border-border bg-surface-1 p-4', className)}
-      onMouseMove={(event) => {
-        clearHoverHighlights()
-        const target = event.target as HTMLElement
-        if (selectionScope === 'note') {
-          target.closest<SVGGElement>('.vf-stavenote')?.classList.add('lava-note-hover')
-          return
-        }
-        target.closest<SVGGElement>('.vf-measure')?.classList.add('lava-bar-hover')
-      }}
-      onMouseLeave={clearHoverHighlights}
-      onClick={(event) => {
-        const target = event.target as HTMLElement
-        const noteEl = target.closest<SVGGElement>('.vf-stavenote')
-        const measureEl = target.closest<SVGGElement>('.vf-measure')
-        const measureId = measureEl?.id ? parseInt(measureEl.id, 10) - 1 : null
+    <div className={cn('relative overflow-auto', className)}>
+      {chordOverlays.length > 0 && (chordDiagramGlobal === 'top' || chordDiagramGlobal === 'both') && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 pb-1">
+          {chordOverlays.map((entry) => (
+            <span key={`top-${entry.measureIndex}`} className="text-xs font-semibold text-text-primary">
+              {entry.symbol}
+            </span>
+          ))}
+        </div>
+      )}
+      <div
+        className="h-full rounded-2xl border border-border bg-surface-1 p-4"
+        onMouseMove={(event) => {
+          clearHoverHighlights()
+          const target = event.target as HTMLElement
+          if (selectionScope === 'note') {
+            target.closest<SVGGElement>('.vf-stavenote')?.classList.add('lava-note-hover')
+            return
+          }
+          target.closest<SVGGElement>('.vf-measure')?.classList.add('lava-bar-hover')
+        }}
+        onMouseLeave={clearHoverHighlights}
+        onClick={(event) => {
+          const target = event.target as HTMLElement
+          const noteEl = target.closest<SVGGElement>('.vf-stavenote')
+          const measureEl = target.closest<SVGGElement>('.vf-measure')
+          const measureId = measureEl?.id ? parseInt(measureEl.id, 10) - 1 : null
 
-        if (selectionScope === 'note' && noteEl?.dataset.scoreNoteId) {
-          selectNoteById(noteEl.dataset.scoreNoteId, event.shiftKey)
-          return
-        }
+          if (selectionScope === 'note' && noteEl?.dataset.scoreNoteId) {
+            selectNoteById(noteEl.dataset.scoreNoteId, event.shiftKey)
+            return
+          }
 
-        if (measureId !== null && Number.isFinite(measureId)) {
-          selectBar(measureId, event.shiftKey)
-          return
-        }
+          if (measureId !== null && Number.isFinite(measureId)) {
+            selectBar(measureId, event.shiftKey)
+            return
+          }
 
-        clearSelection()
-      }}
-    >
-      <div ref={containerRef} className="min-h-full" />
+          clearSelection()
+        }}
+      >
+        <div ref={containerRef} className="score-paper-bg min-h-full" />
+      </div>
+      {chordOverlays.length > 0 && (chordDiagramGlobal === 'bottom' || chordDiagramGlobal === 'both') && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-1">
+          {chordOverlays.map((entry) => (
+            <span key={`bottom-${entry.measureIndex}`} className="text-xs font-semibold text-text-primary">
+              {entry.symbol}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

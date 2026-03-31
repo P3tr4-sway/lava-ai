@@ -69,6 +69,11 @@ export interface TechniqueSet {
   palmMute?: boolean
   harmonic?: boolean
   vibrato?: boolean
+  // --- new articulations ---
+  accent?: boolean
+  staccato?: boolean
+  tenuto?: boolean
+  slur?: boolean
 }
 
 export interface ScorePitch {
@@ -189,6 +194,7 @@ export type ScoreCommand =
   | { type: 'reharmonizeSelection'; measureRange?: [number, number] | null; chords: Array<{ beat: number; symbol: string }> }
   | { type: 'addTechnique'; trackId: string; noteId: string; technique: keyof TechniqueSet; value?: boolean | TechniqueSlide }
   | { type: 'removeTechnique'; trackId: string; noteId: string; technique: keyof TechniqueSet }
+  | { type: 'toggleSlur'; trackId: string; noteId: string }
 
 export interface CommandResult {
   document: ScoreDocument

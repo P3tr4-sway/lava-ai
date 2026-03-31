@@ -17,8 +17,7 @@ import { durationToBeats, moveCaretByStep } from '@/spaces/pack/editor-core/comm
 import { pitchToMidi } from '@/lib/pitchUtils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
-
-type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
+import type { GetMeasureBounds } from '@/lib/cursorMath'
 
 interface TabCanvasProps {
   className?: string

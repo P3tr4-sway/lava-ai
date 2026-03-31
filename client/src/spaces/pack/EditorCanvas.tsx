@@ -6,8 +6,10 @@ import { StaffPreview } from './StaffPreview'
 import { CursorOverlay } from '@/components/score/CursorOverlay'
 import { useCursorEngine } from '@/hooks/useCursorEngine'
 import { noteCursorUrl, restCursorUrl } from '@/lib/cursorIcons'
+import type { GetMeasureBounds } from '@/lib/cursorMath'
 
-type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
+// Upper bound for measure scan — guards against getMeasureBounds never returning null
+const MAX_MEASURE_SCAN = 500
 
 interface EditorCanvasProps {
   className?: string
@@ -30,7 +32,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   // Build snap points from measure bounds
   const snapPoints = useMemo(() => {
     const points: number[] = []
-    for (let i = 0; i < 500; i++) {
+    for (let i = 0; i < MAX_MEASURE_SCAN; i++) {
       const bounds = getMeasureBoundsRef.current(i)
       if (!bounds) break
       points.push(bounds.x)

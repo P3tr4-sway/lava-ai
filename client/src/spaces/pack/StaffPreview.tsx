@@ -4,8 +4,7 @@ import { cn } from '@/components/ui/utils'
 import { useAudioStore } from '@/stores/audioStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
-
-type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
+import type { GetMeasureBounds } from '@/lib/cursorMath'
 
 interface StaffPreviewProps {
   className?: string

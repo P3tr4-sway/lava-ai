@@ -4,7 +4,7 @@ import type { RefObject } from 'react'
 import { useEditorStore } from '@/stores/editorStore'
 import { useAudioStore } from '@/stores/audioStore'
 import { lerp, computeSnapTarget, isSnapped as checkSnapped, deriveCursorMode } from '@/lib/cursorMath'
-import type { CursorMode } from '@/lib/cursorMath'
+import type { CursorMode, GetMeasureBounds } from '@/lib/cursorMath'
 
 const SNAP_RADIUS = 30
 const SNAP_STRENGTH = 0.6
@@ -21,8 +21,6 @@ interface CursorEngineState {
   /** Feed mouse leave to hide the cursor when mouse exits the score. */
   onMouseLeave: () => void
 }
-
-type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
 
 /**
  * Core cursor engine hook. Drives the CursorOverlay.

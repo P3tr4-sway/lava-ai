@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import type { RefObject } from 'react'
 import type React from 'react'
 import { useEditorStore } from '@/stores/editorStore'
+import type { GetMeasureBounds } from '@/lib/cursorMath'
 
 interface Box {
   x: number
@@ -9,8 +10,6 @@ interface Box {
   width: number
   height: number
 }
-
-type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
 
 // Upper bound for measure scan — guards against getMeasureBounds never returning null
 const MAX_MEASURES = 500

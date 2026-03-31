@@ -1,6 +1,5 @@
 import { TabCanvas } from './TabCanvas'
-
-type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
+import type { GetMeasureBounds } from '@/lib/cursorMath'
 
 interface PracticeSurfaceProps {
   className?: string

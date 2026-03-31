@@ -1,3 +1,9 @@
+/** Bounds of a single measure returned by getMeasureBounds. */
+export type MeasureBounds = { x: number; y: number; width: number; height: number }
+
+/** Function that returns the bounding box of measure barIndex, or null if out of range. */
+export type GetMeasureBounds = (barIndex: number) => MeasureBounds | null
+
 /** Linear interpolation between a and b by factor t (0–1). */
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t

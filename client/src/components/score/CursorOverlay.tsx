@@ -1,3 +1,4 @@
+import { cn } from '@/components/ui/utils'
 import type { CursorMode } from '@/lib/cursorMath'
 
 interface CursorOverlayProps {
@@ -13,7 +14,7 @@ interface CursorOverlayProps {
  * Positioned absolutely over the score canvas. pointer-events: none so
  * all clicks pass through to the score beneath.
  */
-export function CursorOverlay({ cursorMode, displayX, displayY, isSnapped }: CursorOverlayProps) {
+export function CursorOverlay({ cursorMode, displayX, displayY, isSnapped, className }: CursorOverlayProps) {
   if (cursorMode === 'hidden' || cursorMode === 'noteEntry') return null
 
   const isPlayback = cursorMode === 'playback'
@@ -22,7 +23,7 @@ export function CursorOverlay({ cursorMode, displayX, displayY, isSnapped }: Cur
 
   return (
     <svg
-      className="absolute inset-0 w-full h-full"
+      className={cn('absolute inset-0 w-full h-full', className)}
       style={{ pointerEvents: 'none' }}
       aria-hidden="true"
     >

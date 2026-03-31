@@ -339,7 +339,7 @@ export function useEditorKeyboard(enabled = true): void {
               })
               useEditorStore.getState().setEntryMode('rest')
             } else {
-              setToolMode(toolMode === 'range' ? 'pointer' : 'range')
+              setToolMode('pointer')
             }
             break
           }

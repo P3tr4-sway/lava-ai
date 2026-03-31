@@ -3,7 +3,7 @@ import type { NoteValue } from '@lava/shared'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
-export type ToolMode = 'pointer' | 'range' | 'chord' | 'keySig' | 'text'
+export type ToolMode = 'pointer' | 'chord' | 'keySig' | 'text'
 export type ViewMode = 'staff' | 'tab' | 'split' | 'leadSheet'
 export type SaveStatus = 'saved' | 'saving' | 'unsaved'
 export type PlaybackState = 'stopped' | 'playing' | 'paused'

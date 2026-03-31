@@ -116,6 +116,37 @@ describe('scoreDocument', () => {
     expect(insertedRest?.pitch).toBeNull()
   })
 
+  it('keeps multiple notes on the same beat when they are on different strings', () => {
+    const document = parseMusicXmlToScoreDocument(SIMPLE_GUITAR_XML)
+    const trackId = document.tracks[0]!.id
+
+    const withFirstNote = applyCommandToDocument(document, {
+      type: 'insertNoteAtCaret',
+      trackId,
+      measureIndex: 0,
+      beat: 1,
+      string: 1,
+      fret: 0,
+      durationType: 'quarter',
+    })
+
+    const withChord = applyCommandToDocument(withFirstNote.document, {
+      type: 'insertNoteAtCaret',
+      trackId,
+      measureIndex: 0,
+      beat: 1,
+      string: 3,
+      fret: 2,
+      durationType: 'quarter',
+    })
+
+    const notesAtBeat = withChord.document.tracks[0]?.notes.filter(
+      (note) => note.measureIndex === 0 && note.beat === 1,
+    ) ?? []
+    expect(notesAtBeat).toHaveLength(2)
+    expect(notesAtBeat.map((note) => note.placement?.string)).toEqual([1, 3])
+  })
+
   it('supports section labels and chord diagram placement on measures', () => {
     const document = parseMusicXmlToScoreDocument(SIMPLE_GUITAR_XML)
     const withBar = applyCommandToDocument(document, {

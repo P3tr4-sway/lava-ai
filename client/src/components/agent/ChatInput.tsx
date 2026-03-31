@@ -59,7 +59,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
       className={cn(
         'flex flex-col bg-surface-0 border border-border shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-colors',
         isRoomy ? 'gap-6 rounded-[28px] p-5 min-h-[132px]' : 'gap-5 rounded-[18px] p-4 min-h-[88px]',
-        isActive && 'border-[#bdbdbd]',
+        isActive && 'border-border-hover',
         className,
       )}
     >
@@ -76,7 +76,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         className={cn(
           'w-full resize-none bg-transparent outline-none',
           isRoomy ? 'text-[1.18rem] leading-8' : 'text-base leading-7',
-          'text-text-primary placeholder:text-[#b4b4b4]',
+          'text-text-primary placeholder:text-text-muted',
           disabled && 'opacity-50',
         )}
         style={{ fieldSizing: 'content', maxHeight: isRoomy ? '176px' : '120px' } as React.CSSProperties}
@@ -101,7 +101,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
             isRoomy ? 'size-12' : 'size-10',
             hasContent
               ? 'border-text-primary bg-text-primary text-surface-0 hover:opacity-85'
-              : 'cursor-default border-[#d0d0d0] bg-[#e7e7e7] text-[#aaaaaa]',
+              : 'cursor-default border-border bg-surface-3 text-text-muted',
           )}
         >
           <ArrowUp size={isRoomy ? 18 : 16} />

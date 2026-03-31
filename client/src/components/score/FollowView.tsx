@@ -215,7 +215,7 @@ export function FollowView({ className }: FollowViewProps) {
               {prev1 && prev1.chord !== '—' && (
                 <p
                   className="absolute z-10 font-normal select-none whitespace-nowrap"
-                  style={{ left: 263, top: 159, fontSize: 64, lineHeight: 0.82, color: '#7d7d7d' }}
+                  style={{ left: 263, top: 159, fontSize: 64, lineHeight: 0.82, color: 'var(--text-secondary)' }}
                 >
                   {prev1.chord}
                 </p>
@@ -225,7 +225,7 @@ export function FollowView({ className }: FollowViewProps) {
               {next1 && next1.chord !== '—' && (
                 <p
                   className="absolute z-10 font-normal select-none whitespace-nowrap"
-                  style={{ left: 896, top: 159, fontSize: 64, lineHeight: 0.82, color: '#7d7d7d' }}
+                  style={{ left: 896, top: 159, fontSize: 64, lineHeight: 0.82, color: 'var(--text-secondary)' }}
                 >
                   {next1.chord}
                 </p>
@@ -235,7 +235,7 @@ export function FollowView({ className }: FollowViewProps) {
               {prev2 && prev2.chord !== '—' && (
                 <p
                   className="absolute z-10 font-normal select-none whitespace-nowrap"
-                  style={{ left: 101, top: 183, fontSize: 36, lineHeight: 0.82, color: '#b4b4b4' }}
+                  style={{ left: 101, top: 183, fontSize: 36, lineHeight: 0.82, color: 'var(--text-muted)' }}
                 >
                   {prev2.chord}
                 </p>
@@ -245,7 +245,7 @@ export function FollowView({ className }: FollowViewProps) {
               {next2 && next2.chord !== '—' && (
                 <p
                   className="absolute z-10 font-normal select-none whitespace-nowrap"
-                  style={{ left: 1067, top: 183, fontSize: 36, lineHeight: 0.82, color: '#b4b4b4' }}
+                  style={{ left: 1067, top: 183, fontSize: 36, lineHeight: 0.82, color: 'var(--text-muted)' }}
                 >
                   {next2.chord}
                 </p>

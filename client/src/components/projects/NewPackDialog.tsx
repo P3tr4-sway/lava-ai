@@ -162,7 +162,7 @@ export function NewPackDialog({ open, onClose }: NewPackDialogProps) {
                 <select
                   value={draft.timeSignature}
                   onChange={(event) => updateDraft('timeSignature', event.target.value)}
-                  className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+                  className="h-10 rounded-xl border border-border bg-surface-2 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
                 >
                   <option value="4/4">4/4</option>
                   <option value="3/4">3/4</option>
@@ -176,7 +176,7 @@ export function NewPackDialog({ open, onClose }: NewPackDialogProps) {
                 <select
                   value={draft.key}
                   onChange={(event) => updateDraft('key', event.target.value)}
-                  className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+                  className="h-10 rounded-xl border border-border bg-surface-2 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
                 >
                   {KEY_OPTIONS.map((key) => (
                     <option key={key} value={key}>
@@ -212,7 +212,7 @@ export function NewPackDialog({ open, onClose }: NewPackDialogProps) {
                 <select
                   value={draft.tuning}
                   onChange={(event) => updateDraft('tuning', event.target.value as NewPackTuningId)}
-                  className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+                  className="h-10 rounded-xl border border-border bg-surface-2 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
                 >
                   {NEW_PACK_TUNINGS.map((tuning) => (
                     <option key={tuning.id} value={tuning.id}>
@@ -225,7 +225,7 @@ export function NewPackDialog({ open, onClose }: NewPackDialogProps) {
               <Input
                 label="Capo"
                 value={String(draft.capo)}
-                onChange={(event) => updateDraft('capo', Math.max(0, Number(event.target.value) || 0))}
+                onChange={(event) => updateDraft('capo', Math.min(12, Math.max(0, Number(event.target.value) || 0)))}
                 inputMode="numeric"
               />
             </div>

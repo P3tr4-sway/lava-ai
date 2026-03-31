@@ -53,8 +53,8 @@ export function MySongsPage() {
               </button>
               <button
                 onClick={() => setDeleteId(pack.id)}
-                className="opacity-0 group-hover:opacity-100 p-3 text-text-muted hover:text-error transition-all flex-shrink-0"
-                title="Delete"
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-3 text-text-muted hover:text-error transition-all flex-shrink-0"
+                aria-label={`Delete ${pack.name}`}
               >
                 <Trash2 className="size-4" />
               </button>

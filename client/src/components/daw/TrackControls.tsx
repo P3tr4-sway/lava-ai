@@ -43,7 +43,7 @@ export function TrackControls({
 
       {/* Row 1 — name + M / S + arm */}
       <div className="flex items-center gap-1.5 min-w-0">
-        <span className="flex-1 text-xs font-semibold text-white truncate min-w-0">{track.name}</span>
+        <span className="flex-1 text-xs font-semibold text-text-primary truncate min-w-0">{track.name}</span>
 
         {/* Mute */}
         <button
@@ -53,7 +53,7 @@ export function TrackControls({
             'w-[22px] h-[18px] rounded text-[10px] font-bold transition-colors',
             track.muted
               ? 'bg-warning text-surface-0'
-              : 'bg-white/15 text-white/60 hover:bg-white/25 hover:text-white/90',
+              : 'bg-text-primary/15 text-text-primary/60 hover:bg-text-primary/25 hover:text-text-primary/90',
           )}
         >
           M
@@ -67,7 +67,7 @@ export function TrackControls({
             'w-[22px] h-[18px] rounded text-[10px] font-bold transition-colors',
             track.solo
               ? 'bg-success text-surface-0'
-              : 'bg-white/15 text-white/60 hover:bg-white/25 hover:text-white/90',
+              : 'bg-text-primary/15 text-text-primary/60 hover:bg-text-primary/25 hover:text-text-primary/90',
           )}
         >
           S
@@ -78,9 +78,9 @@ export function TrackControls({
       {/* Row 2 — volume slider + pan */}
       <div className="flex items-center gap-2">
         <div className="flex-1 relative h-4 flex items-center">
-          <div className="absolute w-full h-[2px] bg-white/20 rounded-full" />
+          <div className="absolute w-full h-[2px] bg-text-primary/20 rounded-full" />
           <div
-            className="absolute h-[2px] bg-white/70 rounded-full"
+            className="absolute h-[2px] bg-text-primary/70 rounded-full"
             style={{ width: `${track.volume}%` }}
           />
           <input
@@ -92,7 +92,7 @@ export function TrackControls({
             className="absolute w-full h-4 opacity-0 cursor-pointer"
           />
           <div
-            className="absolute w-2 h-2 bg-white rounded-full shadow-sm pointer-events-none"
+            className="absolute w-2 h-2 bg-text-primary rounded-full shadow-sm pointer-events-none"
             style={{ left: `calc(${track.volume}% - 4px)` }}
           />
         </div>

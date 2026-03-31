@@ -52,7 +52,7 @@ export function useCursorEngine(
   const [displayX, setDisplayX] = useState(0)
   const [isSnapped, setIsSnapped] = useState(false)
 
-  // Container height for the cursor line extent
+  // Cursor line vertical extent — derived from measure bounds in the rAF tick
   const [displayY, setDisplayY] = useState<{ top: number; bottom: number }>({ top: 0, bottom: 0 })
 
   // Fix 3: stable refs for getMeasureBounds and snapPoints — prevent rAF loop restarts
@@ -61,19 +61,6 @@ export function useCursorEngine(
 
   useEffect(() => { getMeasureBoundsRef.current = getMeasureBounds }, [getMeasureBounds])
   useEffect(() => { snapPointsRef.current = snapPoints }, [snapPoints])
-
-  // Update container height on mount and resize
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    const update = () => {
-      setDisplayY({ top: 0, bottom: container.clientHeight })
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [containerRef])
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     const container = containerRef.current
@@ -112,6 +99,21 @@ export function useCursorEngine(
         const snapped = checkSnapped(displayXRef.current, snapPointsRef.current, SNAP_THRESHOLD)
         setDisplayX(Math.round(displayXRef.current * 10) / 10)
         setIsSnapped(snapped)
+
+        // Derive cursor height from the nearest measure's staff row
+        const sp = snapPointsRef.current
+        if (sp.length > 0) {
+          let nearestIdx = 0
+          let minDist = Infinity
+          for (let i = 0; i < sp.length; i++) {
+            const d = Math.abs(displayXRef.current - sp[i])
+            if (d < minDist) { minDist = d; nearestIdx = i }
+          }
+          const nearestBounds = getMeasureBoundsRef.current(nearestIdx)
+          if (nearestBounds) {
+            setDisplayY({ top: nearestBounds.y, bottom: nearestBounds.y + nearestBounds.height })
+          }
+        }
       }
 
       if (cursorMode === 'playback') {
@@ -133,6 +135,9 @@ export function useCursorEngine(
           }
           setDisplayX(Math.round(displayXRef.current * 10) / 10)
           setIsSnapped(false)
+
+          // Cursor height matches the current measure's staff row
+          setDisplayY({ top: barBounds.y, bottom: barBounds.y + barBounds.height })
 
           // Fix 4: scroll-follow — trigger when cursor passes 40% from left edge
           const container = containerRef.current

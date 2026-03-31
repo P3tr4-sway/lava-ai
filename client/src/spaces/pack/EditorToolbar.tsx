@@ -709,9 +709,6 @@ export function EditorToolbar({
               <PanelButton active={viewMode === 'staff'} onClick={() => setViewMode('staff')}>
                 Staff view
               </PanelButton>
-              <PanelButton active={viewMode === 'split'} onClick={() => setViewMode('split')}>
-                Split view
-              </PanelButton>
             </div>
           </div>
         )
@@ -788,23 +785,19 @@ export function EditorToolbar({
           <ToolDivider />
 
           <div className="flex items-center rounded-[22px] bg-surface-2 p-1">
-            <MiniSegmentButton label="Play mode" active={editorMode === 'transform' && viewMode !== 'split'} onClick={() => {
+            <MiniSegmentButton label="Play mode" active={editorMode === 'transform'} onClick={() => {
               setEditorMode('transform')
-              if (viewMode === 'split') setViewMode('tab')
+              setOpenPanel(null)
             }}>
               <Music2 className="size-4" />
               <span className="ml-1 text-[11px]">Play</span>
             </MiniSegmentButton>
-            <MiniSegmentButton label="Edit mode" active={editorMode === 'fineEdit' && viewMode !== 'split'} onClick={() => {
+            <MiniSegmentButton label="Edit mode" active={editorMode === 'fineEdit'} onClick={() => {
               setEditorMode('fineEdit')
-              if (viewMode === 'split') setViewMode('tab')
+              setOpenPanel(null)
             }}>
               <MousePointer2 className="size-4" />
               <span className="ml-1 text-[11px]">Edit</span>
-            </MiniSegmentButton>
-            <MiniSegmentButton label="Split view" active={viewMode === 'split'} onClick={() => setViewMode(viewMode === 'split' ? 'tab' : 'split')}>
-              <Grid2x2 className="size-4" />
-              <span className="ml-1 text-[11px]">Split</span>
             </MiniSegmentButton>
           </div>
         </div>

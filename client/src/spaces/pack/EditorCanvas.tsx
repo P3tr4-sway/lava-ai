@@ -16,12 +16,6 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
       {viewMode === 'staff' && <StaffPreview className="min-h-0" />}
       {viewMode === 'tab' && tabSurface}
       {viewMode === 'leadSheet' && <StaffPreview className="min-h-0" />}
-      {viewMode === 'split' && (
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-          <StaffPreview className="min-h-0" />
-          <PracticeSurface className="min-h-0" compact />
-        </div>
-      )}
     </div>
   )
 }

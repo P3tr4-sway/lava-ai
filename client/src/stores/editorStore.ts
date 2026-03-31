@@ -91,6 +91,8 @@ interface EditorStore {
   showBeatMarkers: boolean
   toggleChordDiagrams: () => void
   toggleBeatMarkers: () => void
+  chordDiagramGlobal: 'hidden' | 'top' | 'bottom' | 'both'
+  setChordDiagramGlobal: (placement: 'hidden' | 'top' | 'bottom' | 'both') => void
 
   // View
   viewMode: ViewMode
@@ -250,6 +252,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   showBeatMarkers: false,
   toggleChordDiagrams: () => set((s) => ({ showChordDiagrams: !s.showChordDiagrams })),
   toggleBeatMarkers: () => set((s) => ({ showBeatMarkers: !s.showBeatMarkers })),
+  chordDiagramGlobal: 'hidden',
+  setChordDiagramGlobal: (chordDiagramGlobal) => set({ chordDiagramGlobal }),
 
   // View
   viewMode: 'staff',

@@ -38,9 +38,6 @@ export function useCursorEngine(
 ): CursorEngineState {
   const activeToolGroup = useEditorStore((s) => s.activeToolGroup)
   const playbackState = useEditorStore((s) => s.playbackState)
-  const currentBar = useAudioStore((s) => s.currentBar)
-  const currentTime = useAudioStore((s) => s.currentTime)
-  const bpm = useAudioStore((s) => s.bpm)
 
   const cursorMode = deriveCursorMode(activeToolGroup, playbackState)
 
@@ -50,12 +47,22 @@ export function useCursorEngine(
   const mouseActiveRef = useRef(false)
   const rafIdRef = useRef<number>(0)
 
+  // Fix 1: mouseActive state variable so hide-on-leave triggers a re-render
+  const [mouseActive, setMouseActive] = useState(false)
+
   // Render state — only updated when values change meaningfully
   const [displayX, setDisplayX] = useState(0)
   const [isSnapped, setIsSnapped] = useState(false)
 
   // Container height for the cursor line extent
   const [displayY, setDisplayY] = useState<{ top: number; bottom: number }>({ top: 0, bottom: 0 })
+
+  // Fix 3: stable refs for getMeasureBounds and snapPoints — prevent rAF loop restarts
+  const getMeasureBoundsRef = useRef(getMeasureBounds)
+  const snapPointsRef = useRef(snapPoints)
+
+  useEffect(() => { getMeasureBoundsRef.current = getMeasureBounds }, [getMeasureBounds])
+  useEffect(() => { snapPointsRef.current = snapPoints }, [snapPoints])
 
   // Update container height on mount and resize
   useEffect(() => {
@@ -75,12 +82,18 @@ export function useCursorEngine(
     if (!container) return
     const rect = container.getBoundingClientRect()
     const rawX = e.clientX - rect.left + container.scrollLeft
-    targetXRef.current = computeSnapTarget(rawX, snapPoints, SNAP_RADIUS, SNAP_STRENGTH)
+    // Fix 3: use snapPointsRef.current instead of closed-over snapPoints
+    targetXRef.current = computeSnapTarget(rawX, snapPointsRef.current, SNAP_RADIUS, SNAP_STRENGTH)
     mouseActiveRef.current = true
-  }, [containerRef, snapPoints])
+    // Fix 1: update state so the return value guard re-evaluates
+    setMouseActive(true)
+  }, [containerRef])
 
   const onMouseLeave = useCallback(() => {
     mouseActiveRef.current = false
+    // Fix 1: update state AND immediately push cursor off-screen
+    setMouseActive(false)
+    setDisplayX(-100)
   }, [])
 
   // Animation loop
@@ -97,16 +110,19 @@ export function useCursorEngine(
       if (cursorMode === 'select' && mouseActiveRef.current) {
         // Lerp toward snapped target
         displayXRef.current = lerp(displayXRef.current, targetXRef.current, LERP_FACTOR)
-        const snapped = checkSnapped(displayXRef.current, snapPoints, SNAP_THRESHOLD)
+        // Fix 3: use snapPointsRef.current inside rAF tick
+        const snapped = checkSnapped(displayXRef.current, snapPointsRef.current, SNAP_THRESHOLD)
         setDisplayX(Math.round(displayXRef.current * 10) / 10)
         setIsSnapped(snapped)
       }
 
       if (cursorMode === 'playback') {
-        // Compute position from audio time
+        // Fix 2: fresh reads from store each frame — no stale closures
+        const { currentBar, currentTime, bpm } = useAudioStore.getState()
         const barDuration = (60 / bpm) * 4 // assumes 4/4 — good enough for current usage
-        const barBounds = getMeasureBounds(currentBar)
-        const nextBarBounds = getMeasureBounds(currentBar + 1)
+        // Fix 3: use getMeasureBoundsRef.current inside rAF tick
+        const barBounds = getMeasureBoundsRef.current(currentBar)
+        const nextBarBounds = getMeasureBoundsRef.current(currentBar + 1)
 
         if (barBounds) {
           if (nextBarBounds) {
@@ -120,13 +136,13 @@ export function useCursorEngine(
           setDisplayX(Math.round(displayXRef.current * 10) / 10)
           setIsSnapped(false)
 
-          // Scroll following: keep cursor at ~30% from left edge
+          // Fix 4: scroll-follow — trigger when cursor passes 40% from left edge
           const container = containerRef.current
           if (container) {
             const viewportWidth = container.clientWidth
-            const targetScroll = displayXRef.current - viewportWidth * 0.3
-            const currentScroll = container.scrollLeft
-            if (Math.abs(targetScroll - currentScroll) > viewportWidth * 0.4) {
+            const cursorViewportX = displayXRef.current - container.scrollLeft
+            if (cursorViewportX > viewportWidth * 0.4) {
+              const targetScroll = displayXRef.current - viewportWidth * 0.3
               container.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' })
             }
           }
@@ -141,11 +157,13 @@ export function useCursorEngine(
       running = false
       cancelAnimationFrame(rafIdRef.current)
     }
-  }, [cursorMode, snapPoints, bpm, currentBar, currentTime, getMeasureBounds, containerRef])
+    // Fix 2 & 3: bpm/currentBar/currentTime read via getState(); getMeasureBounds/snapPoints via refs
+  }, [cursorMode, containerRef])
 
   return {
     cursorMode,
-    displayX: mouseActiveRef.current || cursorMode === 'playback' ? displayX : -100,
+    // Fix 1: use mouseActive state (not ref) so hiding triggers a re-render
+    displayX: mouseActive || cursorMode === 'playback' ? displayX : -100,
     displayY,
     isSnapped,
     onMouseMove,

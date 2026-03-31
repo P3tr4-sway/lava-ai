@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useCallback } from 'react'
+import { useRef, useMemo, useState, useCallback, useEffect } from 'react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { PracticeSurface } from './PracticeSurface'
@@ -28,6 +28,17 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   // layoutVersion increments when the score re-renders, triggering a snap points rebuild
   const [layoutVersion, setLayoutVersion] = useState(0)
   const onScoreRerender = useCallback(() => setLayoutVersion((v) => v + 1), [])
+
+  // Rebuild snap points when the container is resized (window resize, sidebar open/close, zoom change)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => {
+      setLayoutVersion((v) => v + 1)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   // Build snap points from measure bounds
   const snapPoints = useMemo(() => {

@@ -245,7 +245,7 @@ export function EditSurface({ className, compact = false }: EditSurfaceProps) {
       return
     }
 
-    if (beat && track && activeToolGroup === 'note') {
+    if (beat && track && isNoteEntryToolActive) {
       const target = {
         trackId: track.id,
         measureIndex: beat.measureIndex,

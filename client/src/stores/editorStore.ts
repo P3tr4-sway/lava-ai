@@ -28,7 +28,7 @@ export interface HoverTarget {
 
 export interface DragState {
   active: boolean
-  mode: 'range' | 'bar' | 'section' | null
+  mode: 'bar' | null
   startMeasureIndex: number | null
   currentMeasureIndex: number | null
 }

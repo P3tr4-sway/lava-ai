@@ -322,8 +322,8 @@ export function useEditorKeyboard(enabled = true): void {
             useEditorStore.getState().setToolMode('text')
             break
           case 'r': {
-            // Toggle rest when notes are selected; otherwise toggle range tool
-            const { selectedNoteIds, toolMode, setToolMode } = useEditorStore.getState()
+            // Toggle rest when notes are selected; insert rest at caret if active; else reset tool mode
+            const { selectedNoteIds, setToolMode } = useEditorStore.getState()
             if (selectedNoteIds.length > 0) {
               const trackId = useScoreDocumentStore.getState().document.tracks[0]?.id ?? ''
               selectedNoteIds.forEach((noteId) => {

@@ -3,11 +3,14 @@ import {
   ChevronDown,
   Grid2x2,
   Link2,
-  Music2,
   MousePointer2,
+  Music,
+  Music2,
   Pause,
   Play,
+  SlidersHorizontal,
   Square,
+  Timer,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -20,15 +23,20 @@ import { useEditorStore, type SelectionScope } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
 interface EditorToolbarProps {
-  onAddBar: () => void
-  onDeleteBars: () => void
-  onStylePicker: () => void
   totalBars?: number
   beatsPerBar?: number
   className?: string
 }
 
-type ToolbarPanel = 'playback' | 'selection' | 'note' | 'notation' | 'structure' | 'view' | null
+type ToolbarPanel =
+  | 'playbackSettings'
+  | 'selection'
+  | 'note'
+  | 'rest'
+  | 'notation'
+  | 'chords'
+  | 'view'
+  | null
 
 const PLAYBACK_STYLE_OPTIONS: PlaybackStyleOption[] = [
   {
@@ -247,9 +255,6 @@ function PanelSelect({
 }
 
 export function EditorToolbar({
-  onAddBar,
-  onDeleteBars,
-  onStylePicker,
   totalBars = 16,
   beatsPerBar = 4,
   className,
@@ -276,8 +281,6 @@ export function EditorToolbar({
   const setEntryDuration = useEditorStore((s) => s.setEntryDuration)
   const entryMode = useEditorStore((s) => s.entryMode)
   const setEntryMode = useEditorStore((s) => s.setEntryMode)
-  const caret = useEditorStore((s) => s.caret)
-  const selectedBars = useEditorStore((s) => s.selectedBars)
 
   const document = useScoreDocumentStore((s) => s.document)
   const applyCommand = useScoreDocumentStore((s) => s.applyCommand)
@@ -422,12 +425,9 @@ export function EditorToolbar({
     })
   }
 
-  const selectedBarStart = selectedBars.length > 0 ? Math.min(...selectedBars) : null
-  const selectedBarEnd = selectedBars.length > 0 ? Math.max(...selectedBars) : null
-
   const panelContent = (() => {
     switch (openPanel) {
-      case 'playback':
+      case 'playbackSettings':
         return (
           <div className="grid gap-4 md:grid-cols-[1.1fr_1fr]">
             <div className="space-y-3">
@@ -439,10 +439,7 @@ export function EditorToolbar({
                 type="button"
                 variant="outline"
                 className="h-10 w-full justify-between rounded-xl bg-surface-0"
-                onClick={() => {
-                  onStylePicker()
-                  setStylePickerOpen(true)
-                }}
+                onClick={() => setStylePickerOpen(true)}
               >
                 {selectedPlaybackStyle.label}
                 <ChevronDown className="size-4 text-text-muted" />
@@ -517,40 +514,41 @@ export function EditorToolbar({
         )
       case 'note':
         return (
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Notes</p>
-                <p className="mt-1 text-sm text-text-secondary">Choose the active note value for direct entry or selected notes.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {DURATION_OPTIONS.map((option) => (
-                  <PanelButton
-                    key={`note-${option.value}`}
-                    active={(primarySelectedNote?.durationType === option.value && !primarySelectedNote?.isRest) || (entryMode === 'note' && entryDuration === option.value)}
-                    onClick={() => applyDurationToSelection(option.value, false)}
-                  >
-                    {option.label}
-                  </PanelButton>
-                ))}
-              </div>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Notes</p>
+              <p className="mt-1 text-sm text-text-secondary">Choose the active note value for direct entry or selected notes.</p>
             </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Rests</p>
-                <p className="mt-1 text-sm text-text-secondary">Swap the active entry mode to rests and keep the same duration shortcuts.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {DURATION_OPTIONS.map((option) => (
-                  <PanelButton
-                    key={`rest-${option.value}`}
-                    active={(primarySelectedNote?.durationType === option.value && Boolean(primarySelectedNote?.isRest)) || (entryMode === 'rest' && entryDuration === option.value)}
-                    onClick={() => applyDurationToSelection(option.value, true)}
-                  >
-                    {option.label}
-                  </PanelButton>
-                ))}
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {DURATION_OPTIONS.map((option) => (
+                <PanelButton
+                  key={`note-${option.value}`}
+                  active={(primarySelectedNote?.durationType === option.value && !primarySelectedNote?.isRest) || (entryMode === 'note' && entryDuration === option.value)}
+                  onClick={() => applyDurationToSelection(option.value, false)}
+                >
+                  {option.label}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'rest':
+        return (
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Rests</p>
+              <p className="mt-1 text-sm text-text-secondary">Swap the active entry mode to rests and keep the same duration shortcuts.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {DURATION_OPTIONS.map((option) => (
+                <PanelButton
+                  key={`rest-${option.value}`}
+                  active={(primarySelectedNote?.durationType === option.value && Boolean(primarySelectedNote?.isRest)) || (entryMode === 'rest' && entryDuration === option.value)}
+                  onClick={() => applyDurationToSelection(option.value, true)}
+                >
+                  {option.label}
+                </PanelButton>
+              ))}
             </div>
           </div>
         )
@@ -590,63 +588,26 @@ export function EditorToolbar({
             </div>
           </div>
         )
-      case 'structure':
+      case 'chords':
         return (
-          <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Structure</p>
-                <p className="mt-1 text-sm text-text-secondary">Insert bars, remove selected bars, and toggle chord diagrams for the active region.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <PanelButton
-                  active={false}
-                  onClick={() => {
-                    setActiveToolGroup('measure')
-                    onAddBar()
-                  }}
-                >
-                  Add bar
-                </PanelButton>
-                <PanelButton
-                  active={false}
-                  onClick={() => {
-                    setActiveToolGroup('measure')
-                    onDeleteBars()
-                  }}
-                >
-                  Delete bar
-                </PanelButton>
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-text-muted">Chord diagrams</p>
-                  <div className="flex gap-2">
-                    <PanelButton active={chordDiagramGlobal === 'hidden'} onClick={() => { setChordDiagramGlobal('hidden'); if (showChordDiagrams) toggleChordDiagrams() }}>
-                      Off
-                    </PanelButton>
-                    <PanelButton active={chordDiagramGlobal === 'top'} onClick={() => { setChordDiagramGlobal('top'); if (!showChordDiagrams) toggleChordDiagrams() }}>
-                      Top
-                    </PanelButton>
-                    <PanelButton active={chordDiagramGlobal === 'bottom'} onClick={() => { setChordDiagramGlobal('bottom'); if (!showChordDiagrams) toggleChordDiagrams() }}>
-                      Bottom
-                    </PanelButton>
-                    <PanelButton active={chordDiagramGlobal === 'both'} onClick={() => { setChordDiagramGlobal('both'); if (!showChordDiagrams) toggleChordDiagrams() }}>
-                      Both
-                    </PanelButton>
-                  </div>
-                </div>
-              </div>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Chord diagrams</p>
+              <p className="mt-1 text-sm text-text-secondary">Control chord diagram placement on the score.</p>
             </div>
-            <div className="flex min-w-[150px] flex-col justify-end rounded-2xl border border-border bg-surface-0 p-3">
-              <p className="text-xs font-medium text-text-secondary">Selection</p>
-              <p className="mt-1 text-sm text-text-secondary">
-                {selectedBarStart !== null && selectedBarEnd !== null
-                  ? selectedBarStart === selectedBarEnd
-                    ? `Bar ${selectedBarStart + 1}`
-                    : `Bars ${selectedBarStart + 1}-${selectedBarEnd + 1}`
-                  : caret
-                    ? `Caret at bar ${caret.measureIndex + 1}`
-                    : 'No bars selected'}
-              </p>
+            <div className="flex gap-2">
+              <PanelButton active={chordDiagramGlobal === 'hidden'} onClick={() => { setChordDiagramGlobal('hidden'); if (showChordDiagrams) toggleChordDiagrams() }}>
+                Off
+              </PanelButton>
+              <PanelButton active={chordDiagramGlobal === 'top'} onClick={() => { setChordDiagramGlobal('top'); if (!showChordDiagrams) toggleChordDiagrams() }}>
+                Top
+              </PanelButton>
+              <PanelButton active={chordDiagramGlobal === 'bottom'} onClick={() => { setChordDiagramGlobal('bottom'); if (!showChordDiagrams) toggleChordDiagrams() }}>
+                Bottom
+              </PanelButton>
+              <PanelButton active={chordDiagramGlobal === 'both'} onClick={() => { setChordDiagramGlobal('both'); if (!showChordDiagrams) toggleChordDiagrams() }}>
+                Both
+              </PanelButton>
             </div>
           </div>
         )
@@ -717,12 +678,19 @@ export function EditorToolbar({
     }
   })()
 
+  const activePanelContent = (() => {
+    // Guard: only show panels that belong to the current mode
+    if (editorMode === 'transform' && openPanel !== 'playbackSettings') return null
+    if (editorMode === 'fineEdit' && openPanel === 'playbackSettings') return null
+    return panelContent
+  })()
+
   return (
     <>
       <div ref={toolbarRef} className={cn('pointer-events-none absolute bottom-6 left-1/2 z-30 -translate-x-1/2', className)}>
-        {panelContent && (
+        {activePanelContent && (
           <div className="pointer-events-auto absolute bottom-full left-1/2 mb-3 w-[min(92vw,720px)] -translate-x-1/2 rounded-[28px] border border-border bg-surface-0/96 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.12)] backdrop-blur">
-            {panelContent}
+            {activePanelContent}
           </div>
         )}
 
@@ -736,51 +704,73 @@ export function EditorToolbar({
 
           <ToolDivider />
 
-          <RailButton
-            icon={MousePointer2}
-            label="Selection tools"
-            active={openPanel === 'selection'}
-            withChevron
-            onClick={() => setOpenPanel((current) => current === 'selection' ? null : 'selection')}
-          />
-
-          <RailButton
-            icon={Music2}
-            label="Playback options"
-            active={openPanel === 'playback'}
-            withChevron
-            onClick={() => setOpenPanel((current) => current === 'playback' ? null : 'playback')}
-          />
-
-          <RailButton
-            icon={Square}
-            label="Note and rest durations"
-            active={openPanel === 'note'}
-            withChevron
-            onClick={() => setOpenPanel((current) => current === 'note' ? null : 'note')}
-          />
-          <RailButton
-            icon={Link2}
-            label="Notation tools"
-            active={openPanel === 'notation'}
-            withChevron
-            onClick={() => setOpenPanel((current) => current === 'notation' ? null : 'notation')}
-          />
-          <RailButton
-            icon={Grid2x2}
-            label="Measure and chord tools"
-            active={openPanel === 'structure'}
-            withChevron
-            onClick={() => setOpenPanel((current) => current === 'structure' ? null : 'structure')}
-          />
-
-          <RailButton
-            icon={ZoomIn}
-            label="View controls"
-            active={openPanel === 'view'}
-            withChevron
-            onClick={() => setOpenPanel((current) => current === 'view' ? null : 'view')}
-          />
+          {editorMode === 'transform' ? (
+            <>
+              <RailButton
+                icon={Music2}
+                label="Playback style"
+                onClick={() => setStylePickerOpen(true)}
+              />
+              <RailButton
+                icon={SlidersHorizontal}
+                label="Playback settings"
+                active={openPanel === 'playbackSettings'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'playbackSettings' ? null : 'playbackSettings')}
+              />
+              <RailButton
+                icon={Timer}
+                label={metronomeEnabled ? 'Metronome on' : 'Metronome off'}
+                highlighted={metronomeEnabled}
+                onClick={() => toggleMetronome()}
+              />
+            </>
+          ) : (
+            <>
+              <RailButton
+                icon={MousePointer2}
+                label="Selection tools"
+                active={openPanel === 'selection'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'selection' ? null : 'selection')}
+              />
+              <RailButton
+                icon={Music}
+                label="Note durations"
+                active={openPanel === 'note'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'note' ? null : 'note')}
+              />
+              <RailButton
+                icon={Square}
+                label="Rest durations"
+                active={openPanel === 'rest'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'rest' ? null : 'rest')}
+              />
+              <RailButton
+                icon={Link2}
+                label="Ties, slurs & articulations"
+                active={openPanel === 'notation'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'notation' ? null : 'notation')}
+              />
+              <RailButton
+                icon={Grid2x2}
+                label="Chord diagrams"
+                active={openPanel === 'chords'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'chords' ? null : 'chords')}
+              />
+              <RailButton
+                icon={ZoomIn}
+                label="Zoom"
+                active={openPanel === 'view'}
+                withChevron
+                onClick={() => setOpenPanel((p) => p === 'view' ? null : 'view')}
+              />
+            </>
+          )}
 
           <ToolDivider />
 

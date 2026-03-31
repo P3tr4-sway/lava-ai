@@ -115,7 +115,7 @@ export function EditorPage() {
           useScoreDocumentStore.getState().loadFromMusicXml(musicXml)
         }
         const scoreView = typeof metadata.scoreView === 'string' ? metadata.scoreView : 'tab'
-        useEditorStore.getState().setViewMode(scoreView === 'lead_sheet' ? 'leadSheet' : scoreView === 'tab' ? 'tab' : scoreView === 'staff' ? 'staff' : 'split')
+        useEditorStore.getState().setViewMode(scoreView === 'lead_sheet' ? 'leadSheet' : scoreView === 'tab' ? 'tab' : scoreView === 'staff' ? 'staff' : 'tab')
 
         const hydratedVersions = extractVersionsFromSnapshots(persistedVersions)
         if (hydratedVersions.length > 0) {
@@ -310,22 +310,6 @@ export function EditorPage() {
   usePlaybackStateBridge()
 
   // Bar management
-  const handleAddBar = useCallback(() => {
-    const { selectedBars, caret, selectBar } = useEditorStore.getState()
-    const afterIndex = selectedBars.length > 0
-      ? Math.max(...selectedBars)
-      : caret
-        ? caret.measureIndex
-        : Math.max(scoreDocument.measures.length - 1, 0)
-    useScoreDocumentStore.getState().applyCommand({
-      type: 'addMeasureAfter',
-      afterIndex: Math.max(afterIndex, 0),
-      count: 1,
-    })
-    selectBar(Math.max(afterIndex + 1, 0))
-    useEditorStore.getState().setSaveStatus('unsaved')
-  }, [scoreDocument.measures.length])
-
   const handleDeleteBars = useCallback(() => {
     const { selectedBars, clearSelection } = useEditorStore.getState()
     if (selectedBars.length === 0) return
@@ -342,10 +326,6 @@ export function EditorPage() {
     window.addEventListener('lava-bar-delete', handleDeleteBars)
     return () => window.removeEventListener('lava-bar-delete', handleDeleteBars)
   }, [handleDeleteBars])
-
-  const handleStylePicker = useCallback(() => {
-    toast('Playback style compare is not wired in this build yet.')
-  }, [toast])
 
   const handleNameChange = useCallback((name: string) => {
     useLeadSheetStore.getState().setProjectName(name)
@@ -433,9 +413,6 @@ export function EditorPage() {
           <EditorCanvas className="flex-1" />
 
           <EditorToolbar
-            onAddBar={handleAddBar}
-            onDeleteBars={handleDeleteBars}
-            onStylePicker={handleStylePicker}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             className="z-10"

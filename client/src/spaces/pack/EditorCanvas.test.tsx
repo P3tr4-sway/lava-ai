@@ -13,6 +13,17 @@ vi.mock('./StaffPreview', () => ({
   StaffPreview: () => <div data-testid="staff-preview" />,
 }))
 
+vi.mock('@/hooks/useCursorEngine', () => ({
+  useCursorEngine: () => ({
+    cursorMode: 'hidden' as const,
+    displayX: -100,
+    displayY: { top: 0, bottom: 0 },
+    isSnapped: false,
+    onMouseMove: vi.fn(),
+    onMouseLeave: vi.fn(),
+  }),
+}))
+
 describe('EditorCanvas', () => {
   beforeEach(() => {
     useEditorStore.setState({

@@ -18,9 +18,13 @@ import { pitchToMidi } from '@/lib/pitchUtils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
+type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
+
 interface TabCanvasProps {
   className?: string
   compact?: boolean
+  getMeasureBoundsRef?: React.MutableRefObject<GetMeasureBounds>
+  onScoreRerender?: () => void
 }
 
 interface OverlayRect {
@@ -292,10 +296,11 @@ function entryPreviewLabel(entryMode: 'note' | 'rest') {
   return entryMode === 'rest' ? 'R' : '0'
 }
 
-export function TabCanvas({ className, compact = false }: TabCanvasProps) {
+export function TabCanvas({ className, compact = false, getMeasureBoundsRef, onScoreRerender }: TabCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const alphaTabRootRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<AlphaTabApi | null>(null)
+  const onScoreRerenderRef = useRef(onScoreRerender)
 
   const document = useScoreDocumentStore((state) => state.document)
   const exportCacheXml = useScoreDocumentStore((state) => state.exportCacheXml)
@@ -335,6 +340,27 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
   const [editHintDismissed, setEditHintDismissed] = useState(false)
   const syncOverlaysRef = useRef<() => void>(() => {})
   const noteDurationSelectRef = useRef<HTMLSelectElement | null>(null)
+
+  // Keep onScoreRerenderRef current when the prop changes
+  useEffect(() => {
+    onScoreRerenderRef.current = onScoreRerender
+  }, [onScoreRerender])
+
+  // Derive measure bounds from alphaTab boundsLookup using resolveTabStaffBounds
+  const getMeasureBounds = useCallback<GetMeasureBounds>((barIndex: number) => {
+    const api = apiRef.current
+    if (!api) return null
+    const bounds = resolveTabStaffBounds(api, barIndex)
+    if (!bounds) return null
+    return { x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h }
+  }, [])
+
+  // Keep getMeasureBoundsRef current whenever callback changes identity
+  useEffect(() => {
+    if (getMeasureBoundsRef) {
+      getMeasureBoundsRef.current = getMeasureBounds
+    }
+  }, [getMeasureBoundsRef, getMeasureBounds])
 
   const track = document.tracks[0]
   const beatsPerBar = document.meter.numerator || 4
@@ -454,6 +480,7 @@ export function TabCanvas({ className, compact = false }: TabCanvasProps) {
     const offRenderFinished = api.renderFinished.on(() => {
       setRenderError(null)
       syncOverlaysRef.current()
+      onScoreRerenderRef.current?.()
     })
 
     apiRef.current = api

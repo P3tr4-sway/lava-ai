@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import { cn } from '@/components/ui/utils'
 import { useAudioStore } from '@/stores/audioStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
+type GetMeasureBounds = (barIndex: number) => { x: number; y: number; width: number; height: number } | null
+
 interface StaffPreviewProps {
   className?: string
+  getMeasureBoundsRef?: React.MutableRefObject<GetMeasureBounds>
+  onScoreRerender?: () => void
 }
 
 function assignScoreNoteIds(container: HTMLElement, noteIds: string[]) {
@@ -18,9 +22,42 @@ function assignScoreNoteIds(container: HTMLElement, noteIds: string[]) {
   })
 }
 
-export function StaffPreview({ className }: StaffPreviewProps) {
+export function StaffPreview({ className, getMeasureBoundsRef, onScoreRerender }: StaffPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null)
+
+  // Derive measure bounds from OSMD DOM elements (.vf-measure are 1-indexed by OSMD)
+  const getMeasureBounds = useCallback<GetMeasureBounds>((barIndex: number) => {
+    const container = containerRef.current
+    if (!container) return null
+    const el = container.querySelector<SVGGElement>(`.vf-measure[id="${barIndex + 1}"]`)
+    if (!el) return null
+    const svgRoot = el.ownerSVGElement
+    if (!svgRoot) return null
+    // getBBox gives position in SVG coordinate space; we need position relative to the container
+    try {
+      const bbox = el.getBBox()
+      const svgRect = svgRoot.getBoundingClientRect()
+      const containerRect = container.getBoundingClientRect()
+      const scaleX = svgRect.width / (svgRoot.viewBox.baseVal.width || svgRect.width)
+      const scaleY = svgRect.height / (svgRoot.viewBox.baseVal.height || svgRect.height)
+      return {
+        x: svgRect.left - containerRect.left + container.scrollLeft + bbox.x * scaleX,
+        y: svgRect.top - containerRect.top + container.scrollTop + bbox.y * scaleY,
+        width: bbox.width * scaleX,
+        height: bbox.height * scaleY,
+      }
+    } catch {
+      return null
+    }
+  }, [])
+
+  // Keep getMeasureBoundsRef current whenever the callback changes identity
+  useEffect(() => {
+    if (getMeasureBoundsRef) {
+      getMeasureBoundsRef.current = getMeasureBounds
+    }
+  }, [getMeasureBoundsRef, getMeasureBounds])
   const exportCacheXml = useScoreDocumentStore((state) => state.exportCacheXml)
   const document = useScoreDocumentStore((state) => state.document)
   const selectedBars = useEditorStore((state) => state.selectedBars)
@@ -74,6 +111,7 @@ export function StaffPreview({ className }: StaffPreviewProps) {
       osmdRef.current.render()
       assignScoreNoteIds(containerRef.current, orderedNoteIds)
       syncHighlights()
+      onScoreRerender?.()
     })
     // syncHighlights uses latest store state via DOM query after render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

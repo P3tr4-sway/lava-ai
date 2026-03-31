@@ -653,32 +653,66 @@ export function EditorToolbar({
         )
       case 'view':
         return (
-          <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">View</p>
-                <p className="mt-1 text-sm text-text-secondary">Canvas zoom and alternate score views.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <PanelButton active={false} onClick={() => setZoom(zoom - 10)}>
-                  <ZoomOut className="size-4" />
-                  Zoom out
-                </PanelButton>
-                <PanelButton active={false} onClick={() => setZoom(zoom + 10)}>
-                  <ZoomIn className="size-4" />
-                  Zoom in
-                </PanelButton>
-                <PanelButton active={viewMode === 'tab'} onClick={() => setViewMode('tab')}>
-                  Tab view
-                </PanelButton>
-                <PanelButton active={viewMode === 'split'} onClick={() => setViewMode('split')}>
-                  Split view
-                </PanelButton>
-              </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">View</p>
+              <p className="mt-1 text-sm text-text-secondary">Canvas zoom and alternate score views.</p>
             </div>
-            <div className="flex min-w-[120px] flex-col justify-end rounded-2xl border border-border bg-surface-0 p-3">
-              <p className="text-xs font-medium text-text-secondary">Zoom</p>
-              <p className="mt-1 text-2xl font-semibold text-text-primary">{zoom}%</p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setZoom(zoom - 10)}
+                className="flex size-9 items-center justify-center rounded-xl border border-border text-text-primary hover:bg-surface-1"
+                aria-label="Zoom out"
+              >
+                <ZoomOut className="size-4" />
+              </button>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                step={5}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                aria-label={`Zoom level ${zoom}%`}
+                className={cn(
+                  'flex-1 cursor-pointer appearance-none bg-transparent',
+                  '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border',
+                  '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:border-0 [&::-moz-range-track]:bg-border',
+                  '[&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent',
+                  '[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent',
+                )}
+              />
+              <button
+                type="button"
+                onClick={() => setZoom(zoom + 10)}
+                className="flex size-9 items-center justify-center rounded-xl border border-border text-text-primary hover:bg-surface-1"
+                aria-label="Zoom in"
+              >
+                <ZoomIn className="size-4" />
+              </button>
+              <input
+                type="number"
+                min={50}
+                max={200}
+                step={5}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="h-9 w-16 rounded-xl border border-border bg-surface-0 px-2 text-center text-sm text-text-primary outline-none focus:border-border-hover"
+                aria-label="Zoom percentage"
+              />
+              <span className="text-sm text-text-muted">%</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <PanelButton active={viewMode === 'tab'} onClick={() => setViewMode('tab')}>
+                Tab view
+              </PanelButton>
+              <PanelButton active={viewMode === 'staff'} onClick={() => setViewMode('staff')}>
+                Staff view
+              </PanelButton>
+              <PanelButton active={viewMode === 'split'} onClick={() => setViewMode('split')}>
+                Split view
+              </PanelButton>
             </div>
           </div>
         )

@@ -191,6 +191,7 @@ A `requestAnimationFrame` loop inside the hook:
 - **Remove** `selectionScope` (`'note' | 'bar' | 'section' | 'range'`) — no longer needed
 - **Simplify** `toolMode` — `'pointer'` and `'range'` merge into unified select behavior
 - `selectBar()` and `selectNote()` remain but are triggered by click target, not mode
+- **Migration for callers of `selectionScope`:** EditSurface's `handleMouseDown` currently branches on `selectionScope === 'note'` vs `'range'`/`'bar'`. Replace with click-target detection: if click hits a note element -> `selectNote()`, if click hits empty space and drag starts -> bar range select via `selectBar()`. The distinction is now "what did the user click" not "what mode are they in."
 
 ### EditorToolbar
 

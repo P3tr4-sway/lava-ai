@@ -99,7 +99,10 @@ const SELECTION_SCOPE_OPTIONS: Array<{ value: SelectionScope; label: string; ico
 ]
 
 const TECHNIQUE_OPTIONS: Array<{ value: keyof TechniqueSet; label: string }> = [
-  { value: 'palmMute', label: 'Accent' },
+  { value: 'accent', label: 'Accent' },
+  { value: 'staccato', label: 'Staccato' },
+  { value: 'tenuto', label: 'Tenuto' },
+  { value: 'palmMute', label: 'Palm mute' },
   { value: 'harmonic', label: 'Harmonic' },
   { value: 'vibrato', label: 'Vibrato' },
 ]
@@ -409,6 +412,15 @@ export function EditorToolbar({
     })
   }
 
+  const toggleSlur = () => {
+    setActiveToolGroup('notation')
+    if (!track || selectedNotes.length === 0) return
+    selectedNotes.forEach((note) => {
+      if (!note) return
+      applyCommand({ type: 'toggleSlur', trackId: track.id, noteId: note.id })
+    })
+  }
+
   const selectedBarStart = selectedBars.length > 0 ? Math.min(...selectedBars) : null
   const selectedBarEnd = selectedBars.length > 0 ? Math.max(...selectedBars) : null
 
@@ -543,24 +555,37 @@ export function EditorToolbar({
         )
       case 'notation':
         return (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Notation</p>
-              <p className="mt-1 text-sm text-text-secondary">Apply ties and core guitar articulations to the current note selection.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <PanelButton active={Boolean(primarySelectedNote?.tieStart)} onClick={toggleTie}>
-                Tie
-              </PanelButton>
-              {TECHNIQUE_OPTIONS.map((option) => (
-                <PanelButton
-                  key={option.value}
-                  active={Boolean(primarySelectedNote?.techniques[option.value])}
-                  onClick={() => toggleTechnique(option.value)}
-                >
-                  {option.label}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Ties & Slurs</p>
+                <p className="mt-1 text-sm text-text-secondary">Connect notes with ties or slurs.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <PanelButton active={Boolean(primarySelectedNote?.tieStart)} onClick={toggleTie}>
+                  Tie
                 </PanelButton>
-              ))}
+                <PanelButton active={Boolean(primarySelectedNote?.slurStart)} onClick={toggleSlur}>
+                  Slur
+                </PanelButton>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-text-muted">Articulations</p>
+                <p className="mt-1 text-sm text-text-secondary">Apply accents and articulation marks to selected notes.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {TECHNIQUE_OPTIONS.map((option) => (
+                  <PanelButton
+                    key={option.value}
+                    active={Boolean(primarySelectedNote?.techniques[option.value])}
+                    onClick={() => toggleTechnique(option.value)}
+                  >
+                    {option.label}
+                  </PanelButton>
+                ))}
+              </div>
             </div>
           </div>
         )

@@ -23,7 +23,6 @@ interface EditorToolbarProps {
   onAddBar: () => void
   onDeleteBars: () => void
   onStylePicker: () => void
-  onCompare: () => void
   totalBars?: number
   beatsPerBar?: number
   className?: string

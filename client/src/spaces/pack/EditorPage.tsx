@@ -166,7 +166,8 @@ export function EditorPage() {
         })
         useProjectStore.getState().upsertProject(updated)
         useEditorStore.getState().setSaveStatus('saved')
-      } catch {
+      } catch (err) {
+        console.error('[EditorPage] auto-save failed', err)
         useEditorStore.getState().setSaveStatus('unsaved')
       }
     }, 2000)
@@ -435,7 +436,6 @@ export function EditorPage() {
             onAddBar={handleAddBar}
             onDeleteBars={handleDeleteBars}
             onStylePicker={handleStylePicker}
-            onCompare={handleCompare}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             className="z-10"

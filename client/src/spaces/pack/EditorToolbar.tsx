@@ -271,6 +271,8 @@ export function EditorToolbar({
   const setZoom = useEditorStore((s) => s.setZoom)
   const showChordDiagrams = useEditorStore((s) => s.showChordDiagrams)
   const toggleChordDiagrams = useEditorStore((s) => s.toggleChordDiagrams)
+  const chordDiagramGlobal = useEditorStore((s) => s.chordDiagramGlobal)
+  const setChordDiagramGlobal = useEditorStore((s) => s.setChordDiagramGlobal)
   const entryDuration = useEditorStore((s) => s.entryDuration)
   const setEntryDuration = useEditorStore((s) => s.setEntryDuration)
   const entryMode = useEditorStore((s) => s.entryMode)
@@ -616,9 +618,23 @@ export function EditorToolbar({
                 >
                   Delete bar
                 </PanelButton>
-                <PanelButton active={showChordDiagrams} onClick={toggleChordDiagrams}>
-                  Chord diagrams
-                </PanelButton>
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-text-muted">Chord diagrams</p>
+                  <div className="flex gap-2">
+                    <PanelButton active={chordDiagramGlobal === 'hidden'} onClick={() => { setChordDiagramGlobal('hidden'); if (showChordDiagrams) toggleChordDiagrams() }}>
+                      Off
+                    </PanelButton>
+                    <PanelButton active={chordDiagramGlobal === 'top'} onClick={() => { setChordDiagramGlobal('top'); if (!showChordDiagrams) toggleChordDiagrams() }}>
+                      Top
+                    </PanelButton>
+                    <PanelButton active={chordDiagramGlobal === 'bottom'} onClick={() => { setChordDiagramGlobal('bottom'); if (!showChordDiagrams) toggleChordDiagrams() }}>
+                      Bottom
+                    </PanelButton>
+                    <PanelButton active={chordDiagramGlobal === 'both'} onClick={() => { setChordDiagramGlobal('both'); if (!showChordDiagrams) toggleChordDiagrams() }}>
+                      Both
+                    </PanelButton>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex min-w-[150px] flex-col justify-end rounded-2xl border border-border bg-surface-0 p-3">

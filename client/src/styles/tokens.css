@@ -70,11 +70,19 @@
   animation: coach-pulse 0.75s ease-in-out 2;
 }
 
+/* === Score paper — always light background for readability === */
+.score-paper-bg {
+  background: var(--surface-0);
+}
+[data-theme="dark"] .score-paper-bg {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+}
+
 /* === Score interaction highlights === */
 
 /* Make notes feel clickable */
 .vf-stavenote {
-  cursor: pointer;
   transition: opacity 100ms ease-out;
 }
 

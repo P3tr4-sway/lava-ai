@@ -27,4 +27,9 @@ describe('restCursorUrl', () => {
     expect(url).toMatch(/^url\('data:image\/svg\+xml,/)
     expect(url).toContain('svg')
   })
+
+  it('uses provided color when given', () => {
+    const url = restCursorUrl('#ff0000')
+    expect(url).toContain('ff0000')
+  })
 })

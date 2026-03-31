@@ -38,11 +38,8 @@ export function noteCursorUrl(duration: NoteValue, color = '#888888'): string {
   return svgToCursorUrl(buildNoteSvg(duration, color))
 }
 
-const REST_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <path d="M10 6 L14 12 L10 12 L14 18" fill="none" stroke="#888888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`
-
 /** Returns a CSS `cursor: url(...)` value for a rest symbol. */
-export function restCursorUrl(): string {
-  return svgToCursorUrl(REST_SVG)
+export function restCursorUrl(color = '#888888'): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M10 6 L14 12 L10 12 L14 18" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+  return svgToCursorUrl(svg)
 }

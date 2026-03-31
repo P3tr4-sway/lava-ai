@@ -9,6 +9,8 @@ import type { GetMeasureBounds } from '@/lib/cursorMath'
 interface StaffPreviewProps {
   className?: string
   getMeasureBoundsRef?: React.MutableRefObject<GetMeasureBounds>
+  /** EditorCanvas containerRef — used to compute bounds in EditorCanvas content space. */
+  editorContainerRef?: React.RefObject<HTMLElement | null>
   onScoreRerender?: () => void
 }
 
@@ -21,35 +23,37 @@ function assignScoreNoteIds(container: HTMLElement, noteIds: string[]) {
   })
 }
 
-export function StaffPreview({ className, getMeasureBoundsRef, onScoreRerender }: StaffPreviewProps) {
+export function StaffPreview({ className, getMeasureBoundsRef, editorContainerRef, onScoreRerender }: StaffPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null)
 
-  // Derive measure bounds from OSMD DOM elements (.vf-measure are 1-indexed by OSMD)
+  // Derive measure bounds from OSMD DOM elements (.vf-measure are 1-indexed by OSMD).
+  // Returns coordinates in EditorCanvas content space so CursorOverlay aligns correctly.
   const getMeasureBounds = useCallback<GetMeasureBounds>((barIndex: number) => {
-    const container = containerRef.current
-    if (!container) return null
-    const el = container.querySelector<SVGGElement>(`.vf-measure[id="${barIndex + 1}"]`)
+    const osmdContainer = containerRef.current
+    const editorEl = editorContainerRef?.current
+    if (!osmdContainer || !editorEl) return null
+    const el = osmdContainer.querySelector<SVGGElement>(`.vf-measure[id="${barIndex + 1}"]`)
     if (!el) return null
     const svgRoot = el.ownerSVGElement
     if (!svgRoot) return null
-    // getBBox gives position in SVG coordinate space; we need position relative to the container
+    // getBBox gives position in SVG coordinate space; convert to EditorCanvas content space
     try {
       const bbox = el.getBBox()
       const svgRect = svgRoot.getBoundingClientRect()
-      const containerRect = container.getBoundingClientRect()
+      const editorRect = editorEl.getBoundingClientRect()
       const scaleX = svgRect.width / (svgRoot.viewBox.baseVal.width || svgRect.width)
       const scaleY = svgRect.height / (svgRoot.viewBox.baseVal.height || svgRect.height)
       return {
-        x: svgRect.left - containerRect.left + container.scrollLeft + bbox.x * scaleX,
-        y: svgRect.top - containerRect.top + container.scrollTop + bbox.y * scaleY,
+        x: svgRect.left - editorRect.left + editorEl.scrollLeft + bbox.x * scaleX,
+        y: svgRect.top - editorRect.top + editorEl.scrollTop + bbox.y * scaleY,
         width: bbox.width * scaleX,
         height: bbox.height * scaleY,
       }
     } catch {
       return null
     }
-  }, [])
+  }, [editorContainerRef])
 
   // Keep getMeasureBoundsRef current whenever the callback changes identity
   useEffect(() => {

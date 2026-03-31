@@ -93,6 +93,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         <StaffPreview
           className="min-h-0"
           getMeasureBoundsRef={getMeasureBoundsRef}
+          editorContainerRef={containerRef}
           onScoreRerender={onScoreRerender}
         />
       )}
@@ -100,6 +101,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         <PracticeSurface
           className="min-h-0"
           getMeasureBoundsRef={getMeasureBoundsRef}
+          editorContainerRef={containerRef}
           onScoreRerender={onScoreRerender}
         />
       )}
@@ -107,6 +109,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         <StaffPreview
           className="min-h-0"
           getMeasureBoundsRef={getMeasureBoundsRef}
+          editorContainerRef={containerRef}
           onScoreRerender={onScoreRerender}
         />
       )}

@@ -41,8 +41,8 @@ export function isSnapped(displayX: number, snapPoints: number[], threshold: num
 
 export type CursorMode = 'select' | 'noteEntry' | 'playback' | 'hidden'
 
-type ActiveToolGroup = 'selection' | 'note' | 'rest' | 'notation' | 'measure' | 'playback'
-type PlaybackState = 'stopped' | 'playing' | 'paused'
+export type ActiveToolGroup = 'selection' | 'note' | 'rest' | 'notation' | 'measure' | 'playback'
+export type PlaybackState = 'stopped' | 'playing' | 'paused'
 
 /** Derives the cursor mode from toolbar and playback state. */
 export function deriveCursorMode(

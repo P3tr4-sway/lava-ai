@@ -6,10 +6,16 @@ interface ToastData {
   id: string
   message: string
   type?: 'default' | 'success' | 'error'
+  actionLabel?: string
+  onAction?: () => void
 }
 
 interface ToastContextValue {
-  toast: (message: string, type?: ToastData['type']) => void
+  toast: (
+    message: string,
+    type?: ToastData['type'],
+    options?: { actionLabel?: string; onAction?: () => void },
+  ) => void
 }
 
 const ToastContext = createContext<ToastContextValue>({ toast: () => {} })
@@ -21,9 +27,13 @@ export function useToast() {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastData[]>([])
 
-  const toast = useCallback((message: string, type: ToastData['type'] = 'default') => {
+  const toast = useCallback((
+    message: string,
+    type: ToastData['type'] = 'default',
+    options?: { actionLabel?: string; onAction?: () => void },
+  ) => {
     const id = Math.random().toString(36).slice(2)
-    setToasts((prev) => [...prev, { id, message, type }])
+    setToasts((prev) => [...prev, { id, message, type, ...options }])
   }, [])
 
   const dismiss = useCallback((id: string) => {
@@ -55,7 +65,20 @@ function ToastItem({ data, onDismiss }: { data: ToastData; onDismiss: (id: strin
       data.type === 'error' && 'border-error/50',
       data.type === 'success' && 'border-success/50',
     )}>
-      <p className="text-sm text-text-primary flex-1">{data.message}</p>
+      <div className="flex flex-1 flex-col gap-2">
+        <p className="text-sm text-text-primary">{data.message}</p>
+        {data.actionLabel && data.onAction && (
+          <button
+            onClick={() => {
+              data.onAction?.()
+              onDismiss(data.id)
+            }}
+            className="w-fit text-xs font-medium text-text-primary hover:text-text-secondary transition-colors"
+          >
+            {data.actionLabel}
+          </button>
+        )}
+      </div>
       <button onClick={() => onDismiss(data.id)} className="text-text-muted hover:text-text-secondary shrink-0">
         <X size={14} />
       </button>

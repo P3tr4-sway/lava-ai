@@ -7,7 +7,7 @@ function readTheme(): Theme {
     const v = localStorage.getItem('lava-theme')
     if (v === 'light' || v === 'dark' || v === 'system') return v
   } catch {}
-  return 'system'
+  return 'light'
 }
 
 function readSidebarCollapsed(): boolean {
@@ -16,11 +16,10 @@ function readSidebarCollapsed(): boolean {
     if (v === 'true') return true
     if (v === 'false') return false
   } catch {}
-  return false
+  return true // default: icon-only collapsed
 }
 
 interface UIStore {
-  agentPanelOpen: boolean
   sidebarCollapsed: boolean
   sidebarOpen: boolean
   activeModal: string | null
@@ -28,8 +27,6 @@ interface UIStore {
   authPromptOpen: boolean
   authPromptAction: string | null
 
-  toggleAgentPanel: () => void
-  setAgentPanelOpen: (open: boolean) => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   openModal: (id: string) => void
@@ -40,14 +37,11 @@ interface UIStore {
 }
 
 export const useUIStore = create<UIStore>((set) => ({
-  agentPanelOpen: false,
   sidebarCollapsed: readSidebarCollapsed(),
   sidebarOpen: false,
   activeModal: null,
   theme: readTheme(),
 
-  toggleAgentPanel: () => set((state) => ({ agentPanelOpen: !state.agentPanelOpen })),
-  setAgentPanelOpen: (open) => set({ agentPanelOpen: open }),
   toggleSidebar: () =>
     set((state) => {
       const next = !state.sidebarCollapsed

@@ -5,12 +5,27 @@ export const AgentMessageSchema = z.object({
   content: z.string(),
 })
 
+const ToneContextSchema = z.object({
+  selectedPreset: z.string(),
+  selectedPresetName: z.string(),
+  selectedSlotId: z.string(),
+  selectedPedalId: z.string().nullable().optional(),
+  selectedPedalName: z.string().nullable().optional(),
+  activeCategory: z.string(),
+  chainSummary: z.array(z.string()),
+  knobSummary: z.array(z.string()),
+})
+
 export const ChatRequestSchema = z.object({
   messages: z.array(AgentMessageSchema),
   spaceContext: z.object({
-    currentSpace: z.enum(['learn', 'jam', 'create', 'tools', 'projects']),
+    currentSpace: z.enum(['home', 'learn', 'jam', 'tone', 'create', 'tools', 'library', 'projects']),
+    homeMode: z.enum(['discovery', 'agent']).optional(),
     projectId: z.string().optional(),
     projectName: z.string().optional(),
+    toneContext: ToneContextSchema.optional(),
+    coachContext: z.any().optional(),
+    editorContext: z.any().optional(),
   }),
 })
 

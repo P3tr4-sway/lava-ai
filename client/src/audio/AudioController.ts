@@ -5,6 +5,11 @@ import { useDawPanelStore } from '../stores/dawPanelStore'
 import type { Clip } from './types'
 import type { TrackLane } from '../stores/dawPanelStore'
 
+function dispatchAudioError(message: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('lava-audio-error', { detail: { message } }))
+}
+
 function isRunningState(state: TransportState): boolean {
   return (
     state === 'rolling' ||
@@ -72,6 +77,7 @@ export class AudioController {
     let prevTransportState = useAudioStore.getState().transportState
     let prevMasterVolume = useAudioStore.getState().masterVolume
     let prevBpm = useAudioStore.getState().bpm
+    let prevPlaybackRate = useAudioStore.getState().playbackRate
     let prevMetronomeMode = useAudioStore.getState().metronomeMode
     let prevLoop = useAudioStore.getState().loop
 
@@ -86,10 +92,12 @@ export class AudioController {
         this.engine.setMasterVolume(state.masterVolume)
       }
 
-      if (state.bpm !== prevBpm) {
+      if (state.bpm !== prevBpm || state.playbackRate !== prevPlaybackRate) {
         prevBpm = state.bpm
-        this.engine.setBpm(state.bpm)
-        this.metronome.setBpm(state.bpm)
+        prevPlaybackRate = state.playbackRate
+        const effectiveBpm = state.bpm * state.playbackRate
+        this.engine.setBpm(effectiveBpm)
+        this.metronome.setBpm(effectiveBpm)
       }
 
       if (
@@ -109,11 +117,11 @@ export class AudioController {
     })
     this.unsubscribers.push(unsubTracks)
 
-    const { masterVolume, bpm, loop } = useAudioStore.getState()
+    const { masterVolume, bpm, playbackRate, loop } = useAudioStore.getState()
     this.engine.setMasterVolume(masterVolume)
-    this.engine.setBpm(bpm)
+    this.engine.setBpm(bpm * playbackRate)
     this.engine.setLoopRange(loop)
-    this.metronome.setBpm(bpm)
+    this.metronome.setBpm(bpm * playbackRate)
 
     const { tracks } = useDawPanelStore.getState()
     if (tracks.length > 0) {
@@ -158,7 +166,10 @@ export class AudioController {
         // Schedule metronome AFTER engine.play() finishes — engine.play()
         // calls transport.cancel() which wipes all scheduled events.
         this.syncMetronome(nextState)
-      }).catch((err) => console.error('[AudioController] engine.play() failed:', err))
+      }).catch((err) => {
+        console.error('[AudioController] engine.play() failed:', err)
+        dispatchAudioError(err instanceof Error ? err.message : 'Playback could not start.')
+      })
       return
     }
 
@@ -289,5 +300,13 @@ export class AudioController {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+
+    this.metronome.dispose()
+    this.metronome = new ToneMetronome()
+    this.metronome.onBeat = () => {
+      const { metronomeBeat, setMetronomeBeat } = useAudioStore.getState()
+      setMetronomeBeat(metronomeBeat + 1)
+    }
+    this.engine.clearBufferCache()
   }
 }

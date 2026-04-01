@@ -16,6 +16,13 @@ interface TrackNodes {
   pannerNode: StereoPannerNode
 }
 
+const MAX_BUFFER_CACHE_ENTRIES = 24
+
+function dispatchAudioError(message: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('lava-audio-error', { detail: { message } }))
+}
+
 export class ToneEngine {
   private static instance: ToneEngine | null = null
 
@@ -30,6 +37,7 @@ export class ToneEngine {
   // --- playback state ---
   private activePlayers = new Map<string, Tone.Player[]>()
   private bufferCache = new Map<string, AudioBuffer>()
+  private bufferCacheOrder: string[] = []
   private bpm = 120
   private beatsPerBar = 4
   private initialized = false
@@ -75,6 +83,11 @@ export class ToneEngine {
       } catch (err) {
         console.warn('[ToneEngine] AudioContext.resume() failed:', err)
       }
+    }
+    if (ctx.state !== 'running') {
+      const message = 'Audio playback is blocked by the browser. Click play again after interacting with the page.'
+      dispatchAudioError(message)
+      throw new Error(message)
     }
     this.initialized = true
   }
@@ -178,6 +191,7 @@ export class ToneEngine {
 
   async loadBuffer(audioFileId: string): Promise<AudioBuffer> {
     if (this.bufferCache.has(audioFileId)) {
+      this.touchBufferCache(audioFileId)
       return this.bufferCache.get(audioFileId)!
     }
 
@@ -185,16 +199,29 @@ export class ToneEngine {
 
     const url = `/api/audio/${audioFileId}`
     const toneBuffer = new Tone.ToneAudioBuffer()
-    await toneBuffer.load(url)
+    try {
+      await toneBuffer.load(url)
+    } catch (error) {
+      const message = `Could not decode audio file ${audioFileId}.`
+      dispatchAudioError(message)
+      throw error
+    }
 
     const raw = toneBuffer.get()
-    if (!raw) throw new Error(`Failed to decode audio for fileId="${audioFileId}" url="${url}"`)
+    if (!raw) {
+      const message = `Could not decode audio file ${audioFileId}.`
+      dispatchAudioError(message)
+      throw new Error(`Failed to decode audio for fileId="${audioFileId}" url="${url}"`)
+    }
     this.bufferCache.set(audioFileId, raw)
+    this.touchBufferCache(audioFileId)
+    this.evictBufferCacheIfNeeded()
     return raw
   }
 
   clearBufferCache(): void {
     this.bufferCache.clear()
+    this.bufferCacheOrder = []
   }
 
   // ---------------------------------------------------------------------------
@@ -350,5 +377,18 @@ export class ToneEngine {
       }
     }
     this.activePlayers.clear()
+  }
+
+  private touchBufferCache(audioFileId: string): void {
+    this.bufferCacheOrder = this.bufferCacheOrder.filter((entry) => entry !== audioFileId)
+    this.bufferCacheOrder.push(audioFileId)
+  }
+
+  private evictBufferCacheIfNeeded(): void {
+    while (this.bufferCacheOrder.length > MAX_BUFFER_CACHE_ENTRIES) {
+      const oldest = this.bufferCacheOrder.shift()
+      if (!oldest) break
+      this.bufferCache.delete(oldest)
+    }
   }
 }

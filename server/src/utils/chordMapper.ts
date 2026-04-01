@@ -3,6 +3,8 @@
  * compatible with the frontend leadSheetStore.
  */
 
+import { buildPlayableArrangements, type AnalysisScore, type LeadSheetSection } from '@lava/shared'
+
 export interface ChordMiniAppChord {
   start: number      // seconds (start time)
   end: number        // seconds (end time)
@@ -17,24 +19,9 @@ export interface ChordMiniAppBeats {
   time_signature: number | string
 }
 
-export interface LeadSheetMeasure {
+interface LeadSheetMeasure {
   id: string
   chords: string[]
-}
-
-export interface LeadSheetSection {
-  id: string
-  label: string
-  type: 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'custom'
-  measures: LeadSheetMeasure[]
-}
-
-export interface AnalysisScore {
-  key: string
-  tempo: number
-  timeSignature: string
-  sections: LeadSheetSection[]
-  duration: number
 }
 
 /** Map ChordMiniApp chord notation to standard shorthand */
@@ -211,6 +198,12 @@ export function buildAnalysisScore(
   }
 
   const key = detectKey(chordResult.chords)
+  const arrangementBundle = buildPlayableArrangements({
+    key,
+    tempo: Math.round(beatResult.bpm),
+    timeSignature: `${beatsPerMeasure}/4`,
+    sections,
+  })
 
   return {
     key,
@@ -218,5 +211,7 @@ export function buildAnalysisScore(
     timeSignature: `${beatsPerMeasure}/4`,
     sections,
     duration: chordResult.duration,
+    arrangements: arrangementBundle.arrangements,
+    defaultArrangementId: arrangementBundle.defaultArrangementId,
   }
 }

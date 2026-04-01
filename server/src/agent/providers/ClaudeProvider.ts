@@ -33,6 +33,7 @@ export class ClaudeProvider implements LLMProvider {
               type: p.type,
               description: p.description,
               ...(p.enum ? { enum: p.enum } : {}),
+              ...(p.type === 'array' && p.items ? { items: p.items } : {}),
             },
           ]),
         ),
@@ -48,19 +49,41 @@ export class ClaudeProvider implements LLMProvider {
       tools: anthropicTools,
     })
 
+    // Track in-progress tool-use blocks by content-block index so we can
+    // accumulate the streamed input_json_delta fragments before emitting.
+    const pendingToolBlocks = new Map<number, { toolCall: ToolCall; inputJson: string }>()
+
     for await (const event of stream) {
-      if (event.type === 'content_block_delta') {
-        if (event.delta.type === 'text_delta') {
-          onEvent({ type: 'text_delta', delta: event.delta.text })
-        }
-      } else if (event.type === 'content_block_start') {
+      if (event.type === 'content_block_start') {
         if (event.content_block.type === 'tool_use') {
           const toolCall: ToolCall = {
             id: event.content_block.id,
             name: event.content_block.name,
             input: {},
           }
-          onEvent({ type: 'tool_start', toolCall })
+          pendingToolBlocks.set(event.index, { toolCall, inputJson: '' })
+          // Don't emit tool_start yet — input arrives via input_json_delta
+        }
+      } else if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'text_delta') {
+          onEvent({ type: 'text_delta', delta: event.delta.text })
+        } else if (event.delta.type === 'input_json_delta') {
+          const block = pendingToolBlocks.get(event.index)
+          if (block) {
+            block.inputJson += event.delta.partial_json
+          }
+        }
+      } else if (event.type === 'content_block_stop') {
+        const block = pendingToolBlocks.get(event.index)
+        if (block) {
+          // Parse the fully-accumulated JSON and emit with complete input
+          try {
+            block.toolCall.input = JSON.parse(block.inputJson) as Record<string, unknown>
+          } catch {
+            block.toolCall.input = {}
+          }
+          onEvent({ type: 'tool_start', toolCall: block.toolCall })
+          pendingToolBlocks.delete(event.index)
         }
       } else if (event.type === 'message_stop') {
         onEvent({ type: 'message_stop' })

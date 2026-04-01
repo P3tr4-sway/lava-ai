@@ -1,9 +1,10 @@
-import { useState, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
-import { ArrowUp, Image, Mic } from 'lucide-react'
+import { useState, useRef, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
+import { ArrowUp, Plus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 
 export interface ChatInputRef {
   setValue: (v: string) => void
+  focus: () => void
 }
 
 interface ChatInputProps {
@@ -11,21 +12,40 @@ interface ChatInputProps {
   disabled?: boolean
   /** Compact mode hides the icon toolbar (used inside the agent panel when messages exist) */
   compact?: boolean
+  density?: 'default' | 'roomy'
   placeholder?: string
+  className?: string
+  onAttachClick?: () => void
+  canSend?: boolean
 }
 
-export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({ onSend, disabled, compact, placeholder = 'What would you like to know?' }, ref) {
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({
+  onSend,
+  disabled,
+  compact,
+  density = 'default',
+  placeholder = 'Ask anything about your practice...',
+  className,
+  onAttachClick,
+  canSend = false,
+}, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  useImperativeHandle(ref, () => ({ setValue }), [])
+  useImperativeHandle(ref, () => ({
+    setValue,
+    focus: () => textareaRef.current?.focus(),
+  }), [])
 
   const hasContent = value.trim().length > 0
+  const canSubmit = hasContent || canSend
   const isActive = focused || hasContent
+  const isRoomy = density === 'roomy'
 
   const handleSend = () => {
     const trimmed = value.trim()
-    if (!trimmed || disabled) return
+    if (!canSubmit || disabled) return
     onSend(trimmed)
     setValue('')
   }
@@ -40,12 +60,14 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   return (
     <div
       className={cn(
-        'flex flex-col gap-4 bg-surface-0 border border-border rounded-2xl p-4 min-h-[80px] transition-colors',
+        'border border-border bg-surface-0 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-colors',
+        isRoomy ? 'flex min-h-[132px] flex-col gap-6 rounded-[28px] p-5' : 'flex min-h-[88px] flex-col gap-5 rounded-[18px] p-4',
         isActive && 'border-border-hover',
+        className,
       )}
     >
-      {/* Text area */}
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -55,51 +77,53 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         placeholder={placeholder}
         rows={1}
         className={cn(
-          'w-full bg-transparent text-sm leading-relaxed outline-none resize-none',
+          'w-full resize-none bg-transparent outline-none',
+          isRoomy ? 'text-[1.18rem] leading-8' : 'text-base leading-7',
           'text-text-primary placeholder:text-text-muted',
           disabled && 'opacity-50',
         )}
-        style={{ fieldSizing: 'content', maxHeight: '120px' } as React.CSSProperties}
+        style={{ fieldSizing: 'content', maxHeight: isRoomy ? '176px' : '120px' } as React.CSSProperties}
       />
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        {/* Left icons */}
+      <div className="flex items-center justify-between gap-3">
         {!compact ? (
-          <div className="flex items-center gap-1">
-            <IconButton icon={Image} label="Attach image" />
-            <IconButton icon={Mic} label="Voice" />
+          <div className="flex items-center gap-1.5">
+            <IconButton icon={Plus} label="Add attachment" onClick={() => onAttachClick?.()} />
           </div>
         ) : (
           <div />
         )}
 
-        {/* Send button */}
         <button
+          type="button"
           onClick={handleSend}
-          disabled={disabled || !hasContent}
+          disabled={disabled || !canSubmit}
+          aria-label="Send message"
           className={cn(
-            'flex items-center justify-center size-9 rounded-full transition-colors shrink-0',
-            hasContent
-              ? 'bg-text-primary text-surface-0 hover:opacity-80'
-              : 'bg-surface-3 text-text-muted cursor-default',
+            'flex shrink-0 items-center justify-center rounded-full border transition-colors',
+            isRoomy ? 'size-12' : 'size-10',
+            canSubmit
+              ? 'border-text-primary bg-text-primary text-surface-0 hover:opacity-85'
+              : 'cursor-default border-border bg-surface-3 text-text-muted',
           )}
         >
-          <ArrowUp size={16} />
+          <ArrowUp size={isRoomy ? 18 : 16} />
         </button>
       </div>
     </div>
   )
 })
 
-function IconButton({ icon: Icon, label }: { icon: typeof Image; label: string }) {
+function IconButton({ icon: Icon, label, onClick }: { icon: typeof Plus; label: string; onClick?: () => void }) {
   return (
     <button
       type="button"
       title={label}
-      className="flex items-center justify-center size-9 rounded-full text-text-muted hover:text-text-secondary hover:bg-surface-2 transition-colors"
+      aria-label={label}
+      onClick={onClick}
+      className="flex size-9 items-center justify-center rounded-full text-text-primary transition-colors hover:bg-surface-1"
     >
-      <Icon size={18} />
+      <Icon size={18} strokeWidth={1.9} />
     </button>
   )
 }

@@ -48,6 +48,14 @@ function readNumber(key: string, defaultValue: number): number {
   return defaultValue
 }
 
+function readString(key: string, defaultValue: string): string {
+  try {
+    const v = localStorage.getItem(key)
+    if (v !== null) return v
+  } catch {}
+  return defaultValue
+}
+
 interface AudioStore {
   playbackState: PlaybackState
   transportState: TransportState
@@ -55,6 +63,9 @@ interface AudioStore {
   currentTime: number
   duration: number
   bpm: number
+  playbackRate: number
+  playbackStyleId: string
+  playbackInstrument: string
   masterVolume: number
   metronomeEnabled: boolean
   metronomeMode: MetronomeMode
@@ -79,6 +90,9 @@ interface AudioStore {
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
   setBpm: (bpm: number) => void
+  setPlaybackRate: (rate: number) => void
+  setPlaybackStyleId: (id: string) => void
+  setPlaybackInstrument: (instrument: string) => void
   setMasterVolume: (vol: number) => void
   toggleMetronome: () => void
   setMetronomeMode: (mode: MetronomeMode) => void
@@ -105,6 +119,9 @@ export const useAudioStore = create<AudioStore>((set) => ({
   currentTime: 0,
   duration: 0,
   bpm: readNumber('lava-bpm', 120),
+  playbackRate: readNumber('lava-playback-rate', 1),
+  playbackStyleId: readString('lava-playback-style', 'clean-tab'),
+  playbackInstrument: readString('lava-playback-instrument', 'guitar'),
   masterVolume: readNumber('lava-master-volume', 0.8),
   metronomeEnabled: readBoolean('lava-metronome-enabled', false),
   metronomeMode: readBoolean('lava-metronome-enabled', false) ? 'always' : 'off',
@@ -144,6 +161,19 @@ export const useAudioStore = create<AudioStore>((set) => ({
   setBpm: (bpm) => {
     try { localStorage.setItem('lava-bpm', String(bpm)) } catch {}
     set({ bpm })
+  },
+  setPlaybackRate: (playbackRate) => {
+    const safeRate = Math.max(0.5, Math.min(2, playbackRate))
+    try { localStorage.setItem('lava-playback-rate', String(safeRate)) } catch {}
+    set({ playbackRate: safeRate })
+  },
+  setPlaybackStyleId: (playbackStyleId) => {
+    try { localStorage.setItem('lava-playback-style', playbackStyleId) } catch {}
+    set({ playbackStyleId })
+  },
+  setPlaybackInstrument: (playbackInstrument) => {
+    try { localStorage.setItem('lava-playback-instrument', playbackInstrument) } catch {}
+    set({ playbackInstrument })
   },
   setMasterVolume: (vol) => {
     try { localStorage.setItem('lava-master-volume', String(vol)) } catch {}

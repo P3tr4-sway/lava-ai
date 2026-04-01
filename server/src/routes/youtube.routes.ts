@@ -4,12 +4,13 @@ import { mkdir, stat, readFile } from 'fs/promises'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { eq, like, and } from 'drizzle-orm'
+import type { AnalysisScore } from '@lava/shared'
 import { db } from '../db/client.js'
+import { config } from '../config/index.js'
 import { transcriptions, audioFiles } from '../db/schema.js'
-import { buildAnalysisScore, type AnalysisScore } from '../utils/chordMapper.js'
+import { buildAnalysisScore } from '../utils/chordMapper.js'
 
 const UPLOAD_DIR = './uploads'
-const CHORD_MINI_APP_URL = process.env.CHORD_MINI_APP_URL ?? 'http://localhost:5001'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -312,15 +313,24 @@ async function postAudioToChordMiniApp(filePath: string, endpoint: string): Prom
   const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
   const body = Buffer.concat([header, fileBuffer, footer])
 
-  const url = `${CHORD_MINI_APP_URL}${endpoint}`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      'Content-Length': String(body.length),
-    },
-    body,
-  })
+  const url = `${config.chordMiniAppUrl}${endpoint}`
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': String(body.length),
+      },
+      body,
+    })
+  } catch (error) {
+    // 把底层 fetch failed 转成可操作的提示，方便前端直接展示给用户。
+    throw new Error(
+      `Chord analysis service is unavailable at ${config.chordMiniAppUrl}. Start ChordMiniApp or set CHORD_MINI_APP_URL.`,
+      { cause: error },
+    )
+  }
 
   if (!response.ok) {
     const text = await response.text()

@@ -199,7 +199,7 @@ export function ClipView({
       <div
         data-resize-handle="left"
         aria-label="Resize clip start"
-        className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-white/20 transition-colors"
+        className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-text-primary/20 transition-colors"
         onPointerDown={handleLeftResizePointerDown}
         onPointerMove={handleLeftResizePointerMove}
         onPointerUp={handlePointerUp}
@@ -207,7 +207,7 @@ export function ClipView({
 
       {/* Selected overlay */}
       {selected && (
-        <div className="absolute inset-0 bg-white/10 pointer-events-none z-10" />
+        <div className="absolute inset-0 bg-text-primary/10 pointer-events-none z-10" />
       )}
 
       {/* ── Clip content area (body drag target) ───────────────── */}
@@ -245,7 +245,7 @@ export function ClipView({
       <div
         data-resize-handle="right"
         aria-label="Resize clip end"
-        className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-white/20 transition-colors"
+        className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-10 hover:bg-text-primary/20 transition-colors"
         onPointerDown={handleRightResizePointerDown}
         onPointerMove={handleRightResizePointerMove}
         onPointerUp={handlePointerUp}

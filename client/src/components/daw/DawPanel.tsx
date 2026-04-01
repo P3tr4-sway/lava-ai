@@ -491,7 +491,8 @@ export function DawPanel({
 
   return (
     <div
-      className={cn('shrink-0 flex flex-col bg-surface-0 border-t border-border overflow-hidden', className)}
+      data-coach-target="daw-panel"
+      className={cn('shrink-0 flex flex-col bg-surface-0 border-t border-border rounded-t-lg overflow-hidden', className)}
       style={{ height }}
     >
       <div
@@ -896,6 +897,7 @@ export function DawPanel({
                     currentBar={currentBar}
                     selectedClipId={selectedClipId}
                     snapEnabled={snapEnabled}
+                    height={showRecordButton ? 88 : undefined}
                     onClipSelect={selectClip}
                     onClipMove={(clipId, newStartBar) => updateClip(track.id, clipId, { startBar: newStartBar })}
                     onClipResizeRight={(clipId, newLengthInBars) => updateClip(track.id, clipId, { lengthInBars: newLengthInBars })}

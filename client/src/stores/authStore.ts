@@ -12,6 +12,7 @@ interface AuthState {
   loginWithProvider: (provider: 'google' | 'apple' | 'lava') => Promise<void>
   logout: () => void
   completeOnboarding: () => void
+  setSkillLevel: (level: 'beginner' | 'intermediate' | 'advanced') => void
 }
 
 function readPersistedAuth(): { user: User | null; isAuthenticated: boolean } {
@@ -144,5 +145,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   completeOnboarding: () => {
     persistOnboarding(true)
     set({ hasCompletedOnboarding: true })
+  },
+
+  setSkillLevel: (level) => {
+    set((state) => {
+      if (!state.user) return {}
+      const updated = { ...state.user, skillLevel: level }
+      persistAuth(updated)
+      return { user: updated }
+    })
   },
 }))

@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
-import { useUIStore } from '@/stores/uiStore'
 import { useAudioStore } from '@/stores/audioStore'
+import { useAgentPanelControls } from './useAgentPanelControls'
 
 export function useKeyboardShortcuts() {
-  const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
+  const { canShowPanel, togglePanel } = useAgentPanelControls()
   const setPlaybackState = useAudioStore((s) => s.setPlaybackState)
   const playbackState = useAudioStore((s) => s.playbackState)
 
@@ -18,12 +18,13 @@ export function useKeyboardShortcuts() {
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        if (!canShowPanel) return
         e.preventDefault()
-        toggleAgentPanel()
+        togglePanel()
       }
     }
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [toggleAgentPanel, setPlaybackState, playbackState])
+  }, [canShowPanel, togglePanel, setPlaybackState, playbackState])
 }

@@ -5,6 +5,7 @@ import { db } from '../../db/client.js'
 import { projects } from '../../db/schema.js'
 import { v4 as uuidv4 } from 'uuid'
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 
 export function createToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry()
@@ -23,6 +24,24 @@ function getHandler(name: string) {
       space: input.space,
       reason: input.reason,
     }),
+
+    open_search_results: async (input) => {
+      const songTitle = String(input.songTitle ?? '').trim()
+      const artist = String(input.artist ?? '').trim()
+      const selectionReason = String(input.selectionReason ?? '').trim()
+      const fallbackQuery = String(input.query ?? '').trim()
+      const query = songTitle
+        ? [songTitle, artist].filter(Boolean).join(' ')
+        : fallbackQuery
+
+      return {
+        action: 'open_search_results',
+        query,
+        songTitle: songTitle || undefined,
+        artist: artist || undefined,
+        selectionReason: selectionReason || undefined,
+      }
+    },
 
     create_project: async (input) => {
       const now = Date.now()
@@ -103,6 +122,177 @@ function getHandler(name: string) {
       operation: input.operation,
       status: 'processing',
     }),
+
+    create_version: async (input) => {
+      const versionId = crypto.randomUUID()
+      const name = String(input.name)
+
+      const musicXml = String(input.musicXml ?? '')
+
+      const rawSummary = input.changeSummary
+      let changeSummary: string[]
+      if (Array.isArray(rawSummary)) {
+        changeSummary = rawSummary.map((item: unknown) => String(item))
+      } else {
+        changeSummary = []
+      }
+
+      // Note: musicXml intentionally omitted from the return value — it is sent
+      // via SSE (version_created event) from AgentOrchestrator, not echoed to the LLM.
+      return {
+        action: 'version_created',
+        versionId,
+        name,
+        changeSummary,
+      }
+    },
+
+    // ── Granular score edit tools ──
+    // All return { success: true }. The orchestrator emits score_patch SSE events.
+    edit_note_pitch: async () => ({ success: true }),
+    edit_note_duration: async () => ({ success: true }),
+    edit_chord: async () => ({ success: true }),
+    edit_key_signature: async () => ({ success: true }),
+    edit_time_signature: async () => ({ success: true }),
+    add_bars: async () => ({ success: true }),
+    delete_bars: async () => ({ success: true }),
+    transpose_bars: async () => ({ success: true }),
+    add_accidental: async () => ({ success: true }),
+    toggle_rest: async () => ({ success: true }),
+    toggle_tie: async () => ({ success: true }),
+    set_annotation: async () => ({ success: true }),
+    set_lyric: async () => ({ success: true }),
+    insert_note: async () => ({ success: true }),
+    insert_rest: async () => ({ success: true }),
+    delete_note: async () => ({ success: true }),
+    set_duration: async () => ({ success: true }),
+    set_string_fret: async () => ({ success: true }),
+    add_measure_before: async () => ({ success: true }),
+    add_measure_after: async () => ({ success: true }),
+    set_section_label: async () => ({ success: true }),
+    set_chord_diagram_placement: async () => ({ success: true }),
+    transpose_selection: async () => ({ success: true }),
+    change_tuning: async () => ({ success: true }),
+    set_capo: async () => ({ success: true }),
+    simplify_fingering: async () => ({ success: true }),
+    reharmonize_selection: async () => ({ success: true }),
+    add_technique: async () => ({ success: true }),
+    remove_technique: async () => ({ success: true }),
+
+    end_edit_session: async (input) => {
+      const versionId = crypto.randomUUID()
+      const name = String(input.name ?? 'Unnamed Version')
+      const rawSummary = input.changeSummary
+      const changeSummary = Array.isArray(rawSummary)
+        ? rawSummary.map((item: unknown) => String(item))
+        : []
+      return {
+        action: 'score_patch_session_end',
+        versionId,
+        name,
+        changeSummary,
+      }
+    },
+
+    coach_message: async (input) => {
+      const { content, subtype, targetId, chipsJson } = input as {
+        content: string
+        subtype: string
+        targetId?: string
+        chipsJson?: string
+      }
+
+      const chipSchema = z.array(z.object({
+        label: z.string(),
+        value: z.string(),
+        action: z.enum(['advance', 'expand', 'set_style', 'create_plan', 'navigate']).optional(),
+      }))
+
+      let chips = undefined
+      if (chipsJson) {
+        const parsed = JSON.parse(String(chipsJson))
+        chips = chipSchema.parse(parsed)
+      }
+
+      return {
+        action: 'coach_message',
+        content,
+        subtype,
+        targetId,
+        chips,
+      }
+    },
+
+    create_practice_plan: async (input) => {
+      const songTitle = String(input.songTitle)
+      const goalDescription = String(input.goalDescription ?? `Practice ${songTitle}`)
+      // Note: durationDays, minutesPerDay, skillLevel, focusAreas are LLM-guidance
+      // parameters — they inform how the LLM generates sessionsJson but are not
+      // consumed by this handler directly.
+      const planId = uuidv4()
+      const now = Date.now()
+
+      // Parse and validate sessionsJson with Zod
+      const sessionSchema = z.array(z.object({
+        title: z.string(),
+        totalMinutes: z.number(),
+        timeOfDay: z.enum(['morning', 'afternoon', 'evening']).optional(),
+        subtasks: z.array(z.object({
+          title: z.string(),
+          durationMinutes: z.number(),
+        })).default([]),
+      }))
+
+      let rawSessions: z.infer<typeof sessionSchema>
+      try {
+        const parsed = JSON.parse(String(input.sessionsJson))
+        rawSessions = sessionSchema.parse(parsed)
+      } catch (err) {
+        const msg = err instanceof z.ZodError
+          ? err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
+          : 'Invalid sessionsJson — must be a JSON array of session objects'
+        return { error: msg }
+      }
+
+      // Build sessions with IDs and dates starting from today
+      // Use local date formatting to avoid UTC timezone mismatch
+      const today = new Date()
+      const toDateStr = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const sessions = rawSessions.map((raw, i) => {
+        const date = new Date(today)
+        date.setDate(today.getDate() + i)
+        const dateStr = toDateStr(date)
+
+        return {
+          id: uuidv4(),
+          planId,
+          date: dateStr,
+          timeOfDay: raw.timeOfDay,
+          title: raw.title,
+          totalMinutes: raw.totalMinutes,
+          completed: false,
+          subtasks: (raw.subtasks ?? []).map((st) => ({
+            id: uuidv4(),
+            title: st.title,
+            durationMinutes: st.durationMinutes,
+            completed: false,
+          })),
+        }
+      })
+
+      return {
+        action: 'practice_plan',
+        plan: {
+          id: planId,
+          songTitle,
+          songId: input.songId ? String(input.songId) : undefined,
+          createdAt: now,
+          goalDescription,
+          sessions,
+        },
+      }
+    },
   }
 
   return handlers[name] ?? (async () => ({ error: `No handler for tool: ${name}` }))

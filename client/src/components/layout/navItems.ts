@@ -1,12 +1,22 @@
-import { Home, FolderOpen, Music, FilePlus2, Settings } from 'lucide-react'
+import { Home, Music, User } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
-export const NAV_ITEMS = [
-  { to: '/', icon: Home, label: 'Home', end: true },
-  { to: '/jam', icon: Music, label: 'Play' },
-  { to: '/projects', icon: FolderOpen, label: 'My Projects' },
+export const HOME_NAV_RESET_EVENT = 'lava:home-nav-reset'
+
+export interface NavItem {
+  to: string
+  label: string
+  icon: LucideIcon
+}
+
+export const SIDEBAR_NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Home', icon: Home },
+  { to: '/songs', label: 'My Songs', icon: Music },
+  { to: '/profile', label: 'Profile', icon: User },
 ]
 
-// Separate action entry — displayed below a divider in the sidebar
-export const NEW_SHEET_ITEM = { to: '/editor', icon: FilePlus2, label: 'New Sheet' }
-
-export const SETTINGS_ITEM = { to: '/settings', icon: Settings, label: 'Settings' }
+export const MOBILE_NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Home', icon: Home },
+  { to: '/songs', label: 'Songs', icon: Music },
+  { to: '/profile', label: 'Profile', icon: User },
+]

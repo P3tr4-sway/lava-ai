@@ -314,7 +314,7 @@ export function NewPackDialog({
               {isImportMode ? 'Add score options' : 'Add guitar score'}
             </h2>
             <p className="mt-1.5 text-[12px] text-[#737373]">
-              {isImportMode ? 'Review what we found, then confirm the pack settings.' : 'Choose, tweak, create.'}
+              {isImportMode ? 'Check the defaults, then create the pack.' : 'Choose, tweak, create.'}
             </p>
           </div>
 
@@ -335,7 +335,12 @@ export function NewPackDialog({
             <section className="md:border-r md:border-[#e2e2e2] md:pr-4">
               {isImportMode ? (
                 <>
-                  <h3 className="text-[14px] font-semibold text-[#111111]">Detected</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-[14px] font-semibold text-[#111111]">Detected</h3>
+                    <span className="rounded-full bg-[#ececec] px-3 py-1 text-[11px] font-medium text-[#5a5a5a]">
+                      Step 2 of 3
+                    </span>
+                  </div>
                   <div className="mt-3 grid gap-2.5">
                     <section className={cn(CARD_CLASS_NAME, 'flex flex-col gap-2')}>
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Source</p>
@@ -343,7 +348,7 @@ export function NewPackDialog({
                         {sourceLabel || draft.name}
                       </p>
                       <p className="text-[11px] leading-[1.35] text-[#8a8a8a]">
-                        Key, meter, and tempo were prefilled from the uploaded source.
+                        Key, meter, and tempo are prefilled.
                       </p>
                     </section>
                     {detectedFields.map((field) => (
@@ -505,7 +510,7 @@ export function NewPackDialog({
 
         <div className="flex flex-col gap-4 bg-[#f5f5f5] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] text-[#737373]">Edit later if needed.</p>
+            <p className="text-[11px] text-[#737373]">{isImportMode ? 'You can edit details later.' : 'Edit later if needed.'}</p>
             {error ? <p className="text-[11px] text-[#b24d37]">{error}</p> : null}
           </div>
 

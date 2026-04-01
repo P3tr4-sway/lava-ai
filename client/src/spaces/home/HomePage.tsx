@@ -97,17 +97,17 @@ type WaitingState = {
 }
 
 const IMPORT_PROCESSING_STAGES: Record<ImportSourceKind, string[]> = {
-  audio: ['Uploading audio...', 'Analyzing pitch and tempo...', 'Drafting score...'],
-  youtube: ['Fetching video audio...', 'Transcribing melody...', 'Preparing score draft...'],
-  musicxml: ['Reading score structure...'],
-  'pdf-image': ['Running OCR...', 'Recognizing notes and symbols...', 'Reconstructing score...'],
+  audio: ['Upload audio', 'Detect tempo and pitch', 'Build draft score'],
+  youtube: ['Fetch audio', 'Detect melody', 'Build draft score'],
+  musicxml: ['Read score data'],
+  'pdf-image': ['Scan page', 'Read symbols', 'Build draft score'],
 }
 
 const WAITING_STAGES: Record<ImportSourceKind, string[]> = {
-  audio: ['Recognizing audio...', 'Generating score...', 'Styling arrangement...'],
-  youtube: ['Extracting performance...', 'Generating score...', 'Styling arrangement...'],
-  musicxml: ['Importing notation...', 'Building play view...', 'Styling arrangement...'],
-  'pdf-image': ['Confirming OCR result...', 'Generating score...', 'Styling arrangement...'],
+  audio: ['Read audio', 'Generate score', 'Prepare pack'],
+  youtube: ['Read audio', 'Generate score', 'Prepare pack'],
+  musicxml: ['Import score', 'Build play view', 'Prepare pack'],
+  'pdf-image': ['Confirm scan', 'Generate score', 'Prepare pack'],
 }
 
 function detectImportSource(file: File | null, message: string): ImportSourceKind | null {
@@ -278,7 +278,7 @@ export function HomePage() {
 
       setProcessingState({
         source: importSource,
-        title: importSource === 'youtube' ? 'Preparing YouTube import' : 'Analyzing source',
+        title: importSource === 'youtube' ? 'Reading link' : 'Reading file',
         stages: IMPORT_PROCESSING_STAGES[importSource],
         stageIndex: 0,
         draft,
@@ -336,7 +336,7 @@ export function HomePage() {
           source: processingState.source,
           sourceLabel: processingState.sourceLabel,
           recognitionSummary: [
-            'Detected staff lines and bar structure',
+            'Staff and bars detected',
             `Suggested key: ${processingState.draft.key}`,
             `Suggested tempo: ${processingState.draft.tempo} BPM`,
           ],
@@ -365,10 +365,10 @@ export function HomePage() {
           status: 'error',
           visible: true,
           errorMessage: waitingState.source === 'audio'
-            ? 'Audio is too noisy to detect melody clearly.'
-            : 'We could not confidently reconstruct the score.',
+            ? 'Audio is too noisy to read clearly.'
+            : 'We could not read the score with confidence.',
         } : null)
-        toast('Import failed. You can retry or upload sheet music manually.', 'error')
+        toast('Import failed. Try again or upload score files.', 'error')
         return
       }
 
@@ -392,9 +392,9 @@ export function HomePage() {
           ...current,
           status: 'error',
           visible: true,
-          errorMessage: 'We could not finish building the pack.',
+          errorMessage: 'We could not finish the pack.',
         } : null)
-        toast('Could not finish building the pack.', 'error')
+        toast('Could not finish the pack.', 'error')
       }
     }, 1400)
 
@@ -441,7 +441,7 @@ export function HomePage() {
                   {waitingState.status === 'success'
                     ? 'Pack ready'
                     : waitingState.status === 'error'
-                      ? 'Import stopped'
+                      ? 'Import failed'
                       : waitingState.stages[waitingState.stageIndex]}
                 </h2>
                 <p className="mt-1 text-sm text-text-secondary">
@@ -474,8 +474,8 @@ export function HomePage() {
                           ? 'Done'
                           : waitingState.status === 'error'
                             ? 'Stopped'
-                            : 'In progress'
-                        : 'Pending'}
+                            : 'Now'
+                        : 'Next'}
                   </span>
                 </div>
               ))}
@@ -483,7 +483,8 @@ export function HomePage() {
 
             {waitingState.status === 'error' ? (
               <div className="mt-6 rounded-2xl border border-error/30 bg-error/5 p-4 text-sm text-text-primary">
-                <p>{waitingState.errorMessage}</p>
+                <p className="font-medium text-error">Needs attention</p>
+                <p className="mt-1 text-text-primary">{waitingState.errorMessage}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -505,17 +506,24 @@ export function HomePage() {
                     }}
                     className="rounded-full border border-border px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-1"
                   >
-                    Upload sheet music instead
+                    Upload score instead
                   </button>
                 </div>
+              </div>
+            ) : null}
+
+            {waitingState.status === 'running' ? (
+              <div className="mt-6 rounded-2xl border border-accent/20 bg-accent/5 p-4">
+                <p className="text-sm font-medium text-text-primary">You can leave this page.</p>
+                <p className="mt-1 text-sm text-text-secondary">We will notify you when the pack is ready.</p>
               </div>
             ) : null}
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-text-secondary">
                 {waitingState.status === 'success'
-                  ? 'Your pack is ready to open.'
-                  : 'You can keep browsing other projects. We will notify you when the pack is ready.'}
+                  ? 'Open the pack or go back home.'
+                  : 'You can keep browsing while we finish this.'}
               </p>
               <div className="flex flex-wrap gap-2">
                 {waitingState.status === 'success' && waitingState.projectId ? (
@@ -589,7 +597,7 @@ export function HomePage() {
             <div className="flex flex-col gap-2 pt-1">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-text-primary">Quick actions</p>
-                <span className="text-xs text-text-muted">Tap to fill the prompt</span>
+                <span className="text-xs text-text-muted">Tap to fill</span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {QUICK_ACTIONS.map((action) => (
@@ -652,6 +660,14 @@ export function HomePage() {
       >
         {processingState ? (
           <div className="space-y-5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="rounded-full bg-surface-1 px-3 py-1 text-xs font-medium text-text-secondary">
+                Step 1 of 3
+              </span>
+              <span className="text-xs font-medium text-text-muted">
+                {progressForIndex(processingState.stageIndex, processingState.stages.length)}%
+              </span>
+            </div>
             <p className="text-sm text-text-secondary">
               {processingState.sourceLabel}
             </p>
@@ -668,10 +684,14 @@ export function HomePage() {
                     {stage}
                   </span>
                   <span className="text-text-muted">
-                    {index < processingState.stageIndex ? 'Done' : index === processingState.stageIndex ? 'Working' : 'Pending'}
+                    {index < processingState.stageIndex ? 'Done' : index === processingState.stageIndex ? 'Now' : 'Next'}
                   </span>
                 </div>
               ))}
+            </div>
+            <div className="rounded-2xl border border-accent/20 bg-accent/5 p-4">
+              <p className="text-sm font-medium text-text-primary">Please wait</p>
+              <p className="mt-1 text-sm text-text-secondary">We are reading the source before setup.</p>
             </div>
           </div>
         ) : null}
@@ -686,15 +706,26 @@ export function HomePage() {
       >
         {reviewState ? (
           <div className="space-y-5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="rounded-full bg-surface-1 px-3 py-1 text-xs font-medium text-text-secondary">
+                Step 2 of 3
+              </span>
+              <span className="text-xs font-medium text-text-muted">Check scan</span>
+            </div>
             <p className="text-sm text-text-secondary">
-              We recognized these score details from {reviewState.sourceLabel}. Confirm before filling pack parameters.
+              Check the scan before creating the pack.
             </p>
             <div className="rounded-2xl border border-border bg-surface-1 p-4">
+              <p className="text-sm font-medium text-text-primary">Detected from {reviewState.sourceLabel}</p>
               <ul className="space-y-2 text-sm text-text-primary">
                 {reviewState.recognitionSummary.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
               </ul>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-900">Check this carefully</p>
+              <p className="mt-1 text-sm text-amber-800">If the scan looks wrong, retry before moving on.</p>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -702,7 +733,7 @@ export function HomePage() {
                 onClick={() => setReviewState(null)}
                 className="rounded-full border border-border px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-1"
               >
-                Retry OCR
+                Retry scan
               </button>
               <button
                 type="button"

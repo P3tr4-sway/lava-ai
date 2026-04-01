@@ -3,23 +3,56 @@ import { useRef, useCallback, useEffect, useState } from 'react'
 import type { RefObject } from 'react'
 import { useEditorStore } from '@/stores/editorStore'
 import { useAudioStore } from '@/stores/audioStore'
-import { lerp, computeSnapTarget, isSnapped as checkSnapped, deriveCursorMode } from '@/lib/cursorMath'
+import { lerp, deriveCursorMode } from '@/lib/cursorMath'
 import type { CursorMode, GetMeasureBounds } from '@/lib/cursorMath'
-
-const SNAP_RADIUS = 30
-const SNAP_STRENGTH = 0.6
-const SNAP_THRESHOLD = 5
-const LERP_FACTOR = 0.3
 
 interface CursorEngineState {
   cursorMode: CursorMode
   displayX: number
   displayY: { top: number; bottom: number }
+  overlaySize: { width: number; height: number }
   isSnapped: boolean
   /** Feed mouse position from the container's onMouseMove. */
   onMouseMove: (e: React.MouseEvent) => void
   /** Feed mouse leave to hide the cursor when mouse exits the score. */
   onMouseLeave: () => void
+}
+
+const CURSOR_MEASURE_OVERSCAN = 6
+
+function findMeasureBoundsAtPointer(
+  getMeasureBounds: GetMeasureBounds,
+  pointer: { x: number; y: number },
+) {
+  let closestBounds: { x: number; y: number; width: number; height: number } | null = null
+  let closestDistance = Number.POSITIVE_INFINITY
+
+  for (let index = 0; index < 500; index += 1) {
+    const bounds = getMeasureBounds(index)
+    if (!bounds) break
+
+    const withinX = pointer.x >= bounds.x && pointer.x <= bounds.x + bounds.width
+    const withinY = pointer.y >= bounds.y && pointer.y <= bounds.y + bounds.height
+    if (withinX && withinY) {
+      return bounds
+    }
+
+    const dx =
+      pointer.x < bounds.x ? bounds.x - pointer.x
+        : pointer.x > bounds.x + bounds.width ? pointer.x - (bounds.x + bounds.width)
+          : 0
+    const dy =
+      pointer.y < bounds.y ? bounds.y - pointer.y
+        : pointer.y > bounds.y + bounds.height ? pointer.y - (bounds.y + bounds.height)
+          : 0
+    const distance = Math.hypot(dx, dy)
+    if (distance < closestDistance) {
+      closestDistance = distance
+      closestBounds = bounds
+    }
+  }
+
+  return closestBounds
 }
 
 /**
@@ -43,6 +76,7 @@ export function useCursorEngine(
   const targetXRef = useRef(0)
   const displayXRef = useRef(0)
   const mouseActiveRef = useRef(false)
+  const pointerRef = useRef<{ x: number; y: number } | null>(null)
   const rafIdRef = useRef<number>(0)
 
   // Fix 1: mouseActive state variable so hide-on-leave triggers a re-render
@@ -54,23 +88,40 @@ export function useCursorEngine(
 
   // Cursor line vertical extent — derived from measure bounds in the rAF tick
   const [displayY, setDisplayY] = useState<{ top: number; bottom: number }>({ top: 0, bottom: 0 })
+  const [overlaySize, setOverlaySize] = useState({ width: 0, height: 0 })
 
-  // Fix 3: stable refs for getMeasureBounds and snapPoints — prevent rAF loop restarts
+  // Keep getMeasureBounds stable for the playback rAF loop.
   const getMeasureBoundsRef = useRef(getMeasureBounds)
-  const snapPointsRef = useRef(snapPoints)
 
   useEffect(() => { getMeasureBoundsRef.current = getMeasureBounds }, [getMeasureBounds])
-  useEffect(() => { snapPointsRef.current = snapPoints }, [snapPoints])
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     const container = containerRef.current
     if (!container) return
     const rect = container.getBoundingClientRect()
     const rawX = e.clientX - rect.left + container.scrollLeft
-    // Fix 3: use snapPointsRef.current instead of closed-over snapPoints
-    targetXRef.current = computeSnapTarget(rawX, snapPointsRef.current, SNAP_RADIUS, SNAP_STRENGTH)
+    const rawY = e.clientY - rect.top + container.scrollTop
+    const scrollHeight = Math.max(container.clientHeight, container.scrollHeight)
+    const scrollWidth = Math.max(container.clientWidth, container.scrollWidth)
+
+    targetXRef.current = rawX
+    displayXRef.current = rawX
+    pointerRef.current = { x: rawX, y: rawY }
     mouseActiveRef.current = true
-    // Fix 1: update state so the return value guard re-evaluates
+    setDisplayX(Math.round(rawX * 10) / 10)
+    setIsSnapped(false)
+    const hoveredMeasureBounds = findMeasureBoundsAtPointer(getMeasureBoundsRef.current, { x: rawX, y: rawY })
+    setDisplayY(hoveredMeasureBounds ? {
+      top: hoveredMeasureBounds.y - CURSOR_MEASURE_OVERSCAN,
+      bottom: hoveredMeasureBounds.y + hoveredMeasureBounds.height + CURSOR_MEASURE_OVERSCAN,
+    } : {
+      top: container.scrollTop,
+      bottom: container.scrollTop + scrollHeight,
+    })
+    setOverlaySize({
+      width: scrollWidth,
+      height: scrollHeight,
+    })
     setMouseActive(true)
   }, [containerRef])
 
@@ -93,26 +144,27 @@ export function useCursorEngine(
       if (!running) return
 
       if (cursorMode === 'select' && mouseActiveRef.current) {
-        // Lerp toward snapped target
-        displayXRef.current = lerp(displayXRef.current, targetXRef.current, LERP_FACTOR)
-        // Fix 3: use snapPointsRef.current inside rAF tick
-        const snapped = checkSnapped(displayXRef.current, snapPointsRef.current, SNAP_THRESHOLD)
+        displayXRef.current = targetXRef.current
         setDisplayX(Math.round(displayXRef.current * 10) / 10)
-        setIsSnapped(snapped)
+        setIsSnapped(false)
 
-        // Derive cursor height from the nearest measure's staff row
-        const sp = snapPointsRef.current
-        if (sp.length > 0) {
-          let nearestIdx = 0
-          let minDist = Infinity
-          for (let i = 0; i < sp.length; i++) {
-            const d = Math.abs(displayXRef.current - sp[i])
-            if (d < minDist) { minDist = d; nearestIdx = i }
-          }
-          const nearestBounds = getMeasureBoundsRef.current(nearestIdx)
-          if (nearestBounds) {
-            setDisplayY({ top: nearestBounds.y, bottom: nearestBounds.y + nearestBounds.height })
-          }
+        const container = containerRef.current
+        if (container) {
+          const scrollHeight = Math.max(container.clientHeight, container.scrollHeight)
+          const scrollWidth = Math.max(container.clientWidth, container.scrollWidth)
+          const pointer = pointerRef.current
+          const hoveredMeasureBounds = pointer ? findMeasureBoundsAtPointer(getMeasureBoundsRef.current, pointer) : null
+          setDisplayY(hoveredMeasureBounds ? {
+            top: hoveredMeasureBounds.y - CURSOR_MEASURE_OVERSCAN,
+            bottom: hoveredMeasureBounds.y + hoveredMeasureBounds.height + CURSOR_MEASURE_OVERSCAN,
+          } : {
+            top: container.scrollTop,
+            bottom: container.scrollTop + scrollHeight,
+          })
+          setOverlaySize({
+            width: scrollWidth,
+            height: scrollHeight,
+          })
         }
       }
 
@@ -136,12 +188,18 @@ export function useCursorEngine(
           setDisplayX(Math.round(displayXRef.current * 10) / 10)
           setIsSnapped(false)
 
-          // Cursor height matches the current measure's staff row
-          setDisplayY({ top: barBounds.y, bottom: barBounds.y + barBounds.height })
+          // Cursor height should be slightly taller than the active measure row.
+          setDisplayY({
+            top: barBounds.y - CURSOR_MEASURE_OVERSCAN,
+            bottom: barBounds.y + barBounds.height + CURSOR_MEASURE_OVERSCAN,
+          })
 
-          // Fix 4: scroll-follow — trigger when cursor passes 40% from left edge
           const container = containerRef.current
           if (container) {
+            setOverlaySize({
+              width: Math.max(container.clientWidth, container.scrollWidth),
+              height: Math.max(container.clientHeight, container.scrollHeight),
+            })
             const viewportWidth = container.clientWidth
             const cursorViewportX = displayXRef.current - container.scrollLeft
             if (cursorViewportX > viewportWidth * 0.4) {
@@ -160,14 +218,13 @@ export function useCursorEngine(
       running = false
       cancelAnimationFrame(rafIdRef.current)
     }
-    // Fix 2 & 3: bpm/currentBar/currentTime read via getState(); getMeasureBounds/snapPoints via refs
-  }, [cursorMode, containerRef])
+  }, [cursorMode, containerRef, snapPoints])
 
   return {
     cursorMode,
-    // Fix 1: use mouseActive state (not ref) so hiding triggers a re-render
     displayX: mouseActive || cursorMode === 'playback' ? displayX : -100,
     displayY,
+    overlaySize,
     isSnapped,
     onMouseMove,
     onMouseLeave,

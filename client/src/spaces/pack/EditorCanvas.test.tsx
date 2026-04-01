@@ -18,6 +18,7 @@ vi.mock('@/hooks/useCursorEngine', () => ({
     cursorMode: 'hidden' as const,
     displayX: -100,
     displayY: { top: 0, bottom: 0 },
+    overlaySize: { width: 0, height: 0 },
     isSnapped: false,
     onMouseMove: vi.fn(),
     onMouseLeave: vi.fn(),

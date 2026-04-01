@@ -2,6 +2,7 @@ import { useRef, useMemo, useState, useCallback, useEffect } from 'react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { PracticeSurface } from './PracticeSurface'
+import { ScoreSidebarToolbar } from './ScoreSidebarToolbar'
 import { StaffPreview } from './StaffPreview'
 import { CursorOverlay } from '@/components/score/CursorOverlay'
 import { useCursorEngine } from '@/hooks/useCursorEngine'
@@ -18,6 +19,7 @@ interface EditorCanvasProps {
 
 export function EditorCanvas({ className }: EditorCanvasProps) {
   const viewMode = useEditorStore((state) => state.viewMode)
+  const editorMode = useEditorStore((state) => state.editorMode)
   const entryDuration = useEditorStore((s) => s.entryDuration)
   const entryMode = useEditorStore((s) => s.entryMode)
 
@@ -62,13 +64,15 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   const getMeasureBoundsCb = useCallback((i: number) => getMeasureBoundsRef.current(i), [])
   const rangeSelect = useRangeSelect(containerRef, getMeasureBoundsCb)
   const isStaffView = viewMode === 'staff' || viewMode === 'leadSheet'
+  const cursorOnMouseMove = cursor.onMouseMove
+  const rangeSelectOnMouseMove = rangeSelect.onMouseMove
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      cursor.onMouseMove(e)
-      if (isStaffView) rangeSelect.onMouseMove(e)
+      cursorOnMouseMove(e)
+      if (isStaffView) rangeSelectOnMouseMove(e)
     },
-    [cursor.onMouseMove, rangeSelect.onMouseMove, isStaffView],
+    [cursorOnMouseMove, rangeSelectOnMouseMove, isStaffView],
   )
 
   // CSS cursor for note entry mode
@@ -82,7 +86,11 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
   return (
     <div
       ref={containerRef}
-      className={cn('relative grid min-h-0 w-full flex-1 gap-5 overflow-auto px-5 pb-24 pt-4', className)}
+      className={cn(
+        'relative grid min-h-0 w-full flex-1 gap-5 overflow-auto px-5 pb-24 pt-4',
+        editorMode === 'fineEdit' && 'pl-24',
+        className,
+      )}
       style={cursorStyle}
       onMouseDown={isStaffView ? rangeSelect.onMouseDown : undefined}
       onMouseMove={handleMouseMove}
@@ -126,12 +134,15 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
         />
       )}
 
+      <ScoreSidebarToolbar />
+
       <CursorOverlay
         cursorMode={cursor.cursorMode}
         displayX={cursor.displayX}
         displayY={cursor.displayY}
+        overlaySize={cursor.overlaySize}
         isSnapped={cursor.isSnapped}
-        className="absolute inset-0 pointer-events-none"
+        className="pointer-events-none"
       />
     </div>
   )

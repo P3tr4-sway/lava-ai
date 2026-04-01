@@ -16,6 +16,7 @@ interface ChatInputProps {
   placeholder?: string
   className?: string
   onAttachClick?: () => void
+  canSend?: boolean
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({
@@ -26,6 +27,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   placeholder = 'Ask anything about your practice...',
   className,
   onAttachClick,
+  canSend = false,
 }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -37,12 +39,13 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   }), [])
 
   const hasContent = value.trim().length > 0
+  const canSubmit = hasContent || canSend
   const isActive = focused || hasContent
   const isRoomy = density === 'roomy'
 
   const handleSend = () => {
     const trimmed = value.trim()
-    if (!trimmed || disabled) return
+    if (!canSubmit || disabled) return
     onSend(trimmed)
     setValue('')
   }
@@ -57,8 +60,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   return (
     <div
       className={cn(
-        'flex flex-col bg-surface-0 border border-border shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-colors',
-        isRoomy ? 'gap-6 rounded-[28px] p-5 min-h-[132px]' : 'gap-5 rounded-[18px] p-4 min-h-[88px]',
+        'border border-border bg-surface-0 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-colors',
+        isRoomy ? 'flex min-h-[132px] flex-col gap-6 rounded-[28px] p-5' : 'flex min-h-[88px] flex-col gap-5 rounded-[18px] p-4',
         isActive && 'border-border-hover',
         className,
       )}
@@ -94,12 +97,12 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
         <button
           type="button"
           onClick={handleSend}
-          disabled={disabled || !hasContent}
+          disabled={disabled || !canSubmit}
           aria-label="Send message"
           className={cn(
             'flex shrink-0 items-center justify-center rounded-full border transition-colors',
             isRoomy ? 'size-12' : 'size-10',
-            hasContent
+            canSubmit
               ? 'border-text-primary bg-text-primary text-surface-0 hover:opacity-85'
               : 'cursor-default border-border bg-surface-3 text-text-muted',
           )}

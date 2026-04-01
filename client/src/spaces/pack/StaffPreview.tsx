@@ -99,6 +99,8 @@ export function StaffPreview({ className, getMeasureBoundsRef, editorContainerRe
       drawComposer: false,
       drawTitle: false,
     })
+    osmd.EngravingRules.RenderMultipleRestMeasures = false
+    osmd.EngravingRules.AutoGenerateMultipleRestMeasuresFromRestMeasures = false
     osmdRef.current = osmd
     return () => {
       osmd.clear()
@@ -108,6 +110,8 @@ export function StaffPreview({ className, getMeasureBoundsRef, editorContainerRe
 
   useEffect(() => {
     if (!osmdRef.current || !exportCacheXml) return
+    osmdRef.current.EngravingRules.RenderMultipleRestMeasures = false
+    osmdRef.current.EngravingRules.AutoGenerateMultipleRestMeasuresFromRestMeasures = false
     osmdRef.current.load(exportCacheXml).then(() => {
       if (!osmdRef.current || !containerRef.current) return
       osmdRef.current.Zoom = zoom / 100

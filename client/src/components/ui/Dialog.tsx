@@ -8,9 +8,10 @@ interface DialogProps {
   title?: string
   children: React.ReactNode
   className?: string
+  backdropClassName?: string
 }
 
-export function Dialog({ open, onClose, title, children, className }: DialogProps) {
+export function Dialog({ open, onClose, title, children, className, backdropClassName }: DialogProps) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
   }, [onClose])
@@ -31,7 +32,7 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className={cn('absolute inset-0 bg-black/60', backdropClassName)} onClick={onClose} />
       {/* Panel */}
       <div className={cn(
         'relative bg-surface-0 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-fade-in',

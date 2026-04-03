@@ -4,6 +4,7 @@ export type Clef = 'treble' | 'bass' | 'alto' | 'tenor'
 export type NoteValue = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
 export type PlacementConfidence = 'explicit' | 'derived' | 'low'
 export type RenderLayoutMode = 'systems'
+/** @deprecated Replaced by Technique.slide.style */
 export type TechniqueSlide = 'up' | 'down' | 'shift'
 export type BarlineType = 'single' | 'double' | 'final' | 'dashed' | 'dotted'
 export type RepeatMarker = 'dc-al-fine' | 'ds-al-coda' | 'segno' | 'fine' | 'coda'
@@ -138,12 +139,6 @@ export interface ScoreNoteEvent {
   }
 }
 
-export interface ScoreClipboard {
-  notes: ScoreNoteEvent[]
-  measures: ScoreMeasureMeta[]
-  sourceMeasureCount: number
-}
-
 export interface ScoreMeasureMeta {
   id: string
   index: number
@@ -158,6 +153,12 @@ export interface ScoreMeasureMeta {
   isRepeatStart?: boolean
   isRepeatEnd?: boolean
   repeatMarker?: RepeatMarker
+}
+
+export interface ScoreClipboard {
+  notes: ScoreNoteEvent[]
+  measures: ScoreMeasureMeta[]
+  sourceMeasureCount: number
 }
 
 export interface ScoreTrack {

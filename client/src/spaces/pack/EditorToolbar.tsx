@@ -179,7 +179,7 @@ function ToolbarToolButton({
       data-rail-button
       onMouseEnter={(e) => onHoverOpen?.(e)}
       className={cn(
-        'flex h-full items-center rounded transition-colors',
+        'flex h-full w-10 shrink-0 items-center rounded transition-colors',
         selected ? 'bg-[#8df790]' : 'text-[#0d0d0d] hover:bg-[#f6f6f6]',
       )}
     >
@@ -188,18 +188,10 @@ function ToolbarToolButton({
         title={label}
         aria-label={label}
         onClick={onClick}
-        className={cn(
-          'flex h-full items-center rounded px-[3px]',
-          withChevron ? 'pr-[2px]' : '',
-        )}
+        className="flex h-full flex-1 items-center justify-center rounded"
       >
-        <span className="relative flex size-[30px] items-center justify-center rounded">
+        <span className="flex size-[30px] items-center justify-center rounded">
           <Icon className="size-[18px] stroke-[2]" />
-          {badge && !selected && (
-            <span className="pointer-events-none absolute bottom-0 right-0 text-[10px] leading-none text-text-muted">
-              {badge}
-            </span>
-          )}
         </span>
       </button>
       {withChevron && (
@@ -210,7 +202,7 @@ function ToolbarToolButton({
             e.stopPropagation()
             onChevronClick?.(e)
           }}
-          className="flex h-full w-3 items-center justify-center rounded-r text-[#0d0d0d]"
+          className="flex h-full w-[10px] items-center justify-center rounded-r text-[#0d0d0d]"
         >
           <ChevronDown className={cn('size-3 transition-transform', panelOpen && 'rotate-180')} />
         </button>
@@ -961,12 +953,11 @@ export function EditorToolbar({
             <div className="flex">
               {/* Left: two rows */}
               <div className="flex flex-col">
-                {/* Row 1 — note/rhythm tools */}
-                <div className="flex h-[46px] items-center gap-[5px] p-2">
+                {/* Row 1 — primary tools (1–0) */}
+                <div className="flex h-[46px] items-center gap-[3px] px-2 py-1">
                   <ToolbarToolButton
                     icon={MousePointer2}
                     label="Selection"
-                    badge="1"
                     selected={activeToolGroup === 'selection'}
                     onClick={() => {
                       setActiveToolGroup('selection')
@@ -978,7 +969,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Music}
                     label="Notes & rests"
-                    badge="2"
                     selected={activeToolGroup === 'note' || activeToolGroup === 'rest'}
                     withChevron
                     panelOpen={openPanel === 'note'}
@@ -992,7 +982,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Hash}
                     label="Accidentals"
-                    badge="3"
                     selected={openPanel === 'accidentals'}
                     withChevron
                     panelOpen={openPanel === 'accidentals'}
@@ -1003,7 +992,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Spline}
                     label="Ties, slurs & articulations"
-                    badge="4"
                     selected={activeToolGroup === 'notation'}
                     withChevron
                     panelOpen={openPanel === 'notation'}
@@ -1017,7 +1005,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={WholeWord}
                     label="Dynamics"
-                    badge="5"
                     selected={openPanel === 'dynamics'}
                     withChevron
                     panelOpen={openPanel === 'dynamics'}
@@ -1028,20 +1015,15 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Type}
                     label="Text"
-                    badge="6"
                     selected={toolMode === 'text'}
                     onClick={() => {
                       setToolMode('text')
                       setOpenPanel(null)
                     }}
                   />
-                </div>
-                {/* Row 2 — structural tools */}
-                <div className="flex h-[46px] items-center gap-[5px] border-t border-border p-2">
                   <ToolbarToolButton
                     icon={KeyRound}
                     label="Key signatures"
-                    badge="7"
                     selected={activeSidebarTool === 'keySig'}
                     withChevron
                     panelOpen={openPanel === 'keySig'}
@@ -1055,7 +1037,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Clock3}
                     label="Time signatures"
-                    badge="8"
                     selected={activeSidebarTool === 'timeSig'}
                     withChevron
                     panelOpen={openPanel === 'timeSig'}
@@ -1066,7 +1047,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Repeat2}
                     label="Repeats & jumps"
-                    badge="9"
                     selected={activeSidebarTool === 'repeats'}
                     withChevron
                     panelOpen={openPanel === 'repeats'}
@@ -1077,7 +1057,6 @@ export function EditorToolbar({
                   <ToolbarToolButton
                     icon={Columns2}
                     label="Barlines"
-                    badge="0"
                     selected={activeSidebarTool === 'barlines'}
                     withChevron
                     panelOpen={openPanel === 'barlines'}
@@ -1085,6 +1064,9 @@ export function EditorToolbar({
                     onHoverOpen={(e) => openPanelAt('barlines', e)}
                     onChevronClick={(e) => openPanelAt('barlines', e)}
                   />
+                </div>
+                {/* Row 2 — secondary tools */}
+                <div className="flex h-[46px] items-center gap-[3px] border-t border-border px-2 py-1">
                   <ToolbarToolButton
                     icon={Music2}
                     label="Clefs"

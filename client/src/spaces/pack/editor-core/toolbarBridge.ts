@@ -21,12 +21,12 @@ const EVENT_HANDLERS: Record<string, (e: CustomEvent) => void> = {
     if (!note?.pitch) return
     const trackId = document.tracks.find((t) => t.notes.some((n) => n.id === noteId))?.id
     if (!trackId) return
-    applyCommand({
-      type: 'setPitch',
-      trackId,
-      noteId,
-      pitch: { ...note.pitch, alter: e.detail.alter ?? undefined },
-    })
+    const accType = e.detail.type as 'sharp' | 'flat' | 'natural' | undefined
+    const newPitch = { ...note.pitch }
+    if (accType === 'sharp') newPitch.alter = 1
+    else if (accType === 'flat') newPitch.alter = -1
+    else delete newPitch.alter // natural — remove alter
+    applyCommand({ type: 'setPitch', trackId, noteId, pitch: newPitch })
   },
 
   'lava-dynamic': (e) => {
@@ -35,7 +35,7 @@ const EVENT_HANDLERS: Record<string, (e: CustomEvent) => void> = {
     const { document } = useScoreDocumentStore.getState()
     const trackId = document.tracks.find((t) => t.notes.some((n) => n.id === noteId))?.id
     if (!trackId) return
-    applyCommand({ type: 'setNoteDynamic', trackId, noteId, dynamic: e.detail.dynamic ?? null })
+    applyCommand({ type: 'setNoteDynamic', trackId, noteId, dynamic: (e.detail.value ?? null) as import('@lava/shared').Dynamic | null })
   },
 
   'lava-toggle-dot': () => {

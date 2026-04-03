@@ -88,20 +88,6 @@ export type Technique =
   | { type: 'tenuto' }
   | { type: 'fadeIn' }
 
-/** @deprecated Use Technique[] instead */
-export interface TechniqueSet {
-  bend?: boolean
-  slide?: boolean
-  hammerOn?: boolean
-  pullOff?: boolean
-  palmMute?: boolean
-  harmonic?: boolean
-  vibrato?: boolean
-  accent?: boolean
-  staccato?: boolean
-  tenuto?: boolean
-}
-
 export interface ScorePitch {
   step: NoteName
   octave: number

@@ -490,19 +490,16 @@ function toolCallToCommandPatch(toolCall: ToolCall): import('@lava/shared').Scor
       return {
         commands: (Array.isArray(toolCall.input.noteIds) ? toolCall.input.noteIds : []).map((noteId) => ({
           type: 'addTechnique',
-          trackId: String(toolCall.input.trackId ?? 'track-active'),
           noteId: String(noteId),
-          technique: String(toolCall.input.technique) as 'bend' | 'slide' | 'hammerOn' | 'pullOff' | 'palmMute' | 'harmonic' | 'vibrato',
-          value: normalizeTechniqueValue(toolCall.input.value),
+          technique: buildTechnique(String(toolCall.input.technique), toolCall.input.value),
         })),
       }
     case 'remove_technique':
       return {
         commands: (Array.isArray(toolCall.input.noteIds) ? toolCall.input.noteIds : []).map((noteId) => ({
           type: 'removeTechnique',
-          trackId: String(toolCall.input.trackId ?? 'track-active'),
           noteId: String(noteId),
-          technique: String(toolCall.input.technique) as 'bend' | 'slide' | 'hammerOn' | 'pullOff' | 'palmMute' | 'harmonic' | 'vibrato',
+          techniqueType: String(toolCall.input.technique) as import('@lava/shared').Technique['type'],
         })),
       }
     default:
@@ -522,9 +519,25 @@ function parseChordJson(chordsJson: unknown): Array<{ beat: number; symbol: stri
   }
 }
 
-function normalizeTechniqueValue(value: unknown): boolean | 'up' | 'down' | 'shift' | undefined {
-  if (value === undefined || value === null || value === '') return undefined
-  if (typeof value === 'boolean') return value
-  if (value === 'up' || value === 'down' || value === 'shift') return value
-  return true
+function buildTechnique(name: string, value: unknown): import('@lava/shared').Technique {
+  switch (name) {
+    case 'bend':
+      return { type: 'bend', style: 'full', semitones: typeof value === 'number' ? value : 1 }
+    case 'slide': {
+      const slideStyle = value === 'up' ? 'out-up' : value === 'down' ? 'out-down' : value === 'shift' ? 'shift' : 'legato'
+      return { type: 'slide', style: slideStyle as 'shift' | 'legato' | 'in-above' | 'in-below' | 'out-up' | 'out-down' }
+    }
+    case 'hammerOn':
+      return { type: 'hammerOn' }
+    case 'pullOff':
+      return { type: 'pullOff' }
+    case 'palmMute':
+      return { type: 'palmMute' }
+    case 'harmonic':
+      return { type: 'harmonic', style: 'natural' }
+    case 'vibrato':
+      return { type: 'vibrato', style: 'normal' }
+    default:
+      return { type: 'palmMute' }
+  }
 }

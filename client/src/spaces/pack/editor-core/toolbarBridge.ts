@@ -1,6 +1,6 @@
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 import { useEditorStore } from '@/stores/editorStore'
-import type { ScoreCommand } from '@lava/shared'
+import type { ScoreCommand, Dynamic } from '@lava/shared'
 
 function getSelectedNoteId(): string | null {
   const { selectedNoteIds } = useEditorStore.getState()
@@ -35,7 +35,7 @@ const EVENT_HANDLERS: Record<string, (e: CustomEvent) => void> = {
     const { document } = useScoreDocumentStore.getState()
     const trackId = document.tracks.find((t) => t.notes.some((n) => n.id === noteId))?.id
     if (!trackId) return
-    applyCommand({ type: 'setNoteDynamic', trackId, noteId, dynamic: (e.detail.value ?? null) as import('@lava/shared').Dynamic | null })
+    applyCommand({ type: 'setNoteDynamic', trackId, noteId, dynamic: (e.detail.value ?? null) as Dynamic | null })
   },
 
   'lava-toggle-dot': () => {

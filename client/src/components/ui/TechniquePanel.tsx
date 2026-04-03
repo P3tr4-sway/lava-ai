@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +26,16 @@ export function TechniquePanel({ def, activeTechnique, onApply, onRemove, classN
     }
     return defaults
   })
+
+  useEffect(() => {
+    const next: Record<string, string | number> = {}
+    for (const p of def.params) {
+      next[p.key] = activeTechnique
+        ? ((activeTechnique as Record<string, unknown>)[p.key] as string | number) ?? p.default
+        : p.default
+    }
+    setParams(next)
+  }, [activeTechnique, def])
 
   const Icon = getIcon(def.icon)
 

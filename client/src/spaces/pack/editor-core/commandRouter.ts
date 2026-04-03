@@ -94,12 +94,23 @@ export function applyCommandToDocument(
   const result = handler(doc, cmd)
 
   if (COMMANDS_NEEDING_VALIDATION.has(cmd.type)) {
-    // Determine which measure(s) to validate
-    const measureIndex = 'measureIndex' in cmd ? (cmd as { measureIndex: number }).measureIndex : undefined
-    if (measureIndex !== undefined) {
-      const meter = getEffectiveTimeSignature(result.document, measureIndex)
-      for (const track of result.document.tracks) {
-        track.notes = validateAndTruncate(track.notes, measureIndex, meter, result.document.divisions)
+    if (cmd.type === 'pasteSelection') {
+      // Validate all measures affected by the paste
+      const start = cmd.targetMeasureIndex
+      const end = start + cmd.clipboard.sourceMeasureCount - 1
+      for (let mi = start; mi <= end; mi++) {
+        const meter = getEffectiveTimeSignature(result.document, mi)
+        for (const track of result.document.tracks) {
+          track.notes = validateAndTruncate(track.notes, mi, meter, result.document.divisions)
+        }
+      }
+    } else {
+      const measureIndex = 'measureIndex' in cmd ? (cmd as { measureIndex: number }).measureIndex : undefined
+      if (measureIndex !== undefined) {
+        const meter = getEffectiveTimeSignature(result.document, measureIndex)
+        for (const track of result.document.tracks) {
+          track.notes = validateAndTruncate(track.notes, measureIndex, meter, result.document.divisions)
+        }
       }
     }
   }

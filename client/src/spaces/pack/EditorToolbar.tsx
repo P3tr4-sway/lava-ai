@@ -24,7 +24,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
-import type { NoteValue, TechniqueSet } from '@lava/shared'
+import type { NoteValue, Technique } from '@lava/shared'
+import { TECHNIQUE_DEFS } from '@/spaces/pack/editor-core/techniqueDefinitions'
+import { TechniquePanel } from '@/components/ui/TechniquePanel'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/components/ui/utils'
 import { PlaybackStylePickerDrawer, type PlaybackStyleOption } from '@/components/score'
@@ -115,15 +117,6 @@ const DURATION_OPTIONS: Array<{ value: NoteValue; label: string }> = [
   { value: 'quarter', label: '1/4' },
   { value: 'eighth', label: '1/8' },
   { value: 'sixteenth', label: '1/16' },
-]
-
-const TECHNIQUE_OPTIONS: Array<{ value: keyof TechniqueSet; label: string }> = [
-  { value: 'accent', label: 'Accent' },
-  { value: 'staccato', label: 'Staccato' },
-  { value: 'tenuto', label: 'Tenuto' },
-  { value: 'palmMute', label: 'Palm mute' },
-  { value: 'harmonic', label: 'Harmonic' },
-  { value: 'vibrato', label: 'Vibrato' },
 ]
 
 function isRunningState(state: string) {
@@ -484,19 +477,6 @@ export function EditorToolbar({
     })
   }
 
-  const toggleTechnique = (technique: keyof TechniqueSet) => {
-    setActiveToolGroup('notation')
-    if (!track || selectedNotes.length === 0) return
-    selectedNotes.forEach((note) => {
-      if (!note) return
-      if (note.techniques[technique]) {
-        applyCommand({ type: 'removeTechnique', trackId: track.id, noteId: note.id, technique })
-      } else {
-        applyCommand({ type: 'addTechnique', trackId: track.id, noteId: note.id, technique })
-      }
-    })
-  }
-
   const toggleTie = () => {
     setActiveToolGroup('notation')
     if (!track || selectedNotes.length === 0) return
@@ -620,18 +600,36 @@ export function EditorToolbar({
                 Slur
               </PanelButton>
             </div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Articulations</p>
-            <div className="flex flex-wrap gap-1">
-              {TECHNIQUE_OPTIONS.map((option) => (
-                <PanelButton
-                  key={option.value}
-                  active={Boolean(primarySelectedNote?.techniques[option.value])}
-                  onClick={() => toggleTechnique(option.value)}
-                >
-                  {option.label}
-                </PanelButton>
-              ))}
-            </div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Techniques</p>
+            {Object.entries(
+              TECHNIQUE_DEFS.reduce<Record<string, typeof TECHNIQUE_DEFS>>((acc, def) => {
+                const g = acc[def.group] ?? []
+                g.push(def)
+                acc[def.group] = g
+                return acc
+              }, {})
+            ).map(([group, defs]) => (
+              <div key={group} className="flex flex-wrap gap-1 mb-1">
+                {defs.map((def) => {
+                  const active = primarySelectedNote?.techniques.find((t) => t.type === def.type)
+                  return (
+                    <TechniquePanel
+                      key={def.type}
+                      def={def}
+                      activeTechnique={active}
+                      onApply={(technique: Technique) => {
+                        if (!primarySelectedNote) return
+                        applyCommand({ type: 'addTechnique', noteId: primarySelectedNote.id, technique })
+                      }}
+                      onRemove={(type: string) => {
+                        if (!primarySelectedNote) return
+                        applyCommand({ type: 'removeTechnique', noteId: primarySelectedNote.id, techniqueType: type as Technique['type'] })
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            ))}
           </div>
         )
       case 'chords':

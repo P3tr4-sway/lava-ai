@@ -1,4 +1,4 @@
-import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
+import type { CommandResult, ScoreCommand, ScoreCommandPatch, ScoreDocument } from '@lava/shared'
 import { validateAndTruncate } from './validation'
 import { getEffectiveTimeSignature } from './helpers'
 
@@ -49,7 +49,7 @@ const HANDLER_MAP: Record<string, Handler> = {
   setTimeSignature: handleSetTimeSignature,
   setTrackClef: handleSetTrackClef,
   setCapo: handleSetCapo,
-  setTuning: handleChangeTuning,
+  setTuning: handleChangeTuning, // legacy alias — prefer changeTuning for new callers
   changeTuning: handleChangeTuning,
   setMeasureTimeSignature: handleSetMeasureTimeSignature,
   setMeasureKeySignature: handleSetMeasureKeySignature,
@@ -75,6 +75,7 @@ const COMMANDS_NEEDING_VALIDATION = new Set([
   'insertRestAtCaret',
   'setDuration',
   'splitNote',
+  'mergeWithNext',
   'setMeasureTimeSignature',
   'toggleDot',
   'toggleTuplet',
@@ -94,7 +95,7 @@ export function applyCommandToDocument(
 
   if (COMMANDS_NEEDING_VALIDATION.has(cmd.type)) {
     // Determine which measure(s) to validate
-    const measureIndex = 'measureIndex' in cmd ? (cmd as any).measureIndex : undefined
+    const measureIndex = 'measureIndex' in cmd ? (cmd as { measureIndex: number }).measureIndex : undefined
     if (measureIndex !== undefined) {
       const meter = getEffectiveTimeSignature(result.document, measureIndex)
       for (const track of result.document.tracks) {
@@ -104,4 +105,17 @@ export function applyCommandToDocument(
   }
 
   return result
+}
+
+export function applyCommandPatch(document: ScoreDocument, patch: ScoreCommandPatch): CommandResult {
+  return patch.commands.reduce<CommandResult>(
+    (result, command) => {
+      const next = applyCommandToDocument(result.document, command)
+      return {
+        document: next.document,
+        warnings: [...result.warnings, ...next.warnings],
+      }
+    },
+    { document, warnings: patch.warnings ?? [] },
+  )
 }

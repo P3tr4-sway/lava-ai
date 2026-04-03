@@ -1,10 +1,8 @@
 import type {
-  CommandResult,
   GuitarPlacement,
   KeySignature,
   NoteValue,
   PlacementPolicy,
-  ScoreCommandPatch,
   ScoreDocument,
   ScoreHarmony,
   ScoreMeasureMeta,
@@ -24,8 +22,6 @@ import {
   noteTypeToDivisions,
   resolvePitchFromPlacement as resolvePitchFromPlacementHelper,
 } from '@/spaces/pack/editor-core/helpers'
-import { applyCommandToDocument } from '@/spaces/pack/editor-core/commandRouter'
-
 const parser = new DOMParser()
 const serializer = new XMLSerializer()
 
@@ -589,16 +585,3 @@ export function buildScoreDigest(document: ScoreDocument): string {
 
 // Command handling has moved to editor-core/commandRouter.ts
 // This file retains: document creation, MusicXML import/export, and utility functions.
-
-export function applyCommandPatch(document: ScoreDocument, patch: ScoreCommandPatch): CommandResult {
-  return patch.commands.reduce<CommandResult>(
-    (result, command) => {
-      const next = applyCommandToDocument(result.document, command)
-      return {
-        document: next.document,
-        warnings: [...result.warnings, ...next.warnings],
-      }
-    },
-    { document, warnings: patch.warnings ?? [] },
-  )
-}

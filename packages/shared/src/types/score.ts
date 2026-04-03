@@ -64,9 +64,33 @@ export interface GuitarPlacement {
   confidence: PlacementConfidence
 }
 
+// --- Technique discriminated union (replaces TechniqueSet) ---
+
+export type Technique =
+  | { type: 'bend'; style: 'full' | 'half' | 'pre-bend' | 'bend-release'; semitones: number }
+  | { type: 'slide'; style: 'shift' | 'legato' | 'in-above' | 'in-below' | 'out-up' | 'out-down' }
+  | { type: 'hammerOn' }
+  | { type: 'pullOff' }
+  | { type: 'tap' }
+  | { type: 'tremoloPicking'; speed: 'eighth' | 'sixteenth' | 'thirtySecond' }
+  | { type: 'tremoloBar'; semitones: number }
+  | { type: 'letRing' }
+  | { type: 'ghostNote' }
+  | { type: 'deadNote' }
+  | { type: 'palmMute' }
+  | { type: 'harmonic'; style: 'natural' | 'pinch' | 'tap' | 'artificial' }
+  | { type: 'vibrato'; style: 'normal' | 'wide' }
+  | { type: 'pickStroke'; direction: 'up' | 'down' }
+  | { type: 'arpeggio'; direction: 'up' | 'down' }
+  | { type: 'accent'; style: 'normal' | 'heavy' }
+  | { type: 'staccato' }
+  | { type: 'tenuto' }
+  | { type: 'fadeIn' }
+
+/** @deprecated Use Technique[] instead */
 export interface TechniqueSet {
   bend?: boolean
-  slide?: TechniqueSlide
+  slide?: boolean
   hammerOn?: boolean
   pullOff?: boolean
   palmMute?: boolean
@@ -100,7 +124,8 @@ export interface ScoreNoteEvent {
   isRest: boolean
   pitch: ScorePitch | null
   placement: GuitarPlacement | null
-  techniques: TechniqueSet
+  techniques: Technique[]
+  tuplet?: { actual: number; normal: number }
   lyric?: string
   tieStart?: boolean
   tieStop?: boolean
@@ -111,6 +136,12 @@ export interface ScoreNoteEvent {
     tabVisible?: boolean
     stemDirection?: 'up' | 'down'
   }
+}
+
+export interface ScoreClipboard {
+  notes: ScoreNoteEvent[]
+  measures: ScoreMeasureMeta[]
+  sourceMeasureCount: number
 }
 
 export interface ScoreMeasureMeta {
@@ -199,8 +230,8 @@ export type ScoreCommand =
   | { type: 'changeTuning'; trackId: string; tuning: number[] }
   | { type: 'simplifyFingering'; trackId: string; measureRange?: [number, number] | null }
   | { type: 'reharmonizeSelection'; measureRange?: [number, number] | null; chords: Array<{ beat: number; symbol: string }> }
-  | { type: 'addTechnique'; trackId: string; noteId: string; technique: keyof TechniqueSet; value?: boolean | TechniqueSlide }
-  | { type: 'removeTechnique'; trackId: string; noteId: string; technique: keyof TechniqueSet }
+  | { type: 'addTechnique'; noteId: string; technique: Technique }
+  | { type: 'removeTechnique'; noteId: string; techniqueType: Technique['type'] }
   | { type: 'toggleSlur'; trackId: string; noteId: string }
   | { type: 'setKeySignature'; key: string; mode: 'major' | 'minor' }
   | { type: 'setTimeSignature'; numerator: number; denominator: number }
@@ -210,6 +241,12 @@ export type ScoreCommand =
   | { type: 'setRepeat'; measureIndex: number; repeatType: 'start' | 'end'; enabled: boolean }
   | { type: 'setRepeatMarker'; measureIndex: number; marker: RepeatMarker | null }
   | { type: 'setNoteDynamic'; trackId: string; noteId: string; dynamic: Dynamic | null }
+  | { type: 'toggleDot'; noteId: string }
+  | { type: 'toggleTuplet'; noteId: string; actual: number; normal: number }
+  | { type: 'setLyric'; noteId: string; text: string }
+  | { type: 'pasteSelection'; targetTrackId: string; targetMeasureIndex: number; targetBeat: number; clipboard: ScoreClipboard }
+  | { type: 'setMeasureTimeSignature'; measureIndex: number; timeSignature: TimeSignature }
+  | { type: 'setMeasureKeySignature'; measureIndex: number; keySignature: KeySignature }
 
 export interface CommandResult {
   document: ScoreDocument

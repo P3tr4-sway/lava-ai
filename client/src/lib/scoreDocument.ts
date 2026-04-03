@@ -20,10 +20,10 @@ import {
   choosePlacement,
   createId,
   createMeasureMeta,
+  DEFAULT_PLACEMENT_POLICY,
   divisionsToNoteType,
   noteTypeToDivisions,
   resolvePitchFromPlacement as resolvePitchFromPlacementHelper,
-  updateTrackNotes,
 } from '@/spaces/pack/editor-core/helpers'
 
 const parser = new DOMParser()
@@ -65,11 +65,6 @@ const FIFTHS_FROM_KEY: Record<string, number> = {
   'C#': 7,
 }
 
-const DEFAULT_POLICY: PlacementPolicy = {
-  preferMinimalMovement: true,
-  preferStringContinuity: true,
-  maxFret: 18,
-}
 
 
 export function cloneScoreDocument(document: ScoreDocument): ScoreDocument {
@@ -246,7 +241,7 @@ function parseMeasureMeta(
 }
 
 
-export function assignGuitarPlacement(document: ScoreDocument, policy: PlacementPolicy = DEFAULT_POLICY): ScoreDocument {
+export function assignGuitarPlacement(document: ScoreDocument, policy: PlacementPolicy = DEFAULT_PLACEMENT_POLICY): ScoreDocument {
   const next = cloneScoreDocument(document)
   const track = next.tracks[0]
   if (!track) return next
@@ -972,7 +967,7 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
     case 'simplifyFingering':
       track.notes = track.notes.map((note) => {
         if (!note.pitch) return note
-        const placement = choosePlacement(pitchToMidi(note.pitch), track.tuning, track.capo, null, DEFAULT_POLICY)
+        const placement = choosePlacement(pitchToMidi(note.pitch), track.tuning, track.capo, null, DEFAULT_PLACEMENT_POLICY)
         return { ...note, placement }
       })
       break

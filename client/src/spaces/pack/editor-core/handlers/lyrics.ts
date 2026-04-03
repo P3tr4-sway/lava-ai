@@ -1,8 +1,5 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
+import { cloneDocument } from '../helpers'
 
 export function handleSetLyric(
   doc: ScoreDocument,

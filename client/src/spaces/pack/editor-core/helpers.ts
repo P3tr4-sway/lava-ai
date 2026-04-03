@@ -154,3 +154,8 @@ export function createMeasureMeta(index: number): ScoreMeasureMeta {
   }
 }
 
+// --- Document cloning ---
+export function cloneDocument(doc: ScoreDocument): ScoreDocument {
+  return structuredClone(doc)
+}
+

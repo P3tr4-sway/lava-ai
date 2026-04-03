@@ -538,6 +538,7 @@ function buildTechnique(name: string, value: unknown): import('@lava/shared').Te
     case 'vibrato':
       return { type: 'vibrato', style: 'normal' }
     default:
+      console.warn(`[buildTechnique] Unknown technique name: "${name}", defaulting to palmMute`)
       return { type: 'palmMute' }
   }
 }

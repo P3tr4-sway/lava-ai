@@ -1,8 +1,5 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
+import { cloneDocument } from '../helpers'
 
 /** Cycles dots: 0 → 1 → 2 → 0 */
 export function handleToggleDot(

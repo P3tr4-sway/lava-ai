@@ -1,10 +1,6 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
-import { choosePlacement } from '../helpers'
+import { choosePlacement, cloneDocument } from '../helpers'
 import { pitchToMidi } from '@/lib/pitchUtils'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
 
 export function handleSetTempo(
   doc: ScoreDocument,
@@ -39,7 +35,8 @@ export function handleSetTrackClef(
 ): CommandResult {
   const next = cloneDocument(doc)
   const track = next.tracks.find((t) => t.id === cmd.trackId)
-  if (track) track.clef = cmd.clef
+  if (!track) return { document: next, warnings: [`Track not found: ${cmd.trackId}`] }
+  track.clef = cmd.clef
   return { document: next, warnings: [] }
 }
 

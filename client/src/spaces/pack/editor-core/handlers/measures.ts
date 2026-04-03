@@ -1,9 +1,5 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
-import { createMeasureMeta } from '../helpers'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
+import { cloneDocument, createMeasureMeta } from '../helpers'
 
 export function handleAddMeasureBefore(
   doc: ScoreDocument,

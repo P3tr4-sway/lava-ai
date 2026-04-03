@@ -1,9 +1,5 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
-import { createId } from '../helpers'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
+import { cloneDocument, createId } from '../helpers'
 
 export function handleSetBarlineType(
   doc: ScoreDocument,
@@ -75,6 +71,7 @@ export function handleSetAnnotation(
   const measure = next.measures[cmd.measureIndex]
   if (measure) {
     const text = cmd.text.trim()
+    // annotations is an array for future multi-annotation support; for now each command sets a single entry
     measure.annotations = text ? [text] : []
   }
   return { document: next, warnings: [] }

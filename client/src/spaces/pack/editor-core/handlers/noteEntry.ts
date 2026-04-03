@@ -1,17 +1,10 @@
 import type { CommandResult, ScoreCommand, ScoreDocument, ScoreNoteEvent } from '@lava/shared'
 import {
   createId,
+  cloneDocument,
   noteTypeToDivisions,
   resolvePitchFromPlacement,
 } from '../helpers'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return {
-    ...doc,
-    measures: doc.measures.map((m) => ({ ...m, harmony: [...m.harmony], annotations: [...m.annotations] })),
-    tracks: doc.tracks.map((t) => ({ ...t, notes: t.notes.map((n) => ({ ...n, techniques: [...n.techniques] })) })),
-  }
-}
 
 export function handleInsertNote(
   doc: ScoreDocument,

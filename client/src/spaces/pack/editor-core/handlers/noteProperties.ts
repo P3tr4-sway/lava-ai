@@ -1,15 +1,12 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
 import {
   choosePlacement,
+  cloneDocument,
   noteTypeToDivisions,
   resolvePitchFromPlacement,
   DEFAULT_PLACEMENT_POLICY,
 } from '../helpers'
 import { pitchToMidi } from '@/lib/pitchUtils'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
 
 export function handleSetDuration(
   doc: ScoreDocument,

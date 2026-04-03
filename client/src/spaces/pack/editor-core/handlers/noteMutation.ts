@@ -1,11 +1,6 @@
 import type { CommandResult, ScoreCommand, ScoreDocument, ScorePitch } from '@lava/shared'
-import { choosePlacement, divisionsToNoteType, DEFAULT_PLACEMENT_POLICY } from '../helpers'
+import { choosePlacement, cloneDocument, divisionsToNoteType, DEFAULT_PLACEMENT_POLICY, createId } from '../helpers'
 import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
-import { createId } from '../helpers'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
 
 export function handleMoveNoteToBeat(
   doc: ScoreDocument,

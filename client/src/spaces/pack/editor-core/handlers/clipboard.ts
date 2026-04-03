@@ -1,15 +1,11 @@
 import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
-import { createId } from '../helpers'
-
-function cloneDocument(doc: ScoreDocument): ScoreDocument {
-  return structuredClone(doc)
-}
+import { cloneDocument, createId, createMeasureMeta } from '../helpers'
 
 export function handlePasteSelection(
   doc: ScoreDocument,
   cmd: Extract<ScoreCommand, { type: 'pasteSelection' }>,
 ): CommandResult {
-  const next = cloneDocument(doc) as ScoreDocument
+  const next = cloneDocument(doc)
   const track = next.tracks.find((t) => t.id === cmd.targetTrackId)
   if (!track) return { document: next, warnings: ['Track not found'] }
 
@@ -18,13 +14,7 @@ export function handlePasteSelection(
   // Ensure enough measures exist
   const neededMeasures = cmd.targetMeasureIndex + clipboard.sourceMeasureCount
   while (next.measures.length < neededMeasures) {
-    const idx = next.measures.length
-    next.measures.push({
-      id: createId(`measure-${idx}`),
-      index: idx,
-      harmony: [],
-      annotations: [],
-    })
+    next.measures.push(createMeasureMeta(next.measures.length))
   }
 
   // Insert notes with offset

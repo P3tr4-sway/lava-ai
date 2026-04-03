@@ -38,6 +38,15 @@ type ToolbarPanel =
   | 'notation'
   | 'chords'
   | 'view'
+  | 'accidentals'
+  | 'dynamics'
+  | 'keySig'
+  | 'timeSig'
+  | 'repeats'
+  | 'barlines'
+  | 'clefs'
+  | 'tempo'
+  | 'pitch'
   | null
 
 type PanelAnchor = { left: number; width: number } | null
@@ -144,6 +153,7 @@ function ToolbarToolButton({
   selected,
   withChevron = false,
   panelOpen,
+  badge,
   onClick,
   onChevronClick,
   onHoverOpen,
@@ -153,6 +163,7 @@ function ToolbarToolButton({
   selected?: boolean
   withChevron?: boolean
   panelOpen?: boolean
+  badge?: string
   onClick: () => void
   onChevronClick?: (e: ReactMouseEvent) => void
   onHoverOpen?: (e: ReactMouseEvent) => void
@@ -176,8 +187,13 @@ function ToolbarToolButton({
           withChevron ? 'pr-[2px]' : '',
         )}
       >
-        <span className="flex size-[30px] items-center justify-center rounded">
+        <span className="relative flex size-[30px] items-center justify-center rounded">
           <Icon className="size-[18px] stroke-[2]" />
+          {badge && !selected && (
+            <span className="pointer-events-none absolute bottom-0 right-0 text-[10px] leading-none text-text-muted">
+              {badge}
+            </span>
+          )}
         </span>
       </button>
       {withChevron && (
@@ -188,9 +204,7 @@ function ToolbarToolButton({
             e.stopPropagation()
             onChevronClick?.(e)
           }}
-          className={cn(
-            'flex h-full w-3 items-center justify-center rounded-r text-[#0d0d0d]',
-          )}
+          className="flex h-full w-3 items-center justify-center rounded-r text-[#0d0d0d]"
         >
           <ChevronDown className={cn('size-3 transition-transform', panelOpen && 'rotate-180')} />
         </button>
@@ -291,8 +305,14 @@ export function EditorToolbar({
   const [stylePickerOpen, setStylePickerOpen] = useState(false)
   const [openPanel, setOpenPanel] = useState<ToolbarPanel>(null)
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor>(null)
+  const [activeSidebarTool, setActiveSidebarTool] = useState<string | null>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  const toggleSidebarTool = (id: string) => {
+    setActiveSidebarTool((prev) => (prev === id ? null : id))
+    setOpenPanel(null)
+  }
 
   const openPanelAt = (panel: ToolbarPanel, event: ReactMouseEvent) => {
     const buttonEl = (event.currentTarget as HTMLElement).closest('[data-rail-button]') as HTMLElement | null
@@ -701,7 +721,7 @@ export function EditorToolbar({
         {activePanelContent && (
           <div
             ref={panelRef}
-            className="pointer-events-auto absolute bottom-full mb-3 w-auto min-w-[180px] max-w-[min(92vw,380px)] rounded-2xl border border-[#f1f1f1] bg-white/96 p-3 shadow-[0_16px_40px_rgba(0,0,0,0.12)] backdrop-blur"
+            className="pointer-events-auto absolute bottom-full mb-3 w-auto min-w-[180px] max-w-[min(92vw,380px)] rounded-2xl border border-border bg-surface-0 p-3 shadow-sm"
             style={panelAnchor ? {
               left: `${panelAnchor.left}px`,
               transform: 'translateX(-50%)',
@@ -714,126 +734,73 @@ export function EditorToolbar({
           </div>
         )}
 
-        <div className="pointer-events-auto flex items-center gap-[5px] overflow-hidden rounded-[12px] border border-[#f1f1f1] bg-white/96 shadow-[0_18px_48px_rgba(0,0,0,0.12)] backdrop-blur">
-          <div className="flex h-[46px] items-center gap-3 p-2">
-            {editorMode === 'transform' ? (
-              <>
-                <ToolbarToolButton
-                  icon={isPlaying ? Pause : Play}
-                  label={isPlaying ? 'Pause playback' : 'Play score'}
-                  selected={isPlaying}
-                  onClick={handleTogglePlayback}
-                />
-                <ToolbarToolButton
-                  icon={Music2}
-                  label="Playback style"
-                  onClick={() => setStylePickerOpen(true)}
-                />
-                <ToolbarToolButton
-                  icon={SlidersHorizontal}
-                  label="Playback settings"
-                  selected={openPanel === 'playbackSettings'}
-                  withChevron
-                  panelOpen={openPanel === 'playbackSettings'}
-                  onClick={() => setOpenPanel((p) => p === 'playbackSettings' ? null : 'playbackSettings')}
-                  onHoverOpen={(e) => openPanelAt('playbackSettings', e)}
-                  onChevronClick={(e) => openPanelAt('playbackSettings', e)}
-                />
-                <ToolbarToolButton
-                  icon={Timer}
-                  label={metronomeEnabled ? 'Metronome on' : 'Metronome off'}
-                  selected={metronomeEnabled}
-                  onClick={() => toggleMetronome()}
-                />
-              </>
-            ) : (
-              <>
-                <ToolbarToolButton
-                  icon={MousePointer2}
-                  label="Selection tools"
-                  selected={activeToolGroup === 'selection'}
-                  onClick={() => {
-                    setActiveToolGroup('selection')
-                    setToolMode('pointer')
-                    setCaret(null)
-                    setOpenPanel(null)
+        <div className="pointer-events-auto overflow-hidden rounded-[12px] border border-border bg-surface-0 shadow-sm">
+          {editorMode === 'transform' ? (
+            /* ── Transform (playback) mode — single row, unchanged ── */
+            <div className="flex h-[46px] items-center gap-[5px] p-2">
+              <ToolbarToolButton
+                icon={isPlaying ? Pause : Play}
+                label={isPlaying ? 'Pause playback' : 'Play score'}
+                selected={isPlaying}
+                onClick={handleTogglePlayback}
+              />
+              <ToolbarToolButton
+                icon={Music2}
+                label="Playback style"
+                onClick={() => setStylePickerOpen(true)}
+              />
+              <ToolbarToolButton
+                icon={SlidersHorizontal}
+                label="Playback settings"
+                selected={openPanel === 'playbackSettings'}
+                withChevron
+                panelOpen={openPanel === 'playbackSettings'}
+                onClick={() => setOpenPanel((p) => p === 'playbackSettings' ? null : 'playbackSettings')}
+                onHoverOpen={(e) => openPanelAt('playbackSettings', e)}
+                onChevronClick={(e) => openPanelAt('playbackSettings', e)}
+              />
+              <ToolbarToolButton
+                icon={Timer}
+                label={metronomeEnabled ? 'Metronome on' : 'Metronome off'}
+                selected={metronomeEnabled}
+                onClick={() => toggleMetronome()}
+              />
+              <ToolDivider />
+              <div className="flex h-[39px] items-center px-1">
+                <ToolbarModeSwitch
+                  editMode={false}
+                  onToggle={() => {
+                    setEditorMode('fineEdit')
+                    closeOpenPanel()
                   }}
                 />
-                <ToolbarToolButton
-                  icon={Music}
-                  label="Notes & rests"
-                  selected={activeToolGroup === 'note' || activeToolGroup === 'rest'}
-                  withChevron
-                  panelOpen={openPanel === 'note'}
-                  onClick={() => {
-                    setActiveToolGroup('note')
-                    setOpenPanel(null)
+              </div>
+            </div>
+          ) : (
+            /* ── fineEdit mode — two rows + spanning toggle ── */
+            <div className="flex">
+              {/* Left: two rows */}
+              <div className="flex flex-col">
+                {/* Row 1 — note/rhythm tools (populated in Task 3) */}
+                <div className="flex h-[46px] items-center gap-[5px] p-2">
+                </div>
+                {/* Row 2 — structural tools (populated in Task 3) */}
+                <div className="flex h-[46px] items-center gap-[5px] border-t border-border p-2">
+                </div>
+              </div>
+              {/* Right: mode toggle spanning both rows */}
+              <div className="flex items-center justify-center border-l border-border px-3">
+                <ToolbarModeSwitch
+                  editMode={true}
+                  onToggle={() => {
+                    setEditorMode('transform')
+                    setActiveSidebarTool(null)
+                    closeOpenPanel()
                   }}
-                  onHoverOpen={(e) => openPanelAt('note', e)}
-                  onChevronClick={(e) => openPanelAt('note', e)}
                 />
-                <ToolbarToolButton
-                  icon={Hash}
-                  label="Ties, slurs & articulations"
-                  selected={activeToolGroup === 'notation'}
-                  withChevron
-                  panelOpen={openPanel === 'notation'}
-                  onClick={() => {
-                    setActiveToolGroup('notation')
-                    setOpenPanel(null)
-                  }}
-                  onHoverOpen={(e) => openPanelAt('notation', e)}
-                  onChevronClick={(e) => openPanelAt('notation', e)}
-                />
-                <ToolbarToolButton
-                  icon={PenTool}
-                  label="Chord diagrams"
-                  selected={showChordDiagrams}
-                  withChevron
-                  panelOpen={openPanel === 'chords'}
-                  onClick={() => {
-                    toggleChordDiagrams()
-                    setOpenPanel(null)
-                  }}
-                  onHoverOpen={(e) => openPanelAt('chords', e)}
-                  onChevronClick={(e) => openPanelAt('chords', e)}
-                />
-                <ToolbarToolButton
-                  icon={Type}
-                  label="Zoom controls"
-                  selected={openPanel === 'view'}
-                  onHoverOpen={(e) => openPanelAt('view', e)}
-                  onClick={() => setOpenPanel((panel) => panel === 'view' ? null : 'view')}
-                />
-                <ToolbarToolButton
-                  icon={Circle}
-                  label="Playback style"
-                  onClick={() => setStylePickerOpen(true)}
-                />
-                <ToolbarToolButton
-                  icon={Guitar}
-                  label="Chord diagram placement"
-                  withChevron
-                  panelOpen={openPanel === 'chords'}
-                  onHoverOpen={(e) => openPanelAt('chords', e)}
-                  onClick={() => setOpenPanel((panel) => panel === 'chords' ? null : 'chords')}
-                  onChevronClick={(e) => openPanelAt('chords', e)}
-                />
-              </>
-            )}
-          </div>
-
-          <ToolDivider />
-
-          <div className="flex h-[39px] items-center p-2">
-            <ToolbarModeSwitch
-              editMode={editorMode === 'fineEdit'}
-              onToggle={() => {
-                setEditorMode(editorMode === 'fineEdit' ? 'transform' : 'fineEdit')
-                closeOpenPanel()
-              }}
-            />
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

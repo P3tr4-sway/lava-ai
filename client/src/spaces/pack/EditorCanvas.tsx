@@ -86,7 +86,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     <div
       ref={containerRef}
       className={cn(
-        'relative grid min-h-0 w-full flex-1 gap-0 overflow-auto pb-8 pt-0',
+        'relative grid min-h-0 w-full flex-1 gap-5 overflow-auto px-5 pb-32 pt-4',
         editorMode === 'fineEdit' && 'pl-24',
         className,
       )}

@@ -185,27 +185,13 @@ export function handleInsertRestAtCaret(
   return { document: next, warnings }
 }
 
-/** Accepts the full deleteNote command shape but only noteId is required for the lookup */
 export function handleDeleteNote(
   doc: ScoreDocument,
-  cmd: { type: 'deleteNote'; noteId: string; trackId?: string },
+  cmd: Extract<ScoreCommand, { type: 'deleteNote' }>,
 ): CommandResult {
   const next = cloneDocument(doc)
-  const warnings: string[] = []
-
-  if (cmd.trackId) {
-    const track = next.tracks.find((t) => t.id === cmd.trackId)
-    if (!track) {
-      warnings.push(`Track ${cmd.trackId} not found.`)
-      return { document: next, warnings }
-    }
-    track.notes = track.notes.filter((note) => note.id !== cmd.noteId)
-  } else {
-    // Search across all tracks when trackId is not provided
-    for (const track of next.tracks) {
-      track.notes = track.notes.filter((note) => note.id !== cmd.noteId)
-    }
-  }
-
-  return { document: next, warnings }
+  const track = next.tracks.find((t) => t.id === cmd.trackId)
+  if (!track) return { document: next, warnings: [`Track not found: ${cmd.trackId}`] }
+  track.notes = track.notes.filter((n) => n.id !== cmd.noteId)
+  return { document: next, warnings: [] }
 }

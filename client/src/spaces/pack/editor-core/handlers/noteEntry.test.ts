@@ -70,7 +70,7 @@ describe('handleDeleteNote', () => {
       durationType: 'quarter',
     })
     const noteId = afterInsert.document.tracks[0]!.notes[0]!.id
-    const result = handleDeleteNote(afterInsert.document, { type: 'deleteNote', noteId })
+    const result = handleDeleteNote(afterInsert.document, { type: 'deleteNote', noteId, trackId: afterInsert.document.tracks[0]!.id })
     expect(result.document.tracks[0]!.notes).toHaveLength(0)
   })
 })

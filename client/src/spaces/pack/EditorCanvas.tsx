@@ -2,7 +2,6 @@ import { useRef, useMemo, useState, useCallback, useEffect } from 'react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { PracticeSurface } from './PracticeSurface'
-import { ScoreSidebarToolbar } from './ScoreSidebarToolbar'
 import { StaffPreview } from './StaffPreview'
 import { CursorOverlay } from '@/components/score/CursorOverlay'
 import { useCursorEngine } from '@/hooks/useCursorEngine'
@@ -87,7 +86,7 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     <div
       ref={containerRef}
       className={cn(
-        'relative grid min-h-0 w-full flex-1 gap-5 overflow-auto px-5 pb-24 pt-4',
+        'relative grid min-h-0 w-full flex-1 gap-0 overflow-auto pb-8 pt-0',
         editorMode === 'fineEdit' && 'pl-24',
         className,
       )}
@@ -133,8 +132,6 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
           }}
         />
       )}
-
-      <ScoreSidebarToolbar />
 
       <CursorOverlay
         cursorMode={cursor.cursorMode}

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { PanelRightClose, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, PanelRightClose, SlidersHorizontal } from 'lucide-react'
 import {
   AlphaTabApi,
   LayoutMode,
   PlayerMode,
   StaveProfile,
   TabRhythmMode,
+  synth,
 } from '@coderline/alphatab'
 import type { NoteValue, ScoreNoteEvent, ScoreTrack } from '@lava/shared'
 import { Badge } from '@/components/ui/Badge'
@@ -17,11 +18,13 @@ import { durationToBeats, moveCaretByStep } from '@/spaces/pack/editor-core/comm
 import { pitchToMidi } from '@/lib/pitchUtils'
 import { useEditorStore } from '@/stores/editorStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
+import { useAudioStore } from '@/stores/audioStore'
 import type { GetMeasureBounds } from '@/lib/cursorMath'
 
 interface TabCanvasProps {
   className?: string
   compact?: boolean
+  viewMode?: 'tab' | 'staff' | 'leadSheet' | 'split'
   getMeasureBoundsRef?: React.MutableRefObject<GetMeasureBounds>
   /** EditorCanvas containerRef — used to compute bounds in EditorCanvas content space. */
   editorContainerRef?: React.RefObject<HTMLElement | null>
@@ -297,7 +300,7 @@ function entryPreviewLabel(entryMode: 'note' | 'rest') {
   return entryMode === 'rest' ? 'R' : '0'
 }
 
-export function TabCanvas({ className, compact = false, getMeasureBoundsRef, editorContainerRef, onScoreRerender }: TabCanvasProps) {
+export function TabCanvas({ className, compact = false, viewMode = 'tab', getMeasureBoundsRef, editorContainerRef, onScoreRerender }: TabCanvasProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const alphaTabRootRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<AlphaTabApi | null>(null)
@@ -323,7 +326,12 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
   const entryMode = useEditorStore((state) => state.entryMode)
   const inspectorFocus = useEditorStore((state) => state.inspectorFocus)
   const clearInspectorFocus = useEditorStore((state) => state.clearInspectorFocus)
-  const staveProfile = editorMode === 'fineEdit' ? StaveProfile.ScoreTab : StaveProfile.Tab
+  const isTabView = viewMode === 'tab'
+  const staveProfile = editorMode === 'fineEdit' || viewMode === 'split'
+    ? StaveProfile.ScoreTab
+    : isTabView
+      ? StaveProfile.Tab
+      : StaveProfile.Score
 
   const [renderError, setRenderError] = useState<string | null>(null)
   const [barRects, setBarRects] = useState<OverlayRect[]>([])
@@ -338,7 +346,6 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
   const [noteFretDraft, setNoteFretDraft] = useState('0')
   const [noteDurationDraft, setNoteDurationDraft] = useState<NoteValue>('quarter')
   const [inspectorOpen, setInspectorOpen] = useState(false)
-  const [editHintDismissed, setEditHintDismissed] = useState(false)
   const syncOverlaysRef = useRef<() => void>(() => {})
   const noteDurationSelectRef = useRef<HTMLSelectElement | null>(null)
 
@@ -382,7 +389,7 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
   )
   const focusedMeasureIndex = selectedNote?.measureIndex ?? selectedBars[0] ?? caret?.measureIndex ?? null
   const focusedMeasure = focusedMeasureIndex !== null ? document.measures[focusedMeasureIndex] ?? null : null
-  const canOpenInspector = !compact && editorMode === 'fineEdit' && (Boolean(selectedNote) || Boolean(focusedMeasure) || Boolean(caret))
+  const canOpenInspector = !compact && isTabView && editorMode === 'fineEdit' && (Boolean(selectedNote) || Boolean(focusedMeasure) || Boolean(caret))
 
   const syncOverlays = useCallback(() => {
     const api = apiRef.current
@@ -464,7 +471,9 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
   }, [canOpenInspector, clearInspectorFocus, compact, inspectorFocus])
 
   useEffect(() => {
-    if (!alphaTabRootRef.current) return
+    if (!alphaTabRootRef.current || !surfaceRef.current) return
+
+    const scrollEl = surfaceRef.current
 
     const api = new AlphaTabApi(alphaTabRootRef.current, {
       core: {
@@ -484,7 +493,12 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
         rhythmMode: TabRhythmMode.Automatic,
       },
       player: {
-        playerMode: PlayerMode.Disabled,
+        playerMode: PlayerMode.EnabledAutomatic,
+        soundFont: '/vendor/alphatab/sonivox.sf2',
+        scrollElement: scrollEl,
+        enableCursor: true,
+        enableAnimatedBeatCursor: true,
+        enableUserInteraction: false,
       },
     })
 
@@ -492,6 +506,56 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
       setRenderError(null)
       syncOverlaysRef.current()
       onScoreRerenderRef.current?.()
+    })
+
+    // Sync alphaTab player state → audioStore
+    const offStateChanged = api.playerStateChanged.on((args: synth.PlayerStateChangedEventArgs) => {
+      const { setPlaybackState } = useAudioStore.getState()
+      if (args.stopped) {
+        setPlaybackState('stopped')
+      } else if (args.state === synth.PlayerState.Playing) {
+        setPlaybackState('playing')
+      } else {
+        setPlaybackState('paused')
+      }
+    })
+
+    // Sync playback position → audioStore
+    const offPositionChanged = api.playerPositionChanged.on((args: synth.PositionChangedEventArgs) => {
+      const { setCurrentTime, setCurrentBar } = useAudioStore.getState()
+      setCurrentTime(args.currentTime / 1000)
+      const score = api.score
+      if (score?.masterBars?.length) {
+        let barIndex = 0
+        for (let i = 0; i < score.masterBars.length; i++) {
+          if ((score.masterBars[i]?.start ?? 0) <= args.currentTick) {
+            barIndex = i
+          } else {
+            break
+          }
+        }
+        setCurrentBar(barIndex)
+      }
+    })
+
+    // Sync audioStore → alphaTab player (playback state + speed)
+    let lastPlaybackState = useAudioStore.getState().playbackState
+    let lastPlaybackRate = useAudioStore.getState().playbackRate
+    const unsubscribeAudio = useAudioStore.subscribe((state) => {
+      if (state.playbackRate !== lastPlaybackRate) {
+        lastPlaybackRate = state.playbackRate
+        api.playbackSpeed = state.playbackRate
+      }
+      if (state.playbackState !== lastPlaybackState) {
+        lastPlaybackState = state.playbackState
+        if (state.playbackState === 'playing') {
+          api.play()
+        } else if (state.playbackState === 'paused') {
+          api.pause()
+        } else {
+          api.stop()
+        }
+      }
     })
 
     apiRef.current = api
@@ -510,10 +574,13 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
 
     return () => {
       offRenderFinished()
+      offStateChanged()
+      offPositionChanged()
+      unsubscribeAudio()
       api.destroy()
       apiRef.current = null
     }
-  }, [staveProfile])
+  }, [staveProfile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const api = apiRef.current
@@ -560,15 +627,6 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
       setInspectorOpen(false)
     }
   }, [canOpenInspector])
-
-  useEffect(() => {
-    if (editorMode === 'fineEdit') {
-      setEditHintDismissed(false)
-      const timer = setTimeout(() => setEditHintDismissed(true), 5000)
-      return () => clearTimeout(timer)
-    }
-    setEditHintDismissed(true)
-  }, [editorMode])
 
   const resolveHoverState = useCallback((x: number, y: number) => {
     const api = apiRef.current
@@ -686,6 +744,8 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
       } else if (documentNote) {
         selectNoteById(documentNote.id, event.shiftKey)
         if (editorMode === 'fineEdit' && !compact) setInspectorOpen(true)
+        // Audition the note
+        try { api.playBeat(beat) } catch { /* ignore if player not ready */ }
         return
       }
     }
@@ -756,6 +816,9 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
     }
 
     selectBar(beat.voice.bar.index, event.shiftKey)
+
+    // Audition: play the clicked beat (we're in transform mode here — fineEdit path returned above)
+    try { api.playBeat(beat) } catch { /* ignore if player not ready */ }
   }, [activeToolGroup, applyCommand, beatsPerBar, clearSelection, compact, document.measures.length, document.meter.numerator, editorMode, entryDuration, entryMode, selectBar, selectNoteById, setCaret, setHoverTarget, track])
 
   const handleApplySelectedNote = useCallback(() => {
@@ -839,14 +902,43 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
     selectBar(afterIndex + 1)
   }, [applyCommand, document.measures.length, focusedMeasureIndex, selectBar])
 
+  const [addBarsOpen, setAddBarsOpen] = useState(false)
+  const [addBarsCount, setAddBarsCount] = useState('4')
+  const addBarsRef = useRef<HTMLDivElement>(null)
+
+  const handleAddBars = useCallback((count: number) => {
+    const safeCount = Math.max(1, Math.min(64, Math.floor(count)))
+    const afterIndex = focusedMeasureIndex ?? Math.max(document.measures.length - 1, 0)
+    applyCommand({
+      type: 'addMeasureAfter',
+      afterIndex,
+      count: safeCount,
+    })
+    selectBar(afterIndex + 1)
+    setAddBarsOpen(false)
+  }, [applyCommand, document.measures.length, focusedMeasureIndex, selectBar])
+
+  useEffect(() => {
+    if (!addBarsOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!addBarsRef.current?.contains(event.target as Node)) {
+        setAddBarsOpen(false)
+      }
+    }
+
+    window.document.addEventListener('mousedown', handlePointerDown)
+    return () => window.document.removeEventListener('mousedown', handlePointerDown)
+  }, [addBarsOpen])
+
   if (!track) return null
 
   return (
-    <div className={cn('relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-surface-1', className)}>
+    <div className={cn('relative min-h-0 flex-1 overflow-hidden', className)}>
       <div
         ref={surfaceRef}
         data-testid="tab-canvas-surface"
-        className={cn('relative h-full overflow-auto p-4', !compact && inspectorOpen && 'pr-[23rem]')}
+        className={cn('relative h-full overflow-auto px-5 pb-8 pt-4', !compact && inspectorOpen && 'pr-[24rem]')}
         onMouseMove={handleSurfaceMouseMove}
         onMouseLeave={() => {
           setHoverRect(null)
@@ -854,26 +946,68 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
         }}
         onClick={handleSurfaceClick}
       >
-        <div className="pointer-events-none absolute left-4 top-4 z-20 flex flex-wrap items-center gap-2">
+        <div className="pointer-events-none absolute left-5 top-4 z-20 flex flex-wrap items-center gap-2">
           <Badge className="bg-surface-0 text-text-primary">{track.name}</Badge>
           <Badge>{document.measures.length} bars</Badge>
-          <Badge>{editorMode === 'fineEdit' ? 'Edit mode' : 'Practice mode'}</Badge>
-          {!compact && <Badge>Tuning: {tuningLabels.join(' ')}</Badge>}
-          {!compact && <Badge>Capo: {track.capo}</Badge>}
+          <Badge>{editorMode === 'fineEdit' ? 'Edit mode' : 'Play mode'}</Badge>
+          {!compact && isTabView && <Badge>Tuning: {tuningLabels.join(' ')}</Badge>}
+          {!compact && isTabView && <Badge>Capo: {track.capo}</Badge>}
         </div>
 
         {!compact && (
-          <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+          <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
             {editorMode === 'fineEdit' && (
-              <Button size="sm" onClick={handleAddBarAfterFocused}>
-                + Add Bar
-              </Button>
-            )}
-            {canOpenInspector && !inspectorOpen && (
-              <Button size="sm" variant="outline" onClick={() => setInspectorOpen(true)}>
-                <SlidersHorizontal className="size-4" />
-                Edit Selection
-              </Button>
+              <div ref={addBarsRef} className="relative">
+                <Button
+                  size="sm"
+                  onClick={() => setAddBarsOpen((current) => !current)}
+                  aria-expanded={addBarsOpen}
+                  aria-haspopup="dialog"
+                >
+                  Add Bars
+                  <ChevronDown className="size-4" />
+                </Button>
+
+                {addBarsOpen ? (
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-[220px] rounded-2xl border border-border bg-surface-0 p-3 shadow-sm">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
+                      Add bars
+                    </p>
+
+                    <div className="mt-3 flex gap-2">
+                      {[4, 8, 16].map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          onClick={() => {
+                            setAddBarsCount(String(count))
+                            handleAddBars(count)
+                          }}
+                          className="inline-flex h-9 min-w-[44px] items-center justify-center rounded-full border border-border px-3 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface-1"
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        value={addBarsCount}
+                        onChange={(event) => setAddBarsCount(event.target.value.replace(/[^\d]/g, '').slice(0, 2))}
+                        inputMode="numeric"
+                        aria-label="Number of bars to add"
+                        className="h-9"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleAddBars(Number(addBarsCount) || 1)}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             )}
           </div>
         )}
@@ -988,233 +1122,6 @@ export function TabCanvas({ className, compact = false, getMeasureBoundsRef, edi
         </div>
       )}
 
-      {!compact && inspectorOpen && (
-        <aside className="absolute inset-y-4 right-4 z-30 flex w-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-surface-0 shadow-lg animate-slide-in-right">
-          <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4">
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-text-muted">Selection</p>
-              <h3 className="text-sm font-semibold text-text-primary">
-                {selectedNote
-                  ? `Note · Bar ${selectedNote.measureIndex + 1}`
-                  : focusedMeasure
-                    ? `Bar ${focusedMeasure.index + 1}`
-                    : 'Nothing selected'}
-              </h3>
-              <p className="text-xs text-text-secondary">
-                Edit mode tools for the current note or bar. This panel stays hidden until you ask for it.
-              </p>
-            </div>
-            <Button size="icon-sm" variant="ghost" onClick={() => setInspectorOpen(false)} aria-label="Close selection panel">
-              <PanelRightClose className="size-4" />
-            </Button>
-          </div>
-
-          <div className="flex-1 space-y-3 overflow-auto p-4">
-            <Card className="bg-surface-1">
-              <p className="mb-2 text-xs font-medium text-text-secondary">Global</p>
-              <Input
-                id="tab-canvas-capo"
-                label="Capo"
-                value={capoDraft}
-                onChange={(event) => setCapoDraft(event.target.value)}
-                inputMode="numeric"
-              />
-              <Button className="mt-2 w-full" variant="outline" onClick={handleCapoApply}>
-                Apply Capo
-              </Button>
-            </Card>
-
-            {selectedNote && (
-              <Card className="bg-surface-1">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-medium text-text-secondary">Selected Note</p>
-                  <Badge>{noteLabel(selectedNote)}</Badge>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Input
-                    id="tab-canvas-note-string"
-                    label="String"
-                    value={noteStringDraft}
-                    onChange={(event) => setNoteStringDraft(event.target.value)}
-                    inputMode="numeric"
-                  />
-                  <Input
-                    id="tab-canvas-note-fret"
-                    label="Fret"
-                    value={noteFretDraft}
-                    onChange={(event) => setNoteFretDraft(event.target.value)}
-                    inputMode="numeric"
-                  />
-                </div>
-
-                <label className="mt-3 flex flex-col gap-1 text-xs text-text-secondary">
-                  Duration
-                  <select
-                    ref={noteDurationSelectRef}
-                    className="h-8 rounded border border-border bg-surface-3 px-3 text-sm text-text-primary"
-                    value={noteDurationDraft}
-                    onChange={(event) => setNoteDurationDraft(event.target.value as NoteValue)}
-                  >
-                    {DURATION_OPTIONS.map((duration) => (
-                      <option key={duration} value={duration}>
-                        {duration}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="mt-3 grid gap-2">
-                  <Button className="w-full" onClick={handleApplySelectedNote}>
-                    Apply Note Changes
-                  </Button>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button
-                      variant={selectedNote.techniques.slide === 'up' ? 'default' : 'outline'}
-                      onClick={() => applyCommand({
-                        type: selectedNote.techniques.slide === 'up' ? 'removeTechnique' : 'addTechnique',
-                        trackId: track.id,
-                        noteId: selectedNote.id,
-                        technique: 'slide',
-                        ...(selectedNote.techniques.slide === 'up' ? {} : { value: 'up' }),
-                      })}
-                    >
-                      Slide Up
-                    </Button>
-                    <Button
-                      variant={selectedNote.techniques.slide === 'down' ? 'default' : 'outline'}
-                      onClick={() => applyCommand({
-                        type: selectedNote.techniques.slide === 'down' ? 'removeTechnique' : 'addTechnique',
-                        trackId: track.id,
-                        noteId: selectedNote.id,
-                        technique: 'slide',
-                        ...(selectedNote.techniques.slide === 'down' ? {} : { value: 'down' }),
-                      })}
-                    >
-                      Slide Down
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => applyCommand({
-                        type: 'removeTechnique',
-                        trackId: track.id,
-                        noteId: selectedNote.id,
-                        technique: 'slide',
-                      })}
-                    >
-                      Clear Slide
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => applyCommand({ type: 'toggleRest', trackId: track.id, noteId: selectedNote.id })}
-                    >
-                      Toggle Rest
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => applyCommand({ type: 'toggleTie', trackId: track.id, noteId: selectedNote.id })}
-                    >
-                      Toggle Tie
-                    </Button>
-                  </div>
-                  <Button variant="destructive" onClick={handleDeleteSelectedNotes}>
-                    Delete Selected Notes
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            {focusedMeasure && (
-              <Card className="bg-surface-1">
-                <p className="mb-3 text-xs font-medium text-text-secondary">Bar Actions</p>
-
-                <div className="grid gap-3">
-                  <Input label="Chord" value={chordDraft} onChange={(event) => setChordDraft(event.target.value)} />
-                  <Input
-                    label="Annotation"
-                    value={annotationDraft}
-                    onChange={(event) => setAnnotationDraft(event.target.value)}
-                    placeholder="e.g. palm mute"
-                  />
-                  <Button variant="outline" onClick={handleApplyMeasureMeta}>
-                    Apply Chord / Annotation
-                  </Button>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={() => handleTransposeMeasure(-1)}>
-                      Transpose -1
-                    </Button>
-                    <Button variant="outline" onClick={() => handleTransposeMeasure(1)}>
-                      Transpose +1
-                    </Button>
-                  </div>
-
-                  <Button variant="outline" onClick={handleSimplifyMeasure}>
-                    Simplify Fingering
-                  </Button>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        applyCommand({
-                          type: 'addMeasureBefore',
-                          beforeIndex: focusedMeasure.index,
-                          count: 1,
-                        })
-                      }
-                    >
-                      Add Bar Before
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        applyCommand({
-                          type: 'addMeasureAfter',
-                          afterIndex: focusedMeasure.index,
-                          count: 1,
-                        })
-                      }
-                    >
-                      Add Bar After
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() =>
-                        applyCommand({
-                          type: 'deleteMeasureRange',
-                          start: focusedMeasure.index,
-                          end: focusedMeasure.index,
-                        })
-                      }
-                    >
-                      Delete Bar
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            )}
-          </div>
-        </aside>
-      )}
-
-      {!compact && !inspectorOpen && editorMode === 'fineEdit' && !editHintDismissed && (
-        <div className="pointer-events-none absolute bottom-6 right-6 z-20 animate-fade-in">
-          <button
-            type="button"
-            onClick={() => setEditHintDismissed(true)}
-            className="pointer-events-auto rounded-full border border-border bg-surface-0 px-3 py-2 text-xs text-text-secondary shadow-sm transition-opacity hover:opacity-70"
-          >
-            {caret
-              ? 'The ring marks the next input spot. Choose a value in Note tools, hover a string, and click to write. Use Alt/Cmd/Ctrl-click to move only.'
-              : canOpenInspector
-                ? 'Select Edit Selection to adjust the chosen note or bar.'
-                : 'Choose a note value in the toolbar, hover the target string, and click directly on the score to write.'}
-          </button>
-        </div>
-      )}
     </div>
   )
 }

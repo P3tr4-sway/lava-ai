@@ -427,6 +427,7 @@ export function EditorToolbar({
       setActiveSidebarTool(null)
       setSelectedOptions({})
       setOpenPanel(null)
+      setPanelAnchor(null)
     }
   }, [editorMode])
 

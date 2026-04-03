@@ -15,7 +15,16 @@ import type {
   TechniqueSet,
   TimeSignature,
 } from '@lava/shared'
-import { STANDARD_TUNING, fretToMidi, midiToFret, midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
+import { STANDARD_TUNING, midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
+import {
+  choosePlacement,
+  createId,
+  createMeasureMeta,
+  divisionsToNoteType,
+  noteTypeToDivisions,
+  resolvePitchFromPlacement as resolvePitchFromPlacementHelper,
+  updateTrackNotes,
+} from '@/spaces/pack/editor-core/helpers'
 
 const parser = new DOMParser()
 const serializer = new XMLSerializer()
@@ -56,26 +65,12 @@ const FIFTHS_FROM_KEY: Record<string, number> = {
   'C#': 7,
 }
 
-const NOTE_TYPE_TO_DIVISOR: Record<NoteValue, number> = {
-  whole: 1,
-  half: 2,
-  quarter: 4,
-  eighth: 8,
-  sixteenth: 16,
-}
-
 const DEFAULT_POLICY: PlacementPolicy = {
   preferMinimalMovement: true,
   preferStringContinuity: true,
   maxFret: 18,
 }
 
-function createId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`
-  }
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
-}
 
 export function cloneScoreDocument(document: ScoreDocument): ScoreDocument {
   return structuredClone(document)
@@ -132,19 +127,6 @@ function getText(el: Element | null | undefined, selector: string): string | nul
   return el?.querySelector(selector)?.textContent?.trim() ?? null
 }
 
-function noteTypeToDivisions(type: NoteValue, divisions: number): number {
-  const divisor = NOTE_TYPE_TO_DIVISOR[type] ?? 4
-  return Math.max(1, Math.round((divisions * 4) / divisor))
-}
-
-function divisionsToNoteType(durationDivisions: number, divisions: number): NoteValue {
-  const ratio = durationDivisions / Math.max(divisions, 1)
-  if (ratio >= 4) return 'whole'
-  if (ratio >= 2) return 'half'
-  if (ratio >= 1) return 'quarter'
-  if (ratio >= 0.5) return 'eighth'
-  return 'sixteenth'
-}
 
 function buildHarmonySymbol(harmony: Element): string {
   const rootStep = getText(harmony, 'root-step') ?? 'C'
@@ -263,44 +245,6 @@ function parseMeasureMeta(
   }
 }
 
-function createMeasureMeta(index: number): ScoreMeasureMeta {
-  return {
-    id: createId(`measure-${index}`),
-    index,
-    harmony: [],
-    annotations: [],
-    chordDiagramPlacement: 'hidden',
-  }
-}
-
-function choosePlacement(
-  midi: number,
-  tuning: number[],
-  capo: number,
-  previous: GuitarPlacement | null,
-  policy: PlacementPolicy = DEFAULT_POLICY,
-): GuitarPlacement | null {
-  const effectiveTuning = tuning.map((value) => value + capo)
-  const candidates = midiToFret(midi, effectiveTuning).filter((candidate) => candidate.fret <= policy.maxFret)
-  if (candidates.length === 0) return null
-
-  candidates.sort((a, b) => {
-    const prevDistanceA = previous ? Math.abs(previous.fret - a.fret) + Math.abs(previous.string - a.string) : 0
-    const prevDistanceB = previous ? Math.abs(previous.fret - b.fret) + Math.abs(previous.string - b.string) : 0
-    if (policy.preferMinimalMovement && prevDistanceA !== prevDistanceB) return prevDistanceA - prevDistanceB
-    if (policy.preferStringContinuity && previous && a.string !== b.string) {
-      return Math.abs(previous.string - a.string) - Math.abs(previous.string - b.string)
-    }
-    return a.fret - b.fret
-  })
-
-  const best = candidates[0]
-  return {
-    string: best.string,
-    fret: best.fret,
-    confidence: previous ? 'derived' : 'low',
-  }
-}
 
 export function assignGuitarPlacement(document: ScoreDocument, policy: PlacementPolicy = DEFAULT_POLICY): ScoreDocument {
   const next = cloneScoreDocument(document)
@@ -647,21 +591,6 @@ export function buildScoreDigest(document: ScoreDocument): string {
   ].filter(Boolean).join(' | ')
 }
 
-function updateTrackNotes(track: ScoreTrack, updater: (notes: ScoreNoteEvent[]) => ScoreNoteEvent[]): ScoreTrack {
-  return {
-    ...track,
-    notes: updater(track.notes).sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat),
-  }
-}
-
-function resolvePitchFromPlacement(track: ScoreTrack, placement: GuitarPlacement): ScorePitch {
-  const pitch = midiToPitch(fretToMidi(placement.string, placement.fret, track.tuning.map((value) => value + track.capo)))
-  return {
-    step: pitch.step as ScorePitch['step'],
-    octave: pitch.octave,
-    alter: pitch.alter,
-  }
-}
 
 export function applyCommandToDocument(document: ScoreDocument, command: ScoreCommand): CommandResult {
   const next = cloneScoreDocument(document)
@@ -675,7 +604,7 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
   switch (command.type) {
     case 'insertNote': {
       const inferredPlacement = command.note?.placement ?? { string: 1, fret: 0, confidence: 'low' as const }
-      const inferredPitch = command.note?.pitch ?? resolvePitchFromPlacement(track, inferredPlacement)
+      const inferredPitch = command.note?.pitch ?? resolvePitchFromPlacementHelper(inferredPlacement, track.tuning, track.capo)
       const newNote: ScoreNoteEvent = {
         id: createId('note'),
         measureIndex: command.measureIndex,
@@ -718,11 +647,11 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
                 fret: command.fret,
                 confidence: 'explicit',
               },
-              pitch: resolvePitchFromPlacement(track, {
-                string: command.string,
-                fret: command.fret,
-                confidence: 'explicit',
-              }),
+              pitch: resolvePitchFromPlacementHelper(
+                { string: command.string, fret: command.fret, confidence: 'explicit' },
+                track.tuning,
+                track.capo,
+              ),
             }
           : note)
         break
@@ -742,7 +671,7 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
         durationType,
         dots: 0,
         isRest: false,
-        pitch: resolvePitchFromPlacement(track, placement),
+        pitch: resolvePitchFromPlacementHelper(placement, track.tuning, track.capo),
         placement,
         techniques: {},
         displayHints: { staffVisible: true, tabVisible: true },
@@ -846,11 +775,11 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
               fret: command.fret,
               confidence: 'explicit',
             },
-            pitch: resolvePitchFromPlacement(track, {
-              string: command.string,
-              fret: command.fret,
-              confidence: 'explicit',
-            }),
+            pitch: resolvePitchFromPlacementHelper(
+              { string: command.string, fret: command.fret, confidence: 'explicit' },
+              track.tuning,
+              track.capo,
+            ),
           }
         : note)
       break

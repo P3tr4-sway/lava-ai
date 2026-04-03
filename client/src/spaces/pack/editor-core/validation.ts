@@ -59,6 +59,7 @@ export function validateAndTruncate(
   const validated: ScoreNoteEvent[] = []
 
   for (const note of inMeasure) {
+    // beat is in quarter-note units (0 = bar start, 1.0 = 1 quarter note, etc.)
     const beatPosition = Math.round(note.beat * divisions)
 
     // Remove notes starting at or beyond capacity

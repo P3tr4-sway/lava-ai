@@ -90,7 +90,20 @@ describe('validateAndTruncate', () => {
     const result = validateAndTruncate(notes, 0, { numerator: 4, denominator: 4 }, DIVISIONS)
     const n2 = result.find((n) => n.id === 'n2')!
     expect(n2.dots).toBe(0)
-    expect(n2.durationDivisions).toBe(960) // half note fits exactly (beats 2-3)
+    expect(n2.durationDivisions).toBe(960) // dotted half overflows → truncated to plain half, dots cleared
+  })
+
+  it('clears tuplet when truncating', () => {
+    // A dotted quarter triplet at beat 3 overflows 4/4 → truncate to sixteenth, clear tuplet
+    const notes: ScoreNoteEvent[] = [
+      makeNote({ id: 'n1', beat: 0, durationType: 'half', durationDivisions: 960 }),
+      makeNote({ id: 'n2', beat: 2, durationType: 'half', durationDivisions: 960 }),
+      // tuplet note at beat 3.5 (overflow)
+      makeNote({ id: 'n3', beat: 3.5, durationType: 'quarter', durationDivisions: 480, tuplet: { actual: 3, normal: 2 } }),
+    ]
+    const result = validateAndTruncate(notes, 0, { numerator: 4, denominator: 4 }, DIVISIONS)
+    const n3 = result.find((n) => n.id === 'n3')!
+    expect(n3.tuplet).toBeUndefined()
   })
 
   it('leaves valid measures unchanged', () => {

@@ -515,6 +515,11 @@ function renderNote(note: ScoreNoteEvent, track: ScoreTrack): string {
   return lines.join('')
 }
 
+function renderNoteDynamic(note: ScoreNoteEvent): string {
+  if (!note.dynamic) return ''
+  return `<direction placement="below"><direction-type><dynamics><${note.dynamic}/></dynamics></direction-type></direction>`
+}
+
 export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
   const track = document.tracks[0]
   if (!track) return createEmptyScoreDocument().lastExportedXml ?? ''
@@ -573,14 +578,43 @@ export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
     if (measure.tempo ?? (index === 0 ? document.tempo : undefined)) {
       lines.push(`<direction placement="above"><direction-type><words>Tempo</words></direction-type><sound tempo="${measure.tempo ?? document.tempo}"/></direction>`)
     }
+    if (measure.isRepeatStart) {
+      lines.push('<barline location="left"><bar-style>heavy-light</bar-style><repeat direction="forward"/></barline>')
+    }
     measure.harmony.forEach((harmony) => lines.push(renderHarmony(harmony, document.divisions)))
     measure.annotations.forEach((annotation) => {
       lines.push(`<direction placement="above"><direction-type><words>${xmlEscape(annotation)}</words></direction-type></direction>`)
     })
+    if (measure.repeatMarker) {
+      const markerText: Record<string, string> = {
+        'dc-al-fine': 'D.C. al Fine',
+        'ds-al-coda': 'D.S. al Coda',
+        segno: '\u{1D10B}',
+        fine: 'Fine',
+        coda: '\u{1D10C}',
+      }
+      const text = markerText[measure.repeatMarker]
+      if (text) lines.push(`<direction placement="above"><direction-type><words>${xmlEscape(text)}</words></direction-type></direction>`)
+    }
     const notes = (notesByMeasure.get(index) ?? []).sort((a, b) => a.beat - b.beat)
-    notes.forEach((note) => lines.push(renderNote(note, track)))
+    notes.forEach((note) => {
+      lines.push(renderNoteDynamic(note))
+      lines.push(renderNote(note, track))
+    })
     if (notes.length === 0) {
       lines.push(`<note><rest/><duration>${document.divisions * currentMeter.numerator}</duration><voice>1</voice><type>whole</type></note>`)
+    }
+    if (measure.isRepeatEnd) {
+      lines.push('<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>')
+    } else if (measure.barlineType && measure.barlineType !== 'single') {
+      const barStyleMap: Record<string, string> = {
+        double: 'light-light',
+        final: 'light-heavy',
+        dashed: 'dashed',
+        dotted: 'dotted',
+      }
+      const barStyle = barStyleMap[measure.barlineType]
+      if (barStyle) lines.push(`<barline location="right"><bar-style>${barStyle}</bar-style></barline>`)
     }
     lines.push('</measure>')
   })
@@ -1048,6 +1082,62 @@ export function applyCommandToDocument(document: ScoreDocument, command: ScoreCo
     case 'moveCursor':
     case 'selectNotes':
     case 'setMeasureRange':
+      break
+    case 'setKeySignature':
+      next.keySignature = { key: command.key, mode: command.mode }
+      break
+    case 'setTimeSignature':
+      next.meter = { numerator: command.numerator, denominator: command.denominator }
+      break
+    case 'setTempo':
+      next.tempo = Math.max(1, command.bpm)
+      break
+    case 'setTrackClef': {
+      const clefTrack = next.tracks.find((t) => t.id === command.trackId)
+      if (clefTrack) clefTrack.clef = command.clef
+      break
+    }
+    case 'setBarlineType': {
+      const barlineMeasure = next.measures.find((m) => m.index === command.measureIndex)
+      if (barlineMeasure) {
+        if (command.barlineType === null) {
+          delete barlineMeasure.barlineType
+        } else {
+          barlineMeasure.barlineType = command.barlineType
+        }
+      }
+      break
+    }
+    case 'setRepeat': {
+      const repeatMeasure = next.measures.find((m) => m.index === command.measureIndex)
+      if (repeatMeasure) {
+        if (command.repeatType === 'start') {
+          if (command.enabled) repeatMeasure.isRepeatStart = true
+          else delete repeatMeasure.isRepeatStart
+        } else {
+          if (command.enabled) repeatMeasure.isRepeatEnd = true
+          else delete repeatMeasure.isRepeatEnd
+        }
+      }
+      break
+    }
+    case 'setRepeatMarker': {
+      const markerMeasure = next.measures.find((m) => m.index === command.measureIndex)
+      if (markerMeasure) {
+        if (command.marker === null) delete markerMeasure.repeatMarker
+        else markerMeasure.repeatMarker = command.marker
+      }
+      break
+    }
+    case 'setNoteDynamic':
+      track.notes = track.notes.map((note) => {
+        if (note.id !== command.noteId) return note
+        if (command.dynamic === null) {
+          const { dynamic: _removed, ...rest } = note
+          return rest
+        }
+        return { ...note, dynamic: command.dynamic }
+      })
       break
   }
 

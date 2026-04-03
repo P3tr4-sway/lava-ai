@@ -5,6 +5,9 @@ export type NoteValue = 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
 export type PlacementConfidence = 'explicit' | 'derived' | 'low'
 export type RenderLayoutMode = 'systems'
 export type TechniqueSlide = 'up' | 'down' | 'shift'
+export type BarlineType = 'single' | 'double' | 'final' | 'dashed' | 'dotted'
+export type RepeatMarker = 'dc-al-fine' | 'ds-al-coda' | 'segno' | 'fine' | 'coda'
+export type Dynamic = 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff'
 
 export interface TimeSignature {
   numerator: number
@@ -102,6 +105,7 @@ export interface ScoreNoteEvent {
   tieStart?: boolean
   tieStop?: boolean
   slurStart?: boolean
+  dynamic?: Dynamic
   displayHints?: {
     staffVisible?: boolean
     tabVisible?: boolean
@@ -119,6 +123,10 @@ export interface ScoreMeasureMeta {
   annotations: string[]
   sectionLabel?: string
   chordDiagramPlacement?: 'hidden' | 'top' | 'bottom' | 'both'
+  barlineType?: BarlineType
+  isRepeatStart?: boolean
+  isRepeatEnd?: boolean
+  repeatMarker?: RepeatMarker
 }
 
 export interface ScoreTrack {
@@ -194,6 +202,14 @@ export type ScoreCommand =
   | { type: 'addTechnique'; trackId: string; noteId: string; technique: keyof TechniqueSet; value?: boolean | TechniqueSlide }
   | { type: 'removeTechnique'; trackId: string; noteId: string; technique: keyof TechniqueSet }
   | { type: 'toggleSlur'; trackId: string; noteId: string }
+  | { type: 'setKeySignature'; key: string; mode: 'major' | 'minor' }
+  | { type: 'setTimeSignature'; numerator: number; denominator: number }
+  | { type: 'setTempo'; bpm: number }
+  | { type: 'setTrackClef'; trackId: string; clef: Clef }
+  | { type: 'setBarlineType'; measureIndex: number; barlineType: BarlineType | null }
+  | { type: 'setRepeat'; measureIndex: number; repeatType: 'start' | 'end'; enabled: boolean }
+  | { type: 'setRepeatMarker'; measureIndex: number; marker: RepeatMarker | null }
+  | { type: 'setNoteDynamic'; trackId: string; noteId: string; dynamic: Dynamic | null }
 
 export interface CommandResult {
   document: ScoreDocument

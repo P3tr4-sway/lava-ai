@@ -357,6 +357,15 @@ export function EditorToolbar({
   const applyCommand = useScoreDocumentStore((s) => s.applyCommand)
   const track = document.tracks[0]
 
+  const docKeySig = `${document.keySignature.key} ${document.keySignature.mode}`
+  const docTimeSig = `${document.meter.numerator}/${document.meter.denominator}`
+  const docClef = track?.clef ? (track.clef.charAt(0).toUpperCase() + track.clef.slice(1)) : 'Treble'
+
+  const selectedBarIndex = useEditorStore((s) =>
+    s.selectedBars.length > 0 ? Math.min(...s.selectedBars) : s.caret?.measureIndex ?? null,
+  )
+  const selectedMeasureMeta = selectedBarIndex !== null ? (document.measures[selectedBarIndex] ?? null) : null
+
   const transportState = useAudioStore((s) => s.transportState)
   const setTransportState = useAudioStore((s) => s.setTransportState)
   const currentBar = useAudioStore((s) => s.currentBar)
@@ -731,8 +740,8 @@ export function EditorToolbar({
           <div className="space-y-2">
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Dynamics</p>
             <div className="flex gap-1">
-              {['pp', 'p', 'mf', 'f', 'ff'].map((dyn) => (
-                <PanelButton key={dyn} active={false} onClick={() => window.dispatchEvent(new CustomEvent('lava-dynamic', { detail: { value: dyn } }))}>
+              {(['pp', 'p', 'mp', 'mf', 'f', 'ff'] as const).map((dyn) => (
+                <PanelButton key={dyn} active={primarySelectedNote?.dynamic === dyn} onClick={() => window.dispatchEvent(new CustomEvent('lava-dynamic', { detail: { value: dyn } }))}>
                   {dyn}
                 </PanelButton>
               ))}
@@ -745,8 +754,7 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Key signatures</p>
             <div className="flex flex-col gap-1">
               {['C major', 'G major', 'D major', 'F major', 'Bb major', 'A minor', 'E minor', 'D minor'].map((key) => (
-                <PanelButton key={key} active={selectedOptions['keySig'] === key} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, keySig: key }))
+                <PanelButton key={key} active={docKeySig === key} onClick={() => {
                   setActiveSidebarTool('keySig')
                   window.dispatchEvent(new CustomEvent('lava-key-sig', { detail: { value: key } }))
                   closeOpenPanel()
@@ -763,8 +771,7 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Time signatures</p>
             <div className="flex flex-wrap gap-1">
               {['4/4', '3/4', '2/4', '6/8', '9/8', '12/8', '5/4', '7/8'].map((sig) => (
-                <PanelButton key={sig} active={selectedOptions['timeSig'] === sig} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, timeSig: sig }))
+                <PanelButton key={sig} active={docTimeSig === sig} onClick={() => {
                   setActiveSidebarTool('timeSig')
                   window.dispatchEvent(new CustomEvent('lava-time-sig', { detail: { value: sig } }))
                   closeOpenPanel()
@@ -780,14 +787,21 @@ export function EditorToolbar({
           <div className="space-y-2">
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Repeats & jumps</p>
             <div className="flex flex-col gap-1">
-              {['Repeat start', 'Repeat end', 'D.C. al Fine', 'D.S. al Coda', 'Segno', 'Fine', 'Coda'].map((opt) => (
-                <PanelButton key={opt} active={selectedOptions['repeats'] === opt} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, repeats: opt }))
+              {[
+                { label: 'Repeat start', isActive: Boolean(selectedMeasureMeta?.isRepeatStart) },
+                { label: 'Repeat end', isActive: Boolean(selectedMeasureMeta?.isRepeatEnd) },
+                { label: 'D.C. al Fine', isActive: selectedMeasureMeta?.repeatMarker === 'dc-al-fine' },
+                { label: 'D.S. al Coda', isActive: selectedMeasureMeta?.repeatMarker === 'ds-al-coda' },
+                { label: 'Segno', isActive: selectedMeasureMeta?.repeatMarker === 'segno' },
+                { label: 'Fine', isActive: selectedMeasureMeta?.repeatMarker === 'fine' },
+                { label: 'Coda', isActive: selectedMeasureMeta?.repeatMarker === 'coda' },
+              ].map(({ label, isActive }) => (
+                <PanelButton key={label} active={isActive} onClick={() => {
                   setActiveSidebarTool('repeats')
-                  window.dispatchEvent(new CustomEvent('lava-repeat', { detail: { value: opt } }))
+                  window.dispatchEvent(new CustomEvent('lava-repeat', { detail: { value: label } }))
                   closeOpenPanel()
                 }}>
-                  {opt}
+                  {label}
                 </PanelButton>
               ))}
             </div>
@@ -798,16 +812,21 @@ export function EditorToolbar({
           <div className="space-y-2">
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Barlines</p>
             <div className="flex flex-col gap-1">
-              {['Single', 'Double', 'Final', 'Dashed', 'Dotted'].map((opt) => (
-                <PanelButton key={opt} active={selectedOptions['barlines'] === opt} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, barlines: opt }))
-                  setActiveSidebarTool('barlines')
-                  window.dispatchEvent(new CustomEvent('lava-barline', { detail: { value: opt } }))
-                  closeOpenPanel()
-                }}>
-                  {opt}
-                </PanelButton>
-              ))}
+              {(['Single', 'Double', 'Final', 'Dashed', 'Dotted'] as const).map((opt) => {
+                const barlineValue = opt.toLowerCase() as 'single' | 'double' | 'final' | 'dashed' | 'dotted'
+                const isActive = barlineValue === 'single'
+                  ? !selectedMeasureMeta?.barlineType || selectedMeasureMeta.barlineType === 'single'
+                  : selectedMeasureMeta?.barlineType === barlineValue
+                return (
+                  <PanelButton key={opt} active={isActive} onClick={() => {
+                    setActiveSidebarTool('barlines')
+                    window.dispatchEvent(new CustomEvent('lava-barline', { detail: { value: opt } }))
+                    closeOpenPanel()
+                  }}>
+                    {opt}
+                  </PanelButton>
+                )
+              })}
             </div>
           </div>
         )
@@ -817,8 +836,7 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Clefs</p>
             <div className="flex flex-col gap-1">
               {['Treble', 'Bass', 'Alto', 'Tenor'].map((opt) => (
-                <PanelButton key={opt} active={selectedOptions['clefs'] === opt} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, clefs: opt }))
+                <PanelButton key={opt} active={docClef === opt} onClick={() => {
                   setActiveSidebarTool('clefs')
                   window.dispatchEvent(new CustomEvent('lava-clef', { detail: { value: opt } }))
                   closeOpenPanel()
@@ -835,19 +853,18 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Tempo</p>
             <div className="flex flex-col gap-1">
               {[
-                { label: 'Largo', bpm: '40–60' },
-                { label: 'Andante', bpm: '76–108' },
-                { label: 'Moderato', bpm: '108–120' },
-                { label: 'Allegro', bpm: '120–168' },
-                { label: 'Presto', bpm: '168–200' },
+                { label: 'Largo', range: [40, 60], bpm: 50 },
+                { label: 'Andante', range: [76, 108], bpm: 92 },
+                { label: 'Moderato', range: [108, 120], bpm: 114 },
+                { label: 'Allegro', range: [120, 168], bpm: 144 },
+                { label: 'Presto', range: [168, 200], bpm: 184 },
               ].map((opt) => (
-                <PanelButton key={opt.label} active={selectedOptions['tempo'] === opt.label} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, tempo: opt.label }))
+                <PanelButton key={opt.label} active={document.tempo >= opt.range[0] && document.tempo <= opt.range[1]} onClick={() => {
                   setActiveSidebarTool('tempo')
                   window.dispatchEvent(new CustomEvent('lava-tempo', { detail: { value: opt.label } }))
                   closeOpenPanel()
                 }}>
-                  {opt.label} <span className="text-text-muted">{opt.bpm}</span>
+                  {opt.label} <span className="text-text-muted">{opt.range[0]}–{opt.range[1]}</span>
                 </PanelButton>
               ))}
             </div>
@@ -858,10 +875,8 @@ export function EditorToolbar({
           <div className="space-y-2">
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Pitch</p>
             <div className="flex flex-col gap-1">
-              {['Concert pitch', 'Octave up', 'Octave down', 'Chromatic'].map((opt) => (
-                <PanelButton key={opt} active={selectedOptions['pitch'] === opt} onClick={() => {
-                  setSelectedOptions((prev) => ({ ...prev, pitch: opt }))
-                  setActiveSidebarTool('pitch')
+              {['Octave up', 'Octave down'].map((opt) => (
+                <PanelButton key={opt} active={false} onClick={() => {
                   window.dispatchEvent(new CustomEvent('lava-pitch-mode', { detail: { value: opt } }))
                   closeOpenPanel()
                 }}>

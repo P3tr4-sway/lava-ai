@@ -8,8 +8,7 @@ import type {
   ScoreMeasureMeta,
   ScoreNoteEvent,
   ScorePitch,
-  ScoreTrack,
-  TechniqueSet,
+  Technique,
   TimeSignature,
 } from '@lava/shared'
 import { STANDARD_TUNING, midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
@@ -145,18 +144,69 @@ function buildHarmonySymbol(harmony: Element): string {
   return `${rootStep}${accidental}${kindMap[kind] ?? ''}`
 }
 
-function parseTechniqueSet(noteEl: Element): TechniqueSet {
+function parseTechniques(noteEl: Element): Technique[] {
+  const techniques: Technique[] = []
   const notations = noteEl.querySelector('notations')
-  if (!notations) return {}
-  const techniques: TechniqueSet = {}
-  if (notations.querySelector('technical > bend')) techniques.bend = true
-  if (notations.querySelector('technical > hammer-on')) techniques.hammerOn = true
-  if (notations.querySelector('technical > pull-off')) techniques.pullOff = true
-  if (notations.querySelector('articulations > strong-accent')) techniques.palmMute = true
-  if (notations.querySelector('technical > harmonic')) techniques.harmonic = true
-  if (notations.querySelector('ornaments > wavy-line')) techniques.vibrato = true
-  if (notations.querySelector('slide[type="up"], glissando[type="up"]')) techniques.slide = 'up'
-  if (notations.querySelector('slide[type="down"], glissando[type="down"]')) techniques.slide = 'down'
+  if (!notations) return techniques
+
+  // Technical
+  const technical = notations.querySelector('technical')
+  if (technical) {
+    if (technical.querySelector('bend')) {
+      const alter = parseFloat(technical.querySelector('bend > bend-alter')?.textContent ?? '2')
+      if (alter < 0) {
+        techniques.push({ type: 'tremoloBar', semitones: Math.abs(alter) })
+      } else {
+        techniques.push({ type: 'bend', style: 'full', semitones: alter })
+      }
+    }
+    if (technical.querySelector('slide')) techniques.push({ type: 'slide', style: 'shift' })
+    if (technical.querySelector('hammer-on')) techniques.push({ type: 'hammerOn' })
+    if (technical.querySelector('pull-off')) techniques.push({ type: 'pullOff' })
+    if (technical.querySelector('tap')) techniques.push({ type: 'tap' })
+    if (technical.querySelector('harmonic')) {
+      const style = technical.querySelector('harmonic > artificial') ? 'artificial' : 'natural'
+      techniques.push({ type: 'harmonic', style: style as 'natural' | 'artificial' })
+    }
+    if (technical.querySelector('let-ring')) techniques.push({ type: 'letRing' })
+    if (technical.querySelector('palm-mute')) techniques.push({ type: 'palmMute' })
+  }
+
+  // Ornaments
+  const ornaments = notations.querySelector('ornaments')
+  if (ornaments) {
+    const tremolo = ornaments.querySelector('tremolo')
+    if (tremolo) {
+      const val = parseInt(tremolo.textContent ?? '2', 10)
+      const speed = val >= 3 ? 'thirtySecond' : val >= 2 ? 'sixteenth' : 'eighth'
+      techniques.push({ type: 'tremoloPicking', speed: speed as 'thirtySecond' | 'sixteenth' | 'eighth' })
+    }
+    if (ornaments.querySelector('wavy-line')) techniques.push({ type: 'vibrato', style: 'normal' })
+  }
+
+  // Articulations
+  const articulations = notations.querySelector('articulations')
+  if (articulations) {
+    if (articulations.querySelector('strong-accent')) techniques.push({ type: 'accent', style: 'heavy' })
+    else if (articulations.querySelector('accent')) techniques.push({ type: 'accent', style: 'normal' })
+    if (articulations.querySelector('staccato')) techniques.push({ type: 'staccato' })
+    if (articulations.querySelector('tenuto')) techniques.push({ type: 'tenuto' })
+  }
+
+  // Arpeggiate
+  const arp = notations.querySelector('arpeggiate')
+  if (arp) {
+    const direction = (arp.getAttribute('direction') ?? 'up') as 'up' | 'down'
+    techniques.push({ type: 'arpeggio', direction })
+  }
+
+  // Notehead
+  const notehead = noteEl.querySelector('notehead')
+  if (notehead) {
+    if (notehead.textContent === 'x') techniques.push({ type: 'deadNote' })
+    else if (notehead.getAttribute('parentheses') === 'yes') techniques.push({ type: 'ghostNote' })
+  }
+
   return techniques
 }
 
@@ -308,6 +358,13 @@ export function parseMusicXmlToScoreDocument(xml: string): ScoreDocument {
           }
         : null
 
+      // Tuplet
+      const timeMod = noteEl.querySelector('time-modification')
+      const tuplet = timeMod ? {
+        actual: parseInt(timeMod.querySelector('actual-notes')?.textContent ?? '3', 10),
+        normal: parseInt(timeMod.querySelector('normal-notes')?.textContent ?? '2', 10),
+      } : undefined
+
       const note: ScoreNoteEvent = {
         id: createId(`note-${measureIndex}-${noteOrdinal}`),
         measureIndex,
@@ -319,7 +376,8 @@ export function parseMusicXmlToScoreDocument(xml: string): ScoreDocument {
         isRest: noteEl.querySelector('rest') !== null,
         pitch,
         placement,
-        techniques: parseTechniqueSet(noteEl),
+        techniques: parseTechniques(noteEl),
+        tuplet,
         lyric: getText(noteEl, 'lyric > text') ?? undefined,
         tieStart: noteEl.querySelector('tie[type="start"]') !== null,
         tieStop: noteEl.querySelector('tie[type="stop"]') !== null,
@@ -405,8 +463,9 @@ function renderHarmony(harmony: ScoreHarmony, divisions: number): string {
   ].join('')
 }
 
-function renderNote(note: ScoreNoteEvent, track: ScoreTrack): string {
+function renderNote(note: ScoreNoteEvent): string {
   const lines: string[] = ['<note>']
+
   if (note.isRest || !note.pitch) {
     lines.push('<rest/>')
   } else {
@@ -416,36 +475,108 @@ function renderNote(note: ScoreNoteEvent, track: ScoreTrack): string {
     lines.push(`<octave>${note.pitch.octave}</octave>`)
     lines.push('</pitch>')
   }
+
   lines.push(`<duration>${note.durationDivisions}</duration>`)
   lines.push(`<voice>${note.voice}</voice>`)
   lines.push(`<type>${note.durationType}</type>`)
+
+  // Dots
   for (let dot = 0; dot < note.dots; dot += 1) lines.push('<dot/>')
+
+  // Tuplet time-modification
+  if (note.tuplet) {
+    lines.push('<time-modification>')
+    lines.push(`<actual-notes>${note.tuplet.actual}</actual-notes>`)
+    lines.push(`<normal-notes>${note.tuplet.normal}</normal-notes>`)
+    lines.push('</time-modification>')
+  }
+
+  // Ties (as elements on the note)
   if (note.tieStart) lines.push('<tie type="start"/>')
   if (note.tieStop) lines.push('<tie type="stop"/>')
-  if (note.lyric) {
-    lines.push(`<lyric><text>${xmlEscape(note.lyric)}</text></lyric>`)
+
+  // Notehead for ghost/dead notes
+  const ghostNote = note.techniques.find((t) => t.type === 'ghostNote')
+  const deadNote = note.techniques.find((t) => t.type === 'deadNote')
+  if (deadNote) {
+    lines.push('<notehead>x</notehead>')
+  } else if (ghostNote) {
+    lines.push('<notehead parentheses="yes">normal</notehead>')
   }
-  if (note.placement || note.tieStart || note.tieStop || Object.keys(note.techniques).length > 0) {
+
+  // Lyric
+  if (note.lyric) {
+    lines.push(`<lyric><syllabic>single</syllabic><text>${xmlEscape(note.lyric)}</text></lyric>`)
+  }
+
+  // Notations block
+  const hasNotations = note.tieStart || note.tieStop || note.tuplet || note.slurStart || note.placement || note.techniques.length > 0
+  if (hasNotations) {
     lines.push('<notations>')
+
     if (note.tieStart) lines.push('<tied type="start"/>')
     if (note.tieStop) lines.push('<tied type="stop"/>')
-    if (note.placement || Object.keys(note.techniques).length > 0) {
-      lines.push('<technical>')
-      if (note.placement) {
-        lines.push(`<string>${note.placement.string}</string>`)
-        lines.push(`<fret>${note.placement.fret}</fret>`)
+    if (note.tuplet) lines.push('<tuplet type="start" bracket="yes"/>')
+    if (note.slurStart) lines.push('<slur type="start"/>')
+
+    // Ornaments
+    const ornamentLines: string[] = []
+    for (const t of note.techniques) {
+      if (t.type === 'tremoloPicking') {
+        const val = t.speed === 'thirtySecond' ? 3 : t.speed === 'sixteenth' ? 2 : 1
+        ornamentLines.push(`<tremolo>${val}</tremolo>`)
       }
-      if (note.techniques.bend) lines.push('<bend><bend-alter>1</bend-alter></bend>')
-      if (note.techniques.hammerOn) lines.push('<hammer-on type="start">H</hammer-on>')
-      if (note.techniques.pullOff) lines.push('<pull-off type="start">P</pull-off>')
-      if (note.techniques.harmonic) lines.push('<harmonic><natural/></harmonic>')
+      if (t.type === 'vibrato') ornamentLines.push('<wavy-line type="start"/>')
+    }
+    if (ornamentLines.length) {
+      lines.push('<ornaments>')
+      lines.push(...ornamentLines)
+      lines.push('</ornaments>')
+    }
+
+    // Technical
+    const technicalLines: string[] = []
+    if (note.placement) {
+      technicalLines.push(`<string>${note.placement.string}</string>`)
+      technicalLines.push(`<fret>${note.placement.fret}</fret>`)
+    }
+    for (const t of note.techniques) {
+      if (t.type === 'bend') technicalLines.push(`<bend><bend-alter>${t.semitones}</bend-alter></bend>`)
+      if (t.type === 'tremoloBar') technicalLines.push(`<bend><bend-alter>${-t.semitones}</bend-alter></bend>`)
+      if (t.type === 'slide') technicalLines.push('<slide type="start"/>')
+      if (t.type === 'hammerOn') technicalLines.push('<hammer-on type="start">H</hammer-on>')
+      if (t.type === 'pullOff') technicalLines.push('<pull-off type="start">P</pull-off>')
+      if (t.type === 'tap') technicalLines.push('<tap/>')
+      if (t.type === 'harmonic') technicalLines.push(t.style === 'natural' ? '<harmonic><natural/></harmonic>' : '<harmonic><artificial/></harmonic>')
+      if (t.type === 'letRing') technicalLines.push('<let-ring/>')
+      if (t.type === 'palmMute') technicalLines.push('<palm-mute/>')
+    }
+    if (technicalLines.length) {
+      lines.push('<technical>')
+      lines.push(...technicalLines)
       lines.push('</technical>')
     }
-    if (note.techniques.slide) lines.push(`<slide type="${note.techniques.slide === 'down' ? 'down' : 'up'}"/>`)
-    if (note.techniques.vibrato) lines.push('<ornaments><wavy-line type="start"/></ornaments>')
-    if (note.techniques.palmMute) lines.push('<articulations><strong-accent type="up"/></articulations>')
+
+    // Articulations
+    const articulationLines: string[] = []
+    for (const t of note.techniques) {
+      if (t.type === 'accent') articulationLines.push(t.style === 'heavy' ? '<strong-accent/>' : '<accent/>')
+      if (t.type === 'staccato') articulationLines.push('<staccato/>')
+      if (t.type === 'tenuto') articulationLines.push('<tenuto/>')
+    }
+    if (articulationLines.length) {
+      lines.push('<articulations>')
+      lines.push(...articulationLines)
+      lines.push('</articulations>')
+    }
+
+    // Arpeggiate
+    const arp = note.techniques.find((t) => t.type === 'arpeggio')
+    if (arp && arp.type === 'arpeggio') lines.push(`<arpeggiate direction="${arp.direction}"/>`)
+
     lines.push('</notations>')
   }
+
   lines.push('</note>')
   return lines.join('')
 }
@@ -534,7 +665,7 @@ export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
     const notes = (notesByMeasure.get(index) ?? []).sort((a, b) => a.beat - b.beat)
     notes.forEach((note) => {
       lines.push(renderNoteDynamic(note))
-      lines.push(renderNote(note, track))
+      lines.push(renderNote(note))
     })
     if (notes.length === 0) {
       lines.push(`<note><rest/><duration>${document.divisions * currentMeter.numerator}</duration><voice>1</voice><type>whole</type></note>`)

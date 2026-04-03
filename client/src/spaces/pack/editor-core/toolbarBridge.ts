@@ -50,6 +50,15 @@ const EVENT_HANDLERS: Record<string, (e: CustomEvent) => void> = {
     applyCommand({ type: 'toggleTuplet', noteId, actual: 3, normal: 2 })
   },
 
+  'lava-toggle-tie': () => {
+    const noteId = getSelectedNoteId()
+    if (!noteId) return
+    const { document } = useScoreDocumentStore.getState()
+    const trackId = document.tracks.find((t) => t.notes.some((n) => n.id === noteId))?.id
+    if (!trackId) return
+    applyCommand({ type: 'toggleTie', trackId, noteId })
+  },
+
   'lava-transpose': (e) => {
     const { selectedBars } = useEditorStore.getState()
     if (selectedBars.length === 0) return

@@ -79,21 +79,15 @@ function noteTypeToDivisions(durationType: ScoreNoteEvent['durationType'], divis
   }
 }
 
+// Module-level clipboard — isolates the legacy ClipboardPayload format from the store's ScoreClipboard type
+let internalClipboard: ClipboardPayload | null = null
+
 function serializeClipboard(payload: ClipboardPayload) {
-  return JSON.stringify(payload)
+  internalClipboard = payload
 }
 
-function parseClipboard(raw: string | null): ClipboardPayload | null {
-  if (!raw) return null
-
-  try {
-    const parsed = JSON.parse(raw) as ClipboardPayload
-    if (parsed.kind === 'notes' || parsed.kind === 'bars') {
-      return parsed
-    }
-  } catch {}
-
-  return null
+function parseClipboard(_raw: unknown): ClipboardPayload | null {
+  return internalClipboard
 }
 
 function getTrackDocument() {
@@ -322,7 +316,7 @@ function pasteBars(payload: Extract<ClipboardPayload, { kind: 'bars' }>) {
 function duplicateSelection() {
   const notePayload = buildNoteClipboardPayload()
   if (notePayload?.kind === 'notes') {
-    useEditorStore.getState().setClipboard(serializeClipboard(notePayload))
+    serializeClipboard(notePayload)
     const { track } = getTrackDocument()
     if (!track) return
     const lastNote = notePayload.notes[notePayload.notes.length - 1]
@@ -338,7 +332,7 @@ function duplicateSelection() {
 
   const barPayload = buildBarClipboardPayload()
   if (barPayload?.kind === 'bars') {
-    useEditorStore.getState().setClipboard(serializeClipboard(barPayload))
+    serializeClipboard(barPayload)
     pasteBars(barPayload)
   }
 }
@@ -350,11 +344,11 @@ export function useEditorCommandBridge(enabled = true): void {
     const handleCopy = () => {
       const payload = buildNoteClipboardPayload() ?? buildBarClipboardPayload()
       if (!payload) return
-      useEditorStore.getState().setClipboard(serializeClipboard(payload))
+      serializeClipboard(payload)
     }
 
     const handlePaste = () => {
-      const payload = parseClipboard(useEditorStore.getState().clipboard)
+      const payload = parseClipboard(null)
       if (!payload) return
       if (payload.kind === 'notes') {
         pasteNotes(payload)

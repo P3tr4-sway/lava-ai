@@ -10,14 +10,15 @@ import type {
   ScoreTrack,
   TimeSignature,
 } from '@lava/shared'
-import { fretToMidi, midiToFret, midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
+import { fretToMidi, midiToFret, midiToPitch } from '@/lib/pitchUtils'
 
 // --- ID generation ---
-export function createId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`
-  }
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
+export function createId(prefix?: string): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2, 10)
+  return prefix ? `${prefix}-${uuid}` : uuid
 }
 
 // --- Duration conversions ---
@@ -139,12 +140,7 @@ export function updateTrackNotes(
   track: ScoreTrack,
   updater: (notes: ScoreNoteEvent[]) => ScoreNoteEvent[],
 ): ScoreTrack {
-  return {
-    ...track,
-    notes: updater(track.notes).sort(
-      (a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat,
-    ),
-  }
+  return { ...track, notes: updater([...track.notes]) }
 }
 
 // --- Measure metadata ---
@@ -158,7 +154,3 @@ export function createMeasureMeta(index: number): ScoreMeasureMeta {
   }
 }
 
-// --- Pitch utilities (convenience wrappers) ---
-export function pitchToMidiHelper(pitch: ScorePitch): number {
-  return pitchToMidi(pitch)
-}

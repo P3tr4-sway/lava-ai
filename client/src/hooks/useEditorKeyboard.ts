@@ -374,12 +374,17 @@ export function useEditorKeyboard(enabled = true): void {
             break
           }
           case 'l':
-            if (selectedNoteIds.length > 0) {
-              const trackId = useScoreDocumentStore.getState().document.tracks[0]?.id ?? ''
-              selectedNoteIds.forEach((noteId) => {
-                useScoreDocumentStore.getState().applyCommand({ type: 'toggleTie', trackId, noteId })
-              })
+            if (e.shiftKey) {
+              // Toggle tie (was previously plain L)
+              window.dispatchEvent(new CustomEvent('lava-toggle-tie'))
+            } else {
+              // Open lyric input on selected note
+              const noteId = selectedNoteIds[0]
+              if (noteId) {
+                useEditorStore.getState().setLyricEditingNoteId(noteId)
+              }
             }
+            e.preventDefault()
             break
           case '.':
             window.dispatchEvent(new CustomEvent('lava-toggle-dot'))

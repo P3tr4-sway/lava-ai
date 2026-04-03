@@ -1,20 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import {
+  AudioLines,
   ChevronDown,
   Circle,
-  Guitar,
+  Clock3,
+  Columns2,
   Hash,
+  KeyRound,
   MousePointer2,
   Music,
   Music2,
   Pause,
-  PenTool,
   PencilLine,
+  PenTool,
   Play,
+  Repeat2,
   SlidersHorizontal,
+  SlidersVertical,
   Spline,
   Timer,
   Type,
+  WholeWord,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -144,7 +150,7 @@ function durationToDivisions(duration: NoteValue, divisions: number) {
 }
 
 function ToolDivider() {
-  return <div className="h-[30px] w-px bg-[#f1f1f1]" />
+  return <div className="h-[30px] w-px bg-border" />
 }
 
 function ToolbarToolButton({
@@ -338,6 +344,7 @@ export function EditorToolbar({
   const setEditorMode = useEditorStore((s) => s.setEditorMode)
   const viewMode = useEditorStore((s) => s.viewMode)
   const setViewMode = useEditorStore((s) => s.setViewMode)
+  const toolMode = useEditorStore((s) => s.toolMode)
   const setToolMode = useEditorStore((s) => s.setToolMode)
   const setActiveToolGroup = useEditorStore((s) => s.setActiveToolGroup)
   const zoom = useEditorStore((s) => s.zoom)
@@ -699,6 +706,155 @@ export function EditorToolbar({
             </div>
           </div>
         )
+      case 'accidentals':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Accidentals</p>
+            <div className="flex flex-col gap-1">
+              {[
+                { value: 'sharp', label: 'Sharp' },
+                { value: 'flat', label: 'Flat' },
+                { value: 'natural', label: 'Natural' },
+                { value: 'courtesy', label: 'Courtesy accidental' },
+              ].map((opt) => (
+                <PanelButton key={opt.value} active={false} onClick={() => window.dispatchEvent(new CustomEvent('lava-accidental', { detail: { type: opt.value } }))}>
+                  {opt.label}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'dynamics':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Dynamics</p>
+            <div className="flex gap-1">
+              {['pp', 'p', 'mf', 'f', 'ff'].map((dyn) => (
+                <PanelButton key={dyn} active={false} onClick={() => window.dispatchEvent(new CustomEvent('lava-dynamic', { detail: { value: dyn } }))}>
+                  {dyn}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'keySig':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Key signatures</p>
+            <div className="flex flex-col gap-1">
+              {['C major', 'G major', 'D major', 'F major', 'Bb major', 'A minor', 'E minor', 'D minor'].map((key) => (
+                <PanelButton key={key} active={false} onClick={() => {
+                  setActiveSidebarTool('keySig')
+                  closeOpenPanel()
+                }}>
+                  {key}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'timeSig':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Time signatures</p>
+            <div className="flex flex-wrap gap-1">
+              {['4/4', '3/4', '2/4', '6/8', '9/8', '12/8', '5/4', '7/8'].map((sig) => (
+                <PanelButton key={sig} active={false} onClick={() => {
+                  setActiveSidebarTool('timeSig')
+                  closeOpenPanel()
+                }}>
+                  {sig}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'repeats':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Repeats & jumps</p>
+            <div className="flex flex-col gap-1">
+              {['Repeat start', 'Repeat end', 'D.C. al Fine', 'D.S. al Coda', 'Segno', 'Fine', 'Coda'].map((opt) => (
+                <PanelButton key={opt} active={false} onClick={() => {
+                  setActiveSidebarTool('repeats')
+                  closeOpenPanel()
+                }}>
+                  {opt}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'barlines':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Barlines</p>
+            <div className="flex flex-col gap-1">
+              {['Single', 'Double', 'Final', 'Dashed', 'Dotted'].map((opt) => (
+                <PanelButton key={opt} active={false} onClick={() => {
+                  setActiveSidebarTool('barlines')
+                  closeOpenPanel()
+                }}>
+                  {opt}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'clefs':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Clefs</p>
+            <div className="flex flex-col gap-1">
+              {['Treble', 'Bass', 'Alto', 'Tenor'].map((opt) => (
+                <PanelButton key={opt} active={false} onClick={() => {
+                  setActiveSidebarTool('clefs')
+                  closeOpenPanel()
+                }}>
+                  {opt}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'tempo':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Tempo</p>
+            <div className="flex flex-col gap-1">
+              {[
+                { label: 'Largo', bpm: '40–60' },
+                { label: 'Andante', bpm: '76–108' },
+                { label: 'Moderato', bpm: '108–120' },
+                { label: 'Allegro', bpm: '120–168' },
+                { label: 'Presto', bpm: '168–200' },
+              ].map((opt) => (
+                <PanelButton key={opt.label} active={false} onClick={() => {
+                  setActiveSidebarTool('tempo')
+                  closeOpenPanel()
+                }}>
+                  {opt.label} <span className="text-text-muted">{opt.bpm}</span>
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
+      case 'pitch':
+        return (
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Pitch</p>
+            <div className="flex flex-col gap-1">
+              {['Concert pitch', 'Octave up', 'Octave down', 'Chromatic'].map((opt) => (
+                <PanelButton key={opt} active={false} onClick={() => {
+                  setActiveSidebarTool('pitch')
+                  closeOpenPanel()
+                }}>
+                  {opt}
+                </PanelButton>
+              ))}
+            </div>
+          </div>
+        )
       default:
         return null
     }
@@ -783,9 +939,183 @@ export function EditorToolbar({
               <div className="flex flex-col">
                 {/* Row 1 — note/rhythm tools (populated in Task 3) */}
                 <div className="flex h-[46px] items-center gap-[5px] p-2">
+                  <ToolbarToolButton
+                    icon={MousePointer2}
+                    label="Selection"
+                    badge="1"
+                    selected={activeToolGroup === 'selection'}
+                    onClick={() => {
+                      setActiveToolGroup('selection')
+                      setToolMode('pointer')
+                      setCaret(null)
+                      setOpenPanel(null)
+                    }}
+                  />
+                  <ToolbarToolButton
+                    icon={Music}
+                    label="Notes & rests"
+                    badge="2"
+                    selected={activeToolGroup === 'note' || activeToolGroup === 'rest'}
+                    withChevron
+                    panelOpen={openPanel === 'note'}
+                    onClick={() => {
+                      setActiveToolGroup('note')
+                      setOpenPanel(null)
+                    }}
+                    onHoverOpen={(e) => openPanelAt('note', e)}
+                    onChevronClick={(e) => openPanelAt('note', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Hash}
+                    label="Accidentals"
+                    badge="3"
+                    selected={openPanel === 'accidentals'}
+                    withChevron
+                    panelOpen={openPanel === 'accidentals'}
+                    onClick={() => setOpenPanel((p) => p === 'accidentals' ? null : 'accidentals')}
+                    onHoverOpen={(e) => openPanelAt('accidentals', e)}
+                    onChevronClick={(e) => openPanelAt('accidentals', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Spline}
+                    label="Ties, slurs & articulations"
+                    badge="4"
+                    selected={activeToolGroup === 'notation'}
+                    withChevron
+                    panelOpen={openPanel === 'notation'}
+                    onClick={() => {
+                      setActiveToolGroup('notation')
+                      setOpenPanel(null)
+                    }}
+                    onHoverOpen={(e) => openPanelAt('notation', e)}
+                    onChevronClick={(e) => openPanelAt('notation', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={WholeWord}
+                    label="Dynamics"
+                    badge="5"
+                    selected={openPanel === 'dynamics'}
+                    withChevron
+                    panelOpen={openPanel === 'dynamics'}
+                    onClick={() => setOpenPanel((p) => p === 'dynamics' ? null : 'dynamics')}
+                    onHoverOpen={(e) => openPanelAt('dynamics', e)}
+                    onChevronClick={(e) => openPanelAt('dynamics', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Type}
+                    label="Text"
+                    badge="6"
+                    selected={toolMode === 'text'}
+                    onClick={() => {
+                      setToolMode('text')
+                      setOpenPanel(null)
+                    }}
+                  />
                 </div>
                 {/* Row 2 — structural tools (populated in Task 3) */}
                 <div className="flex h-[46px] items-center gap-[5px] border-t border-border p-2">
+                  <ToolbarToolButton
+                    icon={KeyRound}
+                    label="Key signatures"
+                    badge="7"
+                    selected={activeSidebarTool === 'keySig'}
+                    withChevron
+                    panelOpen={openPanel === 'keySig'}
+                    onClick={() => {
+                      toggleSidebarTool('keySig')
+                      setToolMode('keySig')
+                    }}
+                    onHoverOpen={(e) => openPanelAt('keySig', e)}
+                    onChevronClick={(e) => openPanelAt('keySig', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Clock3}
+                    label="Time signatures"
+                    badge="8"
+                    selected={activeSidebarTool === 'timeSig'}
+                    withChevron
+                    panelOpen={openPanel === 'timeSig'}
+                    onClick={() => toggleSidebarTool('timeSig')}
+                    onHoverOpen={(e) => openPanelAt('timeSig', e)}
+                    onChevronClick={(e) => openPanelAt('timeSig', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Repeat2}
+                    label="Repeats & jumps"
+                    badge="9"
+                    selected={activeSidebarTool === 'repeats'}
+                    withChevron
+                    panelOpen={openPanel === 'repeats'}
+                    onClick={() => toggleSidebarTool('repeats')}
+                    onHoverOpen={(e) => openPanelAt('repeats', e)}
+                    onChevronClick={(e) => openPanelAt('repeats', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Columns2}
+                    label="Barlines"
+                    badge="0"
+                    selected={activeSidebarTool === 'barlines'}
+                    withChevron
+                    panelOpen={openPanel === 'barlines'}
+                    onClick={() => toggleSidebarTool('barlines')}
+                    onHoverOpen={(e) => openPanelAt('barlines', e)}
+                    onChevronClick={(e) => openPanelAt('barlines', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Music2}
+                    label="Clefs"
+                    selected={activeSidebarTool === 'clefs'}
+                    withChevron
+                    panelOpen={openPanel === 'clefs'}
+                    onClick={() => toggleSidebarTool('clefs')}
+                    onHoverOpen={(e) => openPanelAt('clefs', e)}
+                    onChevronClick={(e) => openPanelAt('clefs', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={SlidersVertical}
+                    label="Tempo"
+                    selected={activeSidebarTool === 'tempo'}
+                    withChevron
+                    panelOpen={openPanel === 'tempo'}
+                    onClick={() => toggleSidebarTool('tempo')}
+                    onHoverOpen={(e) => openPanelAt('tempo', e)}
+                    onChevronClick={(e) => openPanelAt('tempo', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={AudioLines}
+                    label="Pitch"
+                    selected={activeSidebarTool === 'pitch'}
+                    withChevron
+                    panelOpen={openPanel === 'pitch'}
+                    onClick={() => toggleSidebarTool('pitch')}
+                    onHoverOpen={(e) => openPanelAt('pitch', e)}
+                    onChevronClick={(e) => openPanelAt('pitch', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={PenTool}
+                    label="Chord diagrams"
+                    selected={showChordDiagrams}
+                    withChevron
+                    panelOpen={openPanel === 'chords'}
+                    onClick={() => {
+                      toggleChordDiagrams()
+                      setOpenPanel(null)
+                    }}
+                    onHoverOpen={(e) => openPanelAt('chords', e)}
+                    onChevronClick={(e) => openPanelAt('chords', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={ZoomIn}
+                    label="Zoom"
+                    selected={openPanel === 'view'}
+                    onClick={() => setOpenPanel((p) => p === 'view' ? null : 'view')}
+                    onHoverOpen={(e) => openPanelAt('view', e)}
+                  />
+                  <ToolbarToolButton
+                    icon={Circle}
+                    label="Playback style"
+                    onClick={() => setStylePickerOpen(true)}
+                  />
                 </div>
               </div>
               {/* Right: mode toggle spanning both rows */}

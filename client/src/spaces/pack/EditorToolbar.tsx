@@ -422,6 +422,14 @@ export function EditorToolbar({
     }
   }, [openPanel])
 
+  useEffect(() => {
+    if (editorMode !== 'fineEdit') {
+      setActiveSidebarTool(null)
+      setSelectedOptions({})
+      setOpenPanel(null)
+    }
+  }, [editorMode])
+
   const closeOpenPanel = () => {
     setOpenPanel(null)
     setPanelAnchor(null)

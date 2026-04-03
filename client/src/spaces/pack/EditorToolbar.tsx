@@ -312,6 +312,7 @@ export function EditorToolbar({
   const [openPanel, setOpenPanel] = useState<ToolbarPanel>(null)
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor>(null)
   const [activeSidebarTool, setActiveSidebarTool] = useState<string | null>(null)
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const toolbarRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -743,8 +744,10 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Key signatures</p>
             <div className="flex flex-col gap-1">
               {['C major', 'G major', 'D major', 'F major', 'Bb major', 'A minor', 'E minor', 'D minor'].map((key) => (
-                <PanelButton key={key} active={false} onClick={() => {
+                <PanelButton key={key} active={selectedOptions['keySig'] === key} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, keySig: key }))
                   setActiveSidebarTool('keySig')
+                  window.dispatchEvent(new CustomEvent('lava-key-sig', { detail: { value: key } }))
                   closeOpenPanel()
                 }}>
                   {key}
@@ -759,8 +762,10 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Time signatures</p>
             <div className="flex flex-wrap gap-1">
               {['4/4', '3/4', '2/4', '6/8', '9/8', '12/8', '5/4', '7/8'].map((sig) => (
-                <PanelButton key={sig} active={false} onClick={() => {
+                <PanelButton key={sig} active={selectedOptions['timeSig'] === sig} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, timeSig: sig }))
                   setActiveSidebarTool('timeSig')
+                  window.dispatchEvent(new CustomEvent('lava-time-sig', { detail: { value: sig } }))
                   closeOpenPanel()
                 }}>
                   {sig}
@@ -775,8 +780,10 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Repeats & jumps</p>
             <div className="flex flex-col gap-1">
               {['Repeat start', 'Repeat end', 'D.C. al Fine', 'D.S. al Coda', 'Segno', 'Fine', 'Coda'].map((opt) => (
-                <PanelButton key={opt} active={false} onClick={() => {
+                <PanelButton key={opt} active={selectedOptions['repeats'] === opt} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, repeats: opt }))
                   setActiveSidebarTool('repeats')
+                  window.dispatchEvent(new CustomEvent('lava-repeat', { detail: { value: opt } }))
                   closeOpenPanel()
                 }}>
                   {opt}
@@ -791,8 +798,10 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Barlines</p>
             <div className="flex flex-col gap-1">
               {['Single', 'Double', 'Final', 'Dashed', 'Dotted'].map((opt) => (
-                <PanelButton key={opt} active={false} onClick={() => {
+                <PanelButton key={opt} active={selectedOptions['barlines'] === opt} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, barlines: opt }))
                   setActiveSidebarTool('barlines')
+                  window.dispatchEvent(new CustomEvent('lava-barline', { detail: { value: opt } }))
                   closeOpenPanel()
                 }}>
                   {opt}
@@ -807,8 +816,10 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Clefs</p>
             <div className="flex flex-col gap-1">
               {['Treble', 'Bass', 'Alto', 'Tenor'].map((opt) => (
-                <PanelButton key={opt} active={false} onClick={() => {
+                <PanelButton key={opt} active={selectedOptions['clefs'] === opt} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, clefs: opt }))
                   setActiveSidebarTool('clefs')
+                  window.dispatchEvent(new CustomEvent('lava-clef', { detail: { value: opt } }))
                   closeOpenPanel()
                 }}>
                   {opt}
@@ -829,8 +840,10 @@ export function EditorToolbar({
                 { label: 'Allegro', bpm: '120–168' },
                 { label: 'Presto', bpm: '168–200' },
               ].map((opt) => (
-                <PanelButton key={opt.label} active={false} onClick={() => {
+                <PanelButton key={opt.label} active={selectedOptions['tempo'] === opt.label} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, tempo: opt.label }))
                   setActiveSidebarTool('tempo')
+                  window.dispatchEvent(new CustomEvent('lava-tempo', { detail: { value: opt.label } }))
                   closeOpenPanel()
                 }}>
                   {opt.label} <span className="text-text-muted">{opt.bpm}</span>
@@ -845,8 +858,10 @@ export function EditorToolbar({
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-muted">Pitch</p>
             <div className="flex flex-col gap-1">
               {['Concert pitch', 'Octave up', 'Octave down', 'Chromatic'].map((opt) => (
-                <PanelButton key={opt} active={false} onClick={() => {
+                <PanelButton key={opt} active={selectedOptions['pitch'] === opt} onClick={() => {
+                  setSelectedOptions((prev) => ({ ...prev, pitch: opt }))
                   setActiveSidebarTool('pitch')
+                  window.dispatchEvent(new CustomEvent('lava-pitch-mode', { detail: { value: opt } }))
                   closeOpenPanel()
                 }}>
                   {opt}
@@ -937,7 +952,7 @@ export function EditorToolbar({
             <div className="flex">
               {/* Left: two rows */}
               <div className="flex flex-col">
-                {/* Row 1 — note/rhythm tools (populated in Task 3) */}
+                {/* Row 1 — note/rhythm tools */}
                 <div className="flex h-[46px] items-center gap-[5px] p-2">
                   <ToolbarToolButton
                     icon={MousePointer2}
@@ -1012,7 +1027,7 @@ export function EditorToolbar({
                     }}
                   />
                 </div>
-                {/* Row 2 — structural tools (populated in Task 3) */}
+                {/* Row 2 — structural tools */}
                 <div className="flex h-[46px] items-center gap-[5px] border-t border-border p-2">
                   <ToolbarToolButton
                     icon={KeyRound}

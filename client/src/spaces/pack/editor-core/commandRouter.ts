@@ -1,0 +1,107 @@
+import type { CommandResult, ScoreCommand, ScoreDocument } from '@lava/shared'
+import { validateAndTruncate } from './validation'
+import { getEffectiveTimeSignature } from './helpers'
+
+// Import all handlers
+import { handleInsertNote, handleInsertNoteAtCaret, handleInsertRestAtCaret, handleDeleteNote } from './handlers/noteEntry'
+import { handleSetDuration, handleSetPitch, handleSetStringFret, handleToggleRest, handleSetNoteDynamic, handleSimplifyFingering } from './handlers/noteProperties'
+import { handleAddTechnique, handleRemoveTechnique } from './handlers/techniques'
+import { handleSplitNote, handleMergeWithNext, handleMoveNoteToBeat, handleTransposeSelection } from './handlers/noteMutation'
+import { handleToggleTie, handleToggleSlur, handleToggleDot, handleToggleTuplet } from './handlers/notation'
+import { handleAddMeasureBefore, handleAddMeasureAfter, handleDeleteMeasureRange } from './handlers/measures'
+import { handleSetTempo, handleSetKeySignature, handleSetTimeSignature, handleSetTrackClef, handleSetCapo, handleChangeTuning } from './handlers/scoreMeta'
+import {
+  handleSetMeasureTimeSignature, handleSetMeasureKeySignature,
+  handleSetBarlineType, handleSetRepeat, handleSetRepeatMarker,
+  handleSetChordSymbol, handleSetAnnotation, handleSetSectionLabel,
+  handleSetChordDiagramPlacement, handleReharmonizeSelection,
+} from './handlers/measureMeta'
+import { handleSetLyric } from './handlers/lyrics'
+import { handlePasteSelection } from './handlers/clipboard'
+
+type Handler = (doc: ScoreDocument, cmd: any) => CommandResult
+
+const HANDLER_MAP: Record<string, Handler> = {
+  insertNote: handleInsertNote,
+  insertNoteAtCaret: handleInsertNoteAtCaret,
+  insertRestAtCaret: handleInsertRestAtCaret,
+  deleteNote: handleDeleteNote,
+  setDuration: handleSetDuration,
+  setPitch: handleSetPitch,
+  setStringFret: handleSetStringFret,
+  toggleRest: handleToggleRest,
+  setNoteDynamic: handleSetNoteDynamic,
+  addTechnique: handleAddTechnique,
+  removeTechnique: handleRemoveTechnique,
+  splitNote: handleSplitNote,
+  mergeWithNext: handleMergeWithNext,
+  moveNoteToBeat: handleMoveNoteToBeat,
+  transposeSelection: handleTransposeSelection,
+  toggleTie: handleToggleTie,
+  toggleSlur: handleToggleSlur,
+  toggleDot: handleToggleDot,
+  toggleTuplet: handleToggleTuplet,
+  addMeasureBefore: handleAddMeasureBefore,
+  addMeasureAfter: handleAddMeasureAfter,
+  deleteMeasureRange: handleDeleteMeasureRange,
+  setTempo: handleSetTempo,
+  setKeySignature: handleSetKeySignature,
+  setTimeSignature: handleSetTimeSignature,
+  setTrackClef: handleSetTrackClef,
+  setCapo: handleSetCapo,
+  setTuning: handleChangeTuning,
+  changeTuning: handleChangeTuning,
+  setMeasureTimeSignature: handleSetMeasureTimeSignature,
+  setMeasureKeySignature: handleSetMeasureKeySignature,
+  setBarlineType: handleSetBarlineType,
+  setRepeat: handleSetRepeat,
+  setRepeatMarker: handleSetRepeatMarker,
+  setChordSymbol: handleSetChordSymbol,
+  setAnnotation: handleSetAnnotation,
+  setSectionLabel: handleSetSectionLabel,
+  setChordDiagramPlacement: handleSetChordDiagramPlacement,
+  reharmonizeSelection: handleReharmonizeSelection,
+  simplifyFingering: handleSimplifyFingering,
+  setLyric: handleSetLyric,
+  pasteSelection: handlePasteSelection,
+  // No-op commands (UI-only, handled by store)
+  moveCursor: (doc) => ({ document: doc, warnings: [] }),
+  selectNotes: (doc) => ({ document: doc, warnings: [] }),
+  setMeasureRange: (doc) => ({ document: doc, warnings: [] }),
+}
+
+const COMMANDS_NEEDING_VALIDATION = new Set([
+  'insertNoteAtCaret',
+  'insertRestAtCaret',
+  'setDuration',
+  'splitNote',
+  'setMeasureTimeSignature',
+  'toggleDot',
+  'toggleTuplet',
+  'pasteSelection',
+])
+
+export function applyCommandToDocument(
+  doc: ScoreDocument,
+  cmd: ScoreCommand,
+): CommandResult {
+  const handler = HANDLER_MAP[cmd.type]
+  if (!handler) {
+    return { document: doc, warnings: [`Unknown command: ${cmd.type}`] }
+  }
+
+  const result = handler(doc, cmd)
+
+  if (COMMANDS_NEEDING_VALIDATION.has(cmd.type)) {
+    // Determine which measure(s) to validate
+    const measureIndex = 'measureIndex' in cmd ? (cmd as any).measureIndex : undefined
+    if (measureIndex !== undefined) {
+      const meter = getEffectiveTimeSignature(result.document, measureIndex)
+      for (const track of result.document.tracks) {
+        track.notes = validateAndTruncate(track.notes, measureIndex, meter, result.document.divisions)
+      }
+    }
+  }
+
+  return result
+}

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ScoreCommand, ScoreCommandPatch, ScoreDocument } from '@lava/shared'
-import { applyCommandPatch, applyCommandToDocument, buildScoreDigest, cloneScoreDocument, createEmptyScoreDocument, exportScoreDocumentToMusicXml, parseMusicXmlToScoreDocument } from '@/lib/scoreDocument'
+import { applyCommandPatch, buildScoreDigest, cloneScoreDocument, createEmptyScoreDocument, exportScoreDocumentToMusicXml, parseMusicXmlToScoreDocument } from '@/lib/scoreDocument'
+import { applyCommandToDocument } from '@/spaces/pack/editor-core/commandRouter'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 
 interface ScoreDocumentStore {

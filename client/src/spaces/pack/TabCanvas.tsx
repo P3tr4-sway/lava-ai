@@ -521,8 +521,12 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
     })
 
     // Sync playback position → audioStore
+    // Use a flag to distinguish AlphaTab-driven currentBar updates from user-driven seeks,
+    // preventing a feedback loop when the subscription tries to seek back.
+    let positionUpdateFromAlphaTab = false
     const offPositionChanged = api.playerPositionChanged.on((args: synth.PositionChangedEventArgs) => {
       const { setCurrentTime, setCurrentBar } = useAudioStore.getState()
+      positionUpdateFromAlphaTab = true
       setCurrentTime(args.currentTime / 1000)
       const score = api.score
       if (score?.masterBars?.length) {
@@ -536,15 +540,28 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
         }
         setCurrentBar(barIndex)
       }
+      positionUpdateFromAlphaTab = false
     })
 
-    // Sync audioStore → alphaTab player (playback state + speed)
+    // Sync audioStore → alphaTab player (playback state + speed + seek position)
     let lastPlaybackState = useAudioStore.getState().playbackState
     let lastPlaybackRate = useAudioStore.getState().playbackRate
+    let lastCurrentBar = useAudioStore.getState().currentBar
     const unsubscribeAudio = useAudioStore.subscribe((state) => {
       if (state.playbackRate !== lastPlaybackRate) {
         lastPlaybackRate = state.playbackRate
         api.playbackSpeed = state.playbackRate
+      }
+      if (state.currentBar !== lastCurrentBar && !positionUpdateFromAlphaTab) {
+        lastCurrentBar = state.currentBar
+        const score = api.score
+        const barIndex = Math.min(Math.floor(state.currentBar), (score?.masterBars?.length ?? 1) - 1)
+        const masterBar = score?.masterBars?.[barIndex]
+        if (masterBar) {
+          try { api.tickPosition = masterBar.start } catch { /* player may not be ready */ }
+        }
+      } else {
+        lastCurrentBar = state.currentBar
       }
       if (state.playbackState !== lastPlaybackState) {
         lastPlaybackState = state.playbackState
@@ -746,6 +763,22 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
         if (editorMode === 'fineEdit' && !compact) setInspectorOpen(true)
         // Audition the note
         try { api.playBeat(beat) } catch { /* ignore if player not ready */ }
+        return
+      }
+    }
+
+    // Fallback: AlphaTab's getNoteAtPos hit area can be small. If there's already a document
+    // note at the snapped beat/string, select it instead of clobbering it with fret:0.
+    if (editorMode === 'fineEdit' && pointerTarget && !isChordAddGesture) {
+      const nearbyNote = findDocumentNoteAtPlacement(
+        track,
+        pointerTarget.measureIndex,
+        pointerTarget.beat,
+        pointerTarget.string,
+      )
+      if (nearbyNote) {
+        selectNoteById(nearbyNote.id, event.shiftKey)
+        if (!compact) setInspectorOpen(true)
         return
       }
     }
@@ -1066,7 +1099,7 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
               {noteRects.map((rect) => (
                 <div
                   key={rect.id}
-                  className="absolute rounded-full border-2 border-accent bg-accent/10 shadow-[0_0_0_4px_rgba(255,255,255,0.08)]"
+                  className="absolute rounded border-2 border-accent bg-accent/30"
                   style={{
                     left: rect.x,
                     top: rect.y,

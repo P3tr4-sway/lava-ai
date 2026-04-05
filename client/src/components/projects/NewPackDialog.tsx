@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, X } from 'lucide-react'
@@ -18,10 +18,11 @@ interface NewPackDialogProps {
   onClose: () => void
   mode?: 'default' | 'import'
   initialDraft?: NewPackDraft | null
+  initialRequestSummary?: string
   sourceLabel?: string
   detectedFields?: Array<{ label: string; value: string }>
   submitLabel?: string
-  onSubmitDraft?: (draft: NewPackDraft) => Promise<void> | void
+  onSubmitDraft?: (draft: NewPackDraft, requestSummary: string) => Promise<void> | void
 }
 
 interface PresetOption {
@@ -38,14 +39,14 @@ const TIME_SIGNATURE_OPTIONS = ['4/4', '3/4', '6/8', '12/8']
 const LAYOUT_OPTIONS: Array<{ value: NewPackLayout; label: string }> = [
   { value: 'tab', label: 'Tabs only' },
   { value: 'split', label: 'Staff + Tabs' },
-  { value: 'staff', label: 'Lead sheet' },
+  { value: 'staff', label: 'Staff' },
 ]
 
 const PRESET_OPTIONS: PresetOption[] = [
   {
-    id: 'standard-guitar',
-    label: 'Standard Guitar',
-    description: 'Tabs for strumming.',
+    id: 'simplified-practice',
+    label: 'Simplified Practice',
+    description: 'Easier tabs for practice.',
     draft: {
       bars: 32,
       tempo: 92,
@@ -57,9 +58,37 @@ const PRESET_OPTIONS: PresetOption[] = [
     },
   },
   {
+    id: 'rhythm-guitar',
+    label: 'Rhythm Guitar',
+    description: 'Chords and strumming tabs.',
+    draft: {
+      bars: 32,
+      tempo: 88,
+      timeSignature: '4/4',
+      key: 'C',
+      layout: 'tab',
+      tuning: 'standard',
+      capo: 0,
+    },
+  },
+  {
+    id: 'fingerstyle-arrangement',
+    label: 'Fingerstyle Arrangement',
+    description: 'Melody-led solo guitar.',
+    draft: {
+      bars: 16,
+      tempo: 72,
+      timeSignature: '4/4',
+      key: 'C',
+      layout: 'split',
+      tuning: 'standard',
+      capo: 0,
+    },
+  },
+  {
     id: 'lead-sheet',
     label: 'Lead Sheet',
-    description: 'Staff + chords.',
+    description: 'Staff, chords, and structure.',
     draft: {
       bars: 32,
       tempo: 86,
@@ -71,26 +100,12 @@ const PRESET_OPTIONS: PresetOption[] = [
     },
   },
   {
-    id: 'fingerstyle-solo',
-    label: 'Fingerstyle / Solo',
-    description: 'Melody + tabs.',
+    id: 'blank-setup',
+    label: 'Blank Setup',
+    description: 'Choose everything yourself.',
     draft: {
       bars: 16,
-      tempo: 72,
-      timeSignature: '4/4',
-      key: 'C',
-      layout: 'split',
-      tuning: 'dadgad',
-      capo: 0,
-    },
-  },
-  {
-    id: 'custom',
-    label: 'Custom',
-    description: 'Start blank.',
-    draft: {
-      bars: 8,
-      tempo: 120,
+      tempo: 96,
       timeSignature: '4/4',
       key: 'C',
       layout: 'tab',
@@ -102,7 +117,7 @@ const PRESET_OPTIONS: PresetOption[] = [
 
 const DEFAULT_PRESET_ID = PRESET_OPTIONS[0].id
 const DEFAULT_DRAFT: NewPackDraft = {
-  name: 'Untitled Pack',
+  name: 'Untitled Project',
   ...PRESET_OPTIONS[0].draft,
 }
 
@@ -130,7 +145,7 @@ function resetDraft(): NewPackDraft {
 }
 
 function createActionLabel(layout: NewPackLayout) {
-  return layout === 'tab' ? 'Create tab' : 'Create pack'
+  return layout === 'tab' ? 'Create tab project' : 'Create project'
 }
 
 function PresetCard({
@@ -221,6 +236,7 @@ export function NewPackDialog({
   onClose,
   mode = 'default',
   initialDraft,
+  initialRequestSummary,
   sourceLabel,
   detectedFields = [],
   submitLabel,
@@ -230,8 +246,10 @@ export function NewPackDialog({
   const upsertProject = useProjectStore((state) => state.upsertProject)
   const [draft, setDraft] = useState<NewPackDraft>(DEFAULT_DRAFT)
   const [activePresetId, setActivePresetId] = useState<string>(DEFAULT_PRESET_ID)
+  const [requestSummary, setRequestSummary] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const isImportMode = mode === 'import'
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -241,10 +259,12 @@ export function NewPackDialog({
   useEffect(() => {
     if (!open) return
     setDraft(initialDraft ?? resetDraft())
-    setActivePresetId(initialDraft ? 'custom' : DEFAULT_PRESET_ID)
+    setActivePresetId(initialDraft ? 'blank-setup' : DEFAULT_PRESET_ID)
+    setRequestSummary(initialRequestSummary ?? '')
     setSubmitting(false)
     setError(null)
-  }, [initialDraft, open])
+    setShowAdvancedSettings(false)
+  }, [initialDraft, initialRequestSummary, open])
 
   useEffect(() => {
     if (!open) return
@@ -273,7 +293,7 @@ export function NewPackDialog({
     setError(null)
     try {
       if (onSubmitDraft) {
-        await onSubmitDraft(draft)
+        await onSubmitDraft(draft, requestSummary.trim())
         onClose()
         return
       }
@@ -283,39 +303,53 @@ export function NewPackDialog({
       navigate(`/pack/${project.id}`)
     } catch (createError) {
       console.error('Failed to create pack', createError)
-      setError(onSubmitDraft ? 'Could not continue with the import. Please try again.' : 'Could not create the new pack. Please try again.')
+      setError(onSubmitDraft ? 'Could not continue with the import. Please try again.' : 'Could not create the project. Please try again.')
     } finally {
       setSubmitting(false)
     }
   }
+
+  const summaryFields = useMemo(() => {
+    const fallbackFields = [
+      { label: 'Key', value: draft.key },
+      { label: 'Meter', value: draft.timeSignature },
+      { label: 'Tempo', value: `${draft.tempo} BPM` },
+    ]
+
+    return detectedFields.length > 0 ? detectedFields : fallbackFields
+  }, [detectedFields, draft.key, draft.tempo, draft.timeSignature])
 
   if (!open) return null
 
   const dialog = (
     <div className="fixed inset-0 z-[2147483647] overflow-y-auto">
       <div className="fixed inset-0 bg-[rgba(0,0,0,0.42)]" onClick={onClose} />
-      <div className="relative flex min-h-full items-start justify-center p-4 sm:items-center sm:p-6 lg:justify-end lg:pl-[224px] lg:pr-10">
+      <div className="relative flex min-h-full items-center justify-center p-4 sm:p-6">
 
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="new-pack-dialog-title"
-          className="relative isolate my-6 flex w-full flex-col overflow-hidden rounded-[28px] border border-[#e5e5e5] bg-[#f5f5f5] text-[#111111] shadow-[0px_28px_70px_rgba(0,0,0,0.14)] ring-1 ring-[rgba(255,255,255,0.55)]"
+          className="relative isolate my-6 flex w-full flex-col overflow-hidden rounded-[28px] border border-[#e5e5e5] bg-[#ffffff] text-[#111111] shadow-[0px_28px_70px_rgba(0,0,0,0.14)] ring-1 ring-[rgba(255,255,255,0.55)]"
           style={{
             width: 'min(860px, calc(100vw - 32px))',
             maxHeight: 'min(720px, calc(100vh - 32px))',
-            backgroundColor: '#f5f5f5',
+            backgroundColor: '#ffffff',
             opacity: 1,
           }}
         >
-        <div className="flex items-start justify-between gap-4 bg-[#f5f5f5] px-5 pb-3 pt-5 sm:items-center">
-          <div>
-            <h2 id="new-pack-dialog-title" className="text-[24px] font-semibold leading-none tracking-[-0.03em] text-[#111111]">
-              {isImportMode ? 'Add score options' : 'Add guitar score'}
-            </h2>
-            <p className="mt-1.5 text-[12px] text-[#737373]">
-              {isImportMode ? 'Check the defaults, then create the pack.' : 'Choose, tweak, create.'}
-            </p>
+        <div className="flex items-start justify-between gap-4 bg-[#ffffff] px-5 pb-4 pt-5 sm:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 id="new-pack-dialog-title" className="text-[24px] font-semibold leading-none tracking-[-0.03em] text-[#111111]">
+                {isImportMode ? 'Create project' : 'Create a guitar project'}
+              </h2>
+              {isImportMode ? (
+                <span className="rounded-full bg-[#ececec] px-3 py-1 text-[11px] font-medium text-[#5a5a5a]">
+                  Step 2 of 3
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <button
@@ -328,36 +362,36 @@ export function NewPackDialog({
           </button>
         </div>
 
-        <div className="mx-5 h-px bg-[#e2e2e2]" />
-
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f5f5f5] px-5 py-3.5">
-          <div className={cn('grid gap-4 md:gap-0', isImportMode ? 'md:grid-cols-[264px_minmax(0,1fr)]' : 'md:grid-cols-[228px_minmax(0,1fr)]')}>
-            <section className="md:border-r md:border-[#e2e2e2] md:pr-4">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#ffffff] px-5 pb-3.5 pt-1">
+          <div className={cn('grid gap-4', isImportMode ? 'md:grid-cols-[236px_minmax(0,1fr)] md:items-start' : 'md:grid-cols-[228px_minmax(0,1fr)]')}>
+            <section>
               {isImportMode ? (
                 <>
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-[14px] font-semibold text-[#111111]">Detected</h3>
-                    <span className="rounded-full bg-[#ececec] px-3 py-1 text-[11px] font-medium text-[#5a5a5a]">
-                      Step 2 of 3
-                    </span>
-                  </div>
-                  <div className="mt-3 grid gap-2.5">
-                    <section className={cn(CARD_CLASS_NAME, 'flex flex-col gap-2')}>
+                  <h3 className="text-[14px] font-semibold text-[#111111]">From import</h3>
+                  <section className={cn(CARD_CLASS_NAME, 'mt-3 flex flex-col gap-4 px-4 py-4')}>
+                    <div className="space-y-1">
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Source</p>
-                      <p className="text-[15px] font-medium leading-[1.35] text-[#111111]">
+                      <p className="truncate text-[15px] font-medium leading-[1.35] text-[#111111]">
                         {sourceLabel || draft.name}
                       </p>
                       <p className="text-[11px] leading-[1.35] text-[#8a8a8a]">
-                        Key, meter, and tempo are prefilled.
+                        Auto-detected from your file.
                       </p>
-                    </section>
-                    {detectedFields.map((field) => (
-                      <section key={field.label} className={cn(CARD_CLASS_NAME, 'flex min-h-[72px] flex-col gap-1.5')}>
-                        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">{field.label}</p>
-                        <p className="text-[16px] font-medium leading-[1.2] text-[#111111]">{field.value}</p>
-                      </section>
-                    ))}
-                  </div>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {summaryFields.map((field) => (
+                        <div key={field.label} className="flex items-baseline justify-between gap-3">
+                          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">
+                            {field.label}
+                          </p>
+                          <p className="text-[14px] font-medium leading-[1.25] text-[#111111]">
+                            {field.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 </>
               ) : (
                 <>
@@ -377,16 +411,36 @@ export function NewPackDialog({
               )}
             </section>
 
-            <section className="md:pl-5">
+            <section>
               <h3 className="text-[14px] font-semibold text-[#111111]">Details</h3>
 
               <div className="mt-3 grid gap-3">
+                {isImportMode ? (
+                  <DetailCard
+                    label="Creative brief"
+                    helper="Optional"
+                    className="min-h-[144px] gap-2 rounded-[24px] px-5 py-4"
+                  >
+                    <textarea
+                      aria-label="Creative brief"
+                      value={requestSummary}
+                      onChange={(event) => setRequestSummary(event.target.value)}
+                      placeholder="Describe the version you want to create."
+                      rows={4}
+                      className={cn(
+                        VALUE_INPUT_CLASS_NAME,
+                        'min-h-[92px] resize-none leading-[1.5] placeholder:text-[#a3a3a3]',
+                      )}
+                    />
+                  </DetailCard>
+                ) : null}
+
                 <DetailCard label="Project name">
                   <input
                     aria-label="Project name"
                     value={draft.name}
                     onChange={(event) => updateDraft('name', event.target.value)}
-                    placeholder="Untitled Pack"
+                    placeholder="Untitled Project"
                     className={VALUE_INPUT_CLASS_NAME}
                   />
                 </DetailCard>
@@ -394,13 +448,34 @@ export function NewPackDialog({
                 {isImportMode ? (
                   <div className="grid gap-3 sm:grid-cols-3">
                     <DetailCard label="Key">
-                      <p className="text-[17px] font-medium leading-[1.2] text-[#111111]">{draft.key}</p>
+                      <SelectValue
+                        ariaLabel="Key"
+                        value={draft.key}
+                        onChange={(value) => updateDraft('key', value)}
+                        options={KEY_OPTIONS.map((key) => ({ value: key, label: key }))}
+                      />
                     </DetailCard>
                     <DetailCard label="Meter">
-                      <p className="text-[17px] font-medium leading-[1.2] text-[#111111]">{draft.timeSignature}</p>
+                      <SelectValue
+                        ariaLabel="Meter"
+                        value={draft.timeSignature}
+                        onChange={(value) => updateDraft('timeSignature', value)}
+                        options={TIME_SIGNATURE_OPTIONS.map((option) => ({ value: option, label: option }))}
+                      />
                     </DetailCard>
                     <DetailCard label="Tempo">
-                      <p className="text-[17px] font-medium leading-[1.2] text-[#111111]">{draft.tempo} BPM</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          aria-label="Tempo"
+                          inputMode="numeric"
+                          value={String(draft.tempo)}
+                          onChange={(event) =>
+                            updateDraft('tempo', clampNumber(event.target.value, 40, 240, draft.tempo))
+                          }
+                          className={cn(VALUE_INPUT_CLASS_NAME, 'min-w-0')}
+                        />
+                        <span className="shrink-0 text-[17px] font-medium text-[#3f3f3b]">BPM</span>
+                      </div>
                     </DetailCard>
                   </div>
                 ) : (
@@ -476,41 +551,59 @@ export function NewPackDialog({
                   </div>
                 </DetailCard>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <DetailCard label="Tuning">
-                    <SelectValue
-                      ariaLabel="Tuning"
-                      value={draft.tuning}
-                      onChange={(value) => updateDraft('tuning', value as NewPackTuningId)}
-                      options={NEW_PACK_TUNINGS.map((tuning) => ({
-                        value: tuning.id,
-                        label: tuning.label,
-                      }))}
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedSettings((current) => !current)}
+                    className="inline-flex h-10 items-center justify-between rounded-[16px] border border-[#e5e5e5] bg-[#fafafa] px-4 text-left text-[13px] font-medium text-[#333333] transition-colors hover:bg-[#f2f2f2]"
+                    aria-expanded={showAdvancedSettings}
+                  >
+                    <span>More settings</span>
+                    <ChevronDown
+                      size={16}
+                      className={cn(
+                        'text-[#8a8a8a] transition-transform duration-200',
+                        showAdvancedSettings && 'rotate-180',
+                      )}
                     />
-                  </DetailCard>
+                  </button>
 
-                  <DetailCard label="Capo">
-                    <input
-                      aria-label="Capo"
-                      inputMode="numeric"
-                      value={String(draft.capo)}
-                      onChange={(event) =>
-                        updateDraft('capo', clampNumber(event.target.value, 0, 12, draft.capo))
-                      }
-                      className={VALUE_INPUT_CLASS_NAME}
-                    />
-                  </DetailCard>
+                  {showAdvancedSettings ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <DetailCard label="Tuning">
+                        <SelectValue
+                          ariaLabel="Tuning"
+                          value={draft.tuning}
+                          onChange={(value) => updateDraft('tuning', value as NewPackTuningId)}
+                          options={NEW_PACK_TUNINGS.map((tuning) => ({
+                            value: tuning.id,
+                            label: tuning.label,
+                          }))}
+                        />
+                      </DetailCard>
+
+                      <DetailCard label="Capo">
+                        <input
+                          aria-label="Capo"
+                          inputMode="numeric"
+                          value={String(draft.capo)}
+                          onChange={(event) =>
+                            updateDraft('capo', clampNumber(event.target.value, 0, 12, draft.capo))
+                          }
+                          className={VALUE_INPUT_CLASS_NAME}
+                        />
+                      </DetailCard>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </section>
           </div>
         </div>
 
-        <div className="mx-5 h-px bg-[#e2e2e2]" />
-
-        <div className="flex flex-col gap-4 bg-[#f5f5f5] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 bg-[#ffffff] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] text-[#737373]">{isImportMode ? 'You can edit details later.' : 'Edit later if needed.'}</p>
+            <p className="text-[11px] text-[#737373]">{isImportMode ? 'You can edit this later.' : 'Edit later if needed.'}</p>
             {error ? <p className="text-[11px] text-[#b24d37]">{error}</p> : null}
           </div>
 
@@ -529,7 +622,7 @@ export function NewPackDialog({
               disabled={submitting || !draft.name.trim()}
               className="inline-flex h-10 min-w-[136px] items-center justify-center rounded-full bg-[#111111] px-5 text-sm font-medium text-white transition-opacity hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? 'Creating...' : submitLabel ?? (isImportMode ? 'Create Pack' : createActionLabel(draft.layout))}
+              {submitting ? 'Creating...' : submitLabel ?? (isImportMode ? 'Create project' : createActionLabel(draft.layout))}
             </button>
           </div>
         </div>

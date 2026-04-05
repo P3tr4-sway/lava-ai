@@ -431,7 +431,7 @@ export function EditorToolbar({
   }
 
   const locateToBar = (bar: number) => {
-    const nextBar = Math.max(0, Math.min(bar, safeTotalBars))
+    const nextBar = Math.floor(Math.max(0, Math.min(bar, safeTotalBars)))
     const nextTime = barsToSeconds(nextBar, effectiveBpm, beatsPerBar)
     if (isRunningState(transportState)) {
       setTransportState('locating')
@@ -956,6 +956,7 @@ export function EditorToolbar({
                   editMode={false}
                   onToggle={() => {
                     setEditorMode('fineEdit')
+                    setActiveToolGroup('note')
                     closeOpenPanel()
                   }}
                 />

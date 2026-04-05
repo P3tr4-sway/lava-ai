@@ -22,6 +22,7 @@ interface VersionStore {
 
   // Actions
   setActiveVersion: (id: string) => void
+  updateVersion: (id: string, updates: Partial<Version>) => void
   addVersion: (version: Version) => void
   removeVersion: (id: string) => void
   startPreview: (id: string) => void
@@ -68,6 +69,14 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     if (version.source === 'arrangement' && version.arrangementId) {
       useLeadSheetStore.getState().selectArrangement(version.arrangementId)
     }
+  },
+
+  updateVersion: (id, updates) => {
+    set((state) => ({
+      versions: state.versions.map((version) =>
+        version.id === id ? { ...version, ...updates } : version
+      ),
+    }))
   },
 
   addVersion: (version) => {

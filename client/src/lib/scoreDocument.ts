@@ -586,6 +586,32 @@ function renderNoteDynamic(note: ScoreNoteEvent): string {
   return `<direction placement="below"><direction-type><dynamics><${note.dynamic}/></dynamics></direction-type></direction>`
 }
 
+/**
+ * Emit filler rest elements to fill a gap in divisions.
+ * MusicXML note positions are determined by cumulative duration, not explicit offsets,
+ * so any gap between notes must be padded with explicit rests.
+ */
+function renderFillerRests(gapDivisions: number, divisions: number): string[] {
+  if (gapDivisions <= 0) return []
+  const lines: string[] = []
+  const restTypes = [
+    { dur: divisions * 4, type: 'whole' },
+    { dur: divisions * 2, type: 'half' },
+    { dur: divisions, type: 'quarter' },
+    { dur: Math.max(1, Math.round(divisions / 2)), type: 'eighth' },
+    { dur: Math.max(1, Math.round(divisions / 4)), type: 'sixteenth' },
+  ]
+  let remaining = gapDivisions
+  let guard = 0
+  while (remaining > 0 && guard++ < 64) {
+    const best = restTypes.find((rt) => rt.dur <= remaining)
+    if (!best) break
+    lines.push(`<note><rest/><duration>${best.dur}</duration><voice>1</voice><type>${best.type}</type></note>`)
+    remaining -= best.dur
+  }
+  return lines
+}
+
 export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
   const track = document.tracks[0]
   if (!track) return createEmptyScoreDocument().lastExportedXml ?? ''
@@ -663,12 +689,23 @@ export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
       if (text) lines.push(`<direction placement="above"><direction-type><words>${xmlEscape(text)}</words></direction-type></direction>`)
     }
     const notes = (notesByMeasure.get(index) ?? []).sort((a, b) => a.beat - b.beat)
-    notes.forEach((note) => {
-      lines.push(renderNoteDynamic(note))
-      lines.push(renderNote(note))
-    })
     if (notes.length === 0) {
       lines.push(`<note><rest/><duration>${document.divisions * currentMeter.numerator}</duration><voice>1</voice><type>whole</type></note>`)
+    } else {
+      let currentDivisions = 0
+      for (const note of notes) {
+        const expectedDivisions = Math.round(note.beat * document.divisions)
+        // Fill any gap between the current write-head and this note's onset with rests.
+        // Without this, AlphaTab (and any MusicXML reader) would place the note at the
+        // wrong beat because MusicXML positions are cumulative, not absolute.
+        if (expectedDivisions > currentDivisions) {
+          renderFillerRests(expectedDivisions - currentDivisions, document.divisions).forEach((r) => lines.push(r))
+          currentDivisions = expectedDivisions
+        }
+        lines.push(renderNoteDynamic(note))
+        lines.push(renderNote(note))
+        currentDivisions += note.durationDivisions
+      }
     }
     if (measure.isRepeatEnd) {
       lines.push('<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>')

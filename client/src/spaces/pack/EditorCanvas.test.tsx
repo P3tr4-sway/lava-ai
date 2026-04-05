@@ -4,25 +4,9 @@ import { useEditorStore } from '@/stores/editorStore'
 import { EditorCanvas } from './EditorCanvas'
 
 vi.mock('./PracticeSurface', () => ({
-  PracticeSurface: ({ compact = false }: { compact?: boolean }) => (
-    <div data-testid={compact ? 'practice-surface-compact' : 'practice-surface'} />
+  PracticeSurface: ({ viewMode }: { viewMode?: string }) => (
+    <div data-testid="practice-surface" data-view-mode={viewMode} />
   ),
-}))
-
-vi.mock('./StaffPreview', () => ({
-  StaffPreview: () => <div data-testid="staff-preview" />,
-}))
-
-vi.mock('@/hooks/useCursorEngine', () => ({
-  useCursorEngine: () => ({
-    cursorMode: 'hidden' as const,
-    displayX: -100,
-    displayY: { top: 0, bottom: 0 },
-    overlaySize: { width: 0, height: 0 },
-    isSnapped: false,
-    onMouseMove: vi.fn(),
-    onMouseLeave: vi.fn(),
-  }),
 }))
 
 describe('EditorCanvas', () => {
@@ -33,19 +17,18 @@ describe('EditorCanvas', () => {
     })
   })
 
-  it('uses the professional tab surface in fine edit tab view', () => {
+  it('renders PracticeSurface in tab view', () => {
     render(<EditorCanvas />)
 
     expect(screen.getByTestId('practice-surface')).toBeInTheDocument()
-    expect(screen.queryByTestId('staff-preview')).not.toBeInTheDocument()
+    expect(screen.getByTestId('practice-surface')).toHaveAttribute('data-view-mode', 'tab')
   })
 
-  it('uses the professional tab surface in split view too', () => {
+  it('passes split viewMode to PracticeSurface', () => {
     useEditorStore.setState({ viewMode: 'split', editorMode: 'fineEdit' })
 
     render(<EditorCanvas />)
 
-    expect(screen.getByTestId('staff-preview')).toBeInTheDocument()
-    expect(screen.getByTestId('practice-surface-compact')).toBeInTheDocument()
+    expect(screen.getByTestId('practice-surface')).toHaveAttribute('data-view-mode', 'split')
   })
 })

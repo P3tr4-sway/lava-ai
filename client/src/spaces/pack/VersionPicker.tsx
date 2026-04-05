@@ -5,9 +5,12 @@ import { useVersionStore } from '@/stores/versionStore'
 
 interface VersionPickerProps {
   className?: string
+  onSelectVersion?: (id: string) => void | Promise<void>
+  disabled?: boolean
+  loadingVersionId?: string | null
 }
 
-export function VersionPicker({ className }: VersionPickerProps) {
+export function VersionPicker({ className, onSelectVersion, disabled, loadingVersionId }: VersionPickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -15,6 +18,7 @@ export function VersionPicker({ className }: VersionPickerProps) {
   const activeVersionId = useVersionStore((s) => s.activeVersionId)
   const setActiveVersion = useVersionStore((s) => s.setActiveVersion)
   const isPreview = useVersionStore((s) => s.previewVersionId !== null)
+  const generatedVersions = versions.filter((version) => version.source === 'ai-transform')
 
   const activeVersion = versions.find((v) => v.id === activeVersionId)
 
@@ -30,7 +34,7 @@ export function VersionPicker({ className }: VersionPickerProps) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  if (versions.length <= 1) return null
+  if (generatedVersions.length === 0) return null
 
   return (
     <div ref={ref} className={cn('relative', className)}>
@@ -39,11 +43,11 @@ export function VersionPicker({ className }: VersionPickerProps) {
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen(!open)}
-        disabled={isPreview}
+        disabled={isPreview || disabled}
         className={cn(
-          'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface-0 px-3 text-xs font-medium transition-colors',
           'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
-          isPreview && 'cursor-not-allowed opacity-40',
+          (isPreview || disabled) && 'cursor-not-allowed opacity-40',
         )}
       >
         <Layers className="size-3.5" />
@@ -52,23 +56,34 @@ export function VersionPicker({ className }: VersionPickerProps) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 min-w-[180px] rounded-lg border border-border bg-surface-0 p-1 shadow-lg">
-          {versions.map((v) => (
+        <div className="absolute right-0 top-full z-30 mt-2 min-w-[220px] rounded-2xl border border-border bg-surface-0 p-1.5 shadow-lg">
+          {generatedVersions.map((v) => (
             <button
               key={v.id}
               type="button"
               onClick={() => {
-                setActiveVersion(v.id)
+                if (loadingVersionId || v.id === activeVersionId) {
+                  setOpen(false)
+                  return
+                }
+                if (onSelectVersion) {
+                  void onSelectVersion(v.id)
+                } else {
+                  setActiveVersion(v.id)
+                }
                 setOpen(false)
               }}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors',
+                'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition-colors',
                 v.id === activeVersionId
                   ? 'bg-surface-2 text-text-primary font-medium'
                   : 'text-text-secondary hover:bg-surface-1 hover:text-text-primary',
               )}
             >
               <span className="flex-1 truncate">{v.name}</span>
+              {loadingVersionId === v.id && (
+                <span className="inline-flex size-2 animate-pulse rounded-full bg-text-primary" />
+              )}
               {v.source === 'ai-transform' && (
                 <span className="flex items-center gap-0.5 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-muted">
                   <Sparkles className="size-2.5" />

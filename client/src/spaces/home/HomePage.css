@@ -1,0 +1,65 @@
+.figma-home-type {
+  font-feature-settings: "kern" 1;
+  font-kerning: normal;
+}
+
+.figma-home-type__hero {
+  font-weight: 400 !important;
+  letter-spacing: -0.06em !important;
+  line-height: 0.96 !important;
+}
+
+.figma-home-type__section-title {
+  font-weight: 400 !important;
+  letter-spacing: -0.05em !important;
+}
+
+.figma-home-type__card-title {
+  font-weight: 540 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.figma-home-type__modal-hero {
+  font-weight: 540 !important;
+  letter-spacing: -0.05em !important;
+}
+
+.figma-home-type__label {
+  font-weight: 340 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.figma-home-type__mono {
+  font-size: 0.75rem;
+  font-weight: 400 !important;
+  letter-spacing: 0.24em !important;
+  line-height: 1 !important;
+}
+
+.figma-home-type__item-title {
+  font-weight: 450 !important;
+  letter-spacing: -0.015em !important;
+}
+
+.figma-home-type__body-large {
+  font-weight: 330 !important;
+  letter-spacing: -0.016em !important;
+  line-height: 1.45 !important;
+}
+
+.figma-home-type__body {
+  font-weight: 330 !important;
+  letter-spacing: -0.014em !important;
+  line-height: 1.5 !important;
+}
+
+.figma-home-type textarea {
+  font-weight: 330;
+  letter-spacing: -0.016em;
+  line-height: 1.5;
+}
+
+.figma-home-type button {
+  font-weight: 340;
+  letter-spacing: -0.01em;
+}

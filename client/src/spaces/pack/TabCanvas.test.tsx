@@ -46,15 +46,15 @@ function KeyboardHarness() {
   return null
 }
 
+const makeNoOpEvent = () => ({ on: vi.fn(() => vi.fn()) })
+
 vi.mock('@coderline/alphatab', () => {
   class AlphaTabApi {
-    settings = {
-      display: {
-        scale: 1,
-      },
-    }
+    settings = { display: { scale: 1 } }
     boundsLookup = mockBoundsLookup
-    score = {}
+    score = { masterBars: [] }
+    playbackSpeed = 1
+    tickPosition = 0
     private renderFinishedHandlers: Array<() => void> = []
     renderFinished = {
       on: (handler: () => void) => {
@@ -64,22 +64,27 @@ vi.mock('@coderline/alphatab', () => {
         }
       },
     }
+    playerStateChanged = makeNoOpEvent()
+    playerPositionChanged = makeNoOpEvent()
     constructor() {}
-    load() {
-      this.renderFinishedHandlers.forEach((handler) => handler())
-    }
-    render() {
-      this.renderFinishedHandlers.forEach((handler) => handler())
-    }
+    load() { this.renderFinishedHandlers.forEach((handler) => handler()) }
+    render() { this.renderFinishedHandlers.forEach((handler) => handler()) }
+    play() {}
+    pause() {}
+    stop() {}
+    playBeat() {}
     destroy() {}
   }
 
   return {
     AlphaTabApi,
     LayoutMode: { Page: 'Page' },
-    PlayerMode: { Disabled: 'Disabled' },
-    StaveProfile: { ScoreTab: 1, Tab: 3 },
+    PlayerMode: { EnabledAutomatic: 'EnabledAutomatic', Disabled: 'Disabled' },
+    StaveProfile: { ScoreTab: 1, Tab: 3, Score: 2 },
     TabRhythmMode: { Automatic: 'Automatic' },
+    synth: {
+      PlayerState: { Playing: 1, Paused: 2 },
+    },
   }
 })
 

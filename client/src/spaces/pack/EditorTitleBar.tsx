@@ -1,16 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Save, Share2 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
+import { Button } from '@/components/ui/Button'
+import { VersionPicker } from './VersionPicker'
 
 interface EditorTitleBarProps {
   packName: string
   onNameChange: (name: string) => void
+  onSave?: () => void
+  onExportPdf?: () => void
+  onSelectVersion?: (id: string) => void | Promise<void>
+  versionSwitching?: boolean
+  loadingVersionId?: string | null
   className?: string
 }
 
-export function EditorTitleBar({ packName, onNameChange, className }: EditorTitleBarProps) {
+export function EditorTitleBar({
+  packName,
+  onNameChange,
+  onSave,
+  onExportPdf,
+  onSelectVersion,
+  versionSwitching = false,
+  loadingVersionId = null,
+  className,
+}: EditorTitleBarProps) {
   const navigate = useNavigate()
   const saveStatus = useEditorStore((s) => s.saveStatus)
   const [editing, setEditing] = useState(false)
@@ -86,6 +102,36 @@ export function EditorTitleBar({ packName, onNameChange, className }: EditorTitl
             Unsaved
           </>
         )}
+      </div>
+
+      <div className="ml-auto flex items-center gap-2">
+        <VersionPicker
+          onSelectVersion={onSelectVersion}
+          disabled={versionSwitching}
+          loadingVersionId={loadingVersionId}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={() => onSave?.()}
+          disabled={saveStatus === 'saving' || versionSwitching}
+          title={saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save'}
+          aria-label={saveStatus === 'saving' ? 'Saving' : saveStatus === 'saved' ? 'Saved' : 'Save'}
+        >
+          <Save className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={() => onExportPdf?.()}
+          disabled={versionSwitching}
+          title="Export PDF"
+          aria-label="Export PDF"
+        >
+          <Share2 className="size-4" />
+        </Button>
       </div>
 
     </div>

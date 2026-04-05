@@ -155,9 +155,9 @@ export function StaffPreview({ className, getMeasureBoundsRef, editorContainerRe
   }
 
   return (
-    <div className={cn('relative overflow-auto', className)}>
+    <div className={cn('relative overflow-auto px-5 pb-8 pt-4', className)}>
       {chordOverlays.length > 0 && (chordDiagramGlobal === 'top' || chordDiagramGlobal === 'both') && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 pb-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 pb-2">
           {chordOverlays.map((entry) => (
             <span key={`top-${entry.measureIndex}`} className="text-xs font-semibold text-text-primary">
               {entry.symbol}
@@ -166,7 +166,7 @@ export function StaffPreview({ className, getMeasureBoundsRef, editorContainerRe
         </div>
       )}
       <div
-        className="h-full rounded-2xl border border-border bg-surface-1 p-4"
+        className="h-full"
         onMouseMove={(event) => {
           clearHoverHighlights()
           const target = event.target as HTMLElement
@@ -200,7 +200,7 @@ export function StaffPreview({ className, getMeasureBoundsRef, editorContainerRe
         <div ref={containerRef} className="score-paper-bg min-h-full" />
       </div>
       {chordOverlays.length > 0 && (chordDiagramGlobal === 'bottom' || chordDiagramGlobal === 'both') && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2">
           {chordOverlays.map((entry) => (
             <span key={`bottom-${entry.measureIndex}`} className="text-xs font-semibold text-text-primary">
               {entry.symbol}

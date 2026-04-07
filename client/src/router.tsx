@@ -7,6 +7,7 @@ import { HomePage } from '@/spaces/home/HomePage'
 import { EditorPage } from '@/spaces/pack/EditorPage'
 import { MySongsPage } from '@/spaces/songs/MySongsPage'
 import { ProfilePage } from '@/spaces/profile/ProfilePage'
+import { PricingPage } from '@/spaces/pricing/PricingPage'
 
 const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
@@ -18,6 +19,7 @@ const routes: RouteObject[] = [
       { index: true, element: <HomePage /> },
       { path: 'songs', element: <MySongsPage /> },
       { path: 'profile', element: <ProfilePage /> },
+      { path: 'pricing', element: <PricingPage /> },
       // Redirects for removed routes
       { path: 'settings', element: <Navigate to="/profile" replace /> },
       // play/:id redirects to /pack/:id

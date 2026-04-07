@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { Version } from '@lava/shared'
+import { Loader2 } from 'lucide-react'
 import { Button, useToast } from '@/components/ui'
+import { cn } from '@/components/ui/utils'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useAgentStore } from '@/stores/agentStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -14,15 +16,27 @@ import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { usePlaybackStateBridge } from '@/hooks/usePlaybackStateBridge'
 import { useTheme } from '@/hooks/useTheme'
-import { buildScoreDigest } from '@/lib/scoreDocument'
+import { buildScoreDigest, cloneScoreDocument, exportScoreDocumentToMusicXml } from '@/lib/scoreDocument'
 import { useAudioStore } from '@/stores/audioStore'
+import { registerToolbarBridge } from '@/spaces/pack/editor-core/toolbarBridge'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
 import { EditorChatPanel } from './EditorChatPanel'
 import { PreviewBar } from './PreviewBar'
+import { PackReadyBar } from './PackReadyBar'
+import { ExportPdfDialog } from './ExportPdfDialog'
+import { NEW_PACK_TUNINGS } from './newPack'
 
 type ProjectLoadState = 'loading' | 'ready' | 'error'
+type RenderStatus = 'idle' | 'running' | 'error'
+
+const PACK_RENDER_STAGES: Record<string, string[]> = {
+  audio: ['Read audio', 'Prepare pack', 'Finish pack'],
+  youtube: ['Read link', 'Prepare pack', 'Finish pack'],
+  'pdf-image': ['Generate score', 'Prepare pack', 'Finish pack'],
+  musicxml: ['Prepare pack', 'Finish pack'],
+}
 
 function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string, unknown>; createdAt: number }>): Version[] {
   return snapshots.flatMap((entry) => {
@@ -53,13 +67,17 @@ function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isMobile = useIsMobile()
   const { toast } = useToast()
   useTheme()
 
+  const activeProject = useProjectStore((s) => s.activeProject)
   const projectName = useLeadSheetStore((s) => s.projectName)
+  const sections = useLeadSheetStore((s) => s.sections)
   const chatCollapsed = useEditorStore((s) => s.chatPanelCollapsed)
   const saveStatus = useEditorStore((s) => s.saveStatus)
+  const viewMode = useEditorStore((s) => s.viewMode)
   const bpm = useAudioStore((s) => s.bpm)
   const playbackRate = useAudioStore((s) => s.playbackRate)
   const scoreDocument = useScoreDocumentStore((s) => s.document)
@@ -67,6 +85,11 @@ export function EditorPage() {
   const [projectLoadState, setProjectLoadState] = useState<ProjectLoadState>('loading')
   const [projectLoadError, setProjectLoadError] = useState<string | null>(null)
   const [reloadCount, setReloadCount] = useState(0)
+  const [showReadyBar, setShowReadyBar] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [renderStatus, setRenderStatus] = useState<RenderStatus>('idle')
+  const [renderStageIndex, setRenderStageIndex] = useState(0)
+  const [switchingVersionId, setSwitchingVersionId] = useState<string | null>(null)
 
   const { totalBars, beatsPerBar } = useMemo(() => {
     return {
@@ -81,6 +104,34 @@ export function EditorPage() {
     const durationSeconds = totalBars * beatsPerBar * (60 / effectiveBpm)
     useAudioStore.getState().setDuration(durationSeconds)
   }, [totalBars, beatsPerBar, bpm, playbackRate])
+
+  const readyDismissKey = id ? `lava-pack-ready-dismissed:${id}` : null
+
+  const tuningLabel = useMemo(() => {
+    const currentTuning = scoreDocument.tracks[0]?.tuning ?? []
+    return NEW_PACK_TUNINGS.find((entry) =>
+      entry.midi.length === currentTuning.length && entry.midi.every((value, index) => value === currentTuning[index]),
+    )?.label ?? 'Custom tuning'
+  }, [scoreDocument.tracks])
+
+  const exportLayout = useMemo<'tab' | 'staff' | 'split'>(() => {
+    if (viewMode === 'leadSheet' || viewMode === 'staff') return 'staff'
+    if (viewMode === 'split') return 'split'
+    return 'tab'
+  }, [viewMode])
+
+  const renderSource = searchParams.get('source') ?? 'pdf-image'
+  const renderStages = useMemo(
+    () => PACK_RENDER_STAGES[renderSource] ?? PACK_RENDER_STAGES['pdf-image'],
+    [renderSource],
+  )
+  const isRendering = searchParams.get('rendering') === '1'
+  const shouldRenderFail = searchParams.get('renderFail') === '1'
+  const isVersionSwitching = switchingVersionId !== null
+  const renderSourceLabel = useMemo(() => {
+    const metadata = activeProject?.metadata as Record<string, unknown> | undefined
+    return typeof metadata?.sourceLabel === 'string' ? metadata.sourceLabel : projectName || 'Untitled'
+  }, [activeProject?.metadata, projectName])
 
   // Load project from server when navigating to /pack/:id
   useEffect(() => {
@@ -140,41 +191,61 @@ export function EditorPage() {
     }
   }, [id, reloadCount])
 
-  // Auto-save with 2 s debounce whenever the sheet is marked unsaved
   useEffect(() => {
-    if (!id || saveStatus !== 'unsaved') return
-    saveTimerRef.current = setTimeout(async () => {
-      useEditorStore.getState().setSaveStatus('saving')
-      const s = useLeadSheetStore.getState()
-      const scoreState = useScoreDocumentStore.getState()
-      const viewMode = useEditorStore.getState().viewMode
-      try {
-        const updated = await projectService.update(id, {
-          name: s.projectName,
-          metadata: {
-            key: s.key,
-            tempo: s.tempo,
-            timeSignature: s.timeSignature,
-            sections: s.sections,
-            arrangements: s.arrangements,
-            selectedArrangementId: s.selectedArrangementId,
-            scoreView: viewMode === 'leadSheet' ? 'lead_sheet' : viewMode,
-            pdfUrl: s.pdfUrl,
-            musicXml: scoreState.exportCacheXml,
-            scoreDocument: scoreState.document,
-          },
-        })
-        useProjectStore.getState().upsertProject(updated)
-        useEditorStore.getState().setSaveStatus('saved')
-      } catch (err) {
-        console.error('[EditorPage] auto-save failed', err)
-        useEditorStore.getState().setSaveStatus('unsaved')
-      }
-    }, 2000)
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    const entry = searchParams.get('entry')
+    if (entry === 'edit') {
+      useEditorStore.getState().setEditorMode('fineEdit')
+      return
     }
-  }, [id, saveStatus])
+    if (entry === 'play' || entry === 'practice' || entry === null) {
+      useEditorStore.getState().setEditorMode('transform')
+      return
+    }
+    useEditorStore.getState().setEditorMode('transform')
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!id || projectLoadState !== 'ready') return
+    const shouldShow = searchParams.get('ready') === '1' && readyDismissKey
+      ? window.localStorage.getItem(readyDismissKey) !== '1'
+      : false
+    setShowReadyBar(shouldShow && !isRendering)
+  }, [id, isRendering, projectLoadState, readyDismissKey, searchParams])
+
+  useEffect(() => {
+    if (!isRendering || projectLoadState !== 'ready') {
+      setRenderStatus('idle')
+      setRenderStageIndex(0)
+      return
+    }
+
+    setRenderStatus('running')
+    setRenderStageIndex(0)
+
+    const timer = window.setInterval(() => {
+      setRenderStageIndex((current) => {
+        if (current < renderStages.length - 1) return current + 1
+
+        window.clearInterval(timer)
+
+        if (shouldRenderFail) {
+          setRenderStatus('error')
+          toast('Could not finish the pack.', 'error')
+          return current
+        }
+
+        setRenderStatus('idle')
+        const nextParams = new URLSearchParams(searchParams)
+        nextParams.delete('rendering')
+        nextParams.delete('source')
+        nextParams.delete('renderFail')
+        setSearchParams(nextParams, { replace: true })
+        return current
+      })
+    }, 1100)
+
+    return () => window.clearInterval(timer)
+  }, [isRendering, projectLoadState, renderStages.length, searchParams, setSearchParams, shouldRenderFail, toast])
 
   // Sync editor context to agent store — Trigger 1: musicXml changes (debounced)
   const contextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -325,9 +396,124 @@ export function EditorPage() {
     useEditorStore.getState().setSaveStatus('unsaved')
   }, [])
 
+  const persistEditorState = useCallback(async (options?: { showToast?: boolean }) => {
+    if (!id) return
+
+    const s = useLeadSheetStore.getState()
+    const scoreState = useScoreDocumentStore.getState()
+    const currentViewMode = useEditorStore.getState().viewMode
+
+    const updated = await projectService.update(id, {
+      name: s.projectName,
+      metadata: {
+        key: s.key,
+        tempo: s.tempo,
+        timeSignature: s.timeSignature,
+        sections: s.sections,
+        arrangements: s.arrangements,
+        selectedArrangementId: s.selectedArrangementId,
+        scoreView: currentViewMode === 'leadSheet' ? 'lead_sheet' : currentViewMode,
+        pdfUrl: s.pdfUrl,
+        musicXml: scoreState.exportCacheXml,
+        scoreDocument: scoreState.document,
+      },
+    })
+
+    useProjectStore.getState().upsertProject(updated)
+    useEditorStore.getState().setSaveStatus('saved')
+
+    if (options?.showToast) {
+      toast('Saved.', 'success')
+    }
+  }, [id, toast])
+
+  const handleSaveNow = useCallback(async () => {
+    if (!id || saveStatus === 'saving') return
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+
+    useEditorStore.getState().setSaveStatus('saving')
+    try {
+      await persistEditorState({ showToast: true })
+    } catch (err) {
+      console.error('[EditorPage] manual save failed', err)
+      useEditorStore.getState().setSaveStatus('unsaved')
+      toast('Could not save.', 'error')
+    }
+  }, [id, persistEditorState, saveStatus, toast])
+
+  const handleSelectVersion = useCallback(async (nextVersionId: string) => {
+    if (!id || isVersionSwitching) return
+
+    const versionStore = useVersionStore.getState()
+    const currentVersionId = versionStore.activeVersionId
+    if (nextVersionId === currentVersionId) return
+
+    try {
+      setSwitchingVersionId(nextVersionId)
+
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+
+      useEditorStore.getState().setSaveStatus('saving')
+
+      const currentSnapshot = cloneScoreDocument(useScoreDocumentStore.getState().document)
+      const currentMusicXml =
+        useScoreDocumentStore.getState().exportCacheXml || exportScoreDocumentToMusicXml(currentSnapshot)
+
+      useVersionStore.getState().updateVersion(currentVersionId, {
+        scoreSnapshot: currentSnapshot,
+        musicXml: currentMusicXml,
+      })
+
+      await persistEditorState()
+      await new Promise((resolve) => window.setTimeout(resolve, 520))
+
+      useVersionStore.getState().setActiveVersion(nextVersionId)
+      useEditorStore.getState().setSaveStatus('saved')
+    } catch (err) {
+      console.error('[EditorPage] version switch failed', err)
+      useEditorStore.getState().setSaveStatus('unsaved')
+      toast('Could not switch version.', 'error')
+    } finally {
+      setSwitchingVersionId(null)
+    }
+  }, [id, isVersionSwitching, persistEditorState, toast])
+
+  // Auto-save with 2 s debounce whenever the sheet is marked unsaved
+  useEffect(() => {
+    if (!id || saveStatus !== 'unsaved') return
+    saveTimerRef.current = setTimeout(async () => {
+      useEditorStore.getState().setSaveStatus('saving')
+      try {
+        await persistEditorState()
+      } catch (err) {
+        console.error('[EditorPage] auto-save failed', err)
+        useEditorStore.getState().setSaveStatus('unsaved')
+      }
+    }, 2000)
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [id, persistEditorState, saveStatus])
+
   const handleCompare = useCallback(() => {
     toast('Compare view is still being connected.')
   }, [toast])
+
+  const dismissReadyBar = useCallback(() => {
+    if (readyDismissKey) window.localStorage.setItem(readyDismissKey, '1')
+    setShowReadyBar(false)
+    if (searchParams.get('ready') === '1') {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('ready')
+      setSearchParams(nextParams, { replace: true })
+    }
+  }, [readyDismissKey, searchParams, setSearchParams])
 
   useEffect(() => {
     let isInitial = true
@@ -352,6 +538,11 @@ export function EditorPage() {
     window.addEventListener('lava-audio-error', handleAudioError as EventListener)
     return () => window.removeEventListener('lava-audio-error', handleAudioError as EventListener)
   }, [toast])
+
+  useEffect(() => {
+    const cleanup = registerToolbarBridge()
+    return cleanup
+  }, [])
 
   if (projectLoadState === 'loading') {
     return (
@@ -391,7 +582,21 @@ export function EditorPage() {
     <div className="flex h-screen w-screen flex-col bg-surface-1">
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex min-w-0 flex-1 flex-col bg-surface-1">
-          <EditorTitleBar packName={projectName || 'Untitled'} onNameChange={handleNameChange} />
+          <EditorTitleBar
+            packName={projectName || 'Untitled'}
+            onNameChange={handleNameChange}
+            onSave={handleSaveNow}
+            onExportPdf={() => setExportDialogOpen(true)}
+            onSelectVersion={handleSelectVersion}
+            versionSwitching={isVersionSwitching}
+            loadingVersionId={switchingVersionId}
+          />
+
+          {showReadyBar ? (
+            <PackReadyBar
+              onClose={dismissReadyBar}
+            />
+          ) : null}
 
           <PreviewBar
             onApply={() => {
@@ -403,16 +608,42 @@ export function EditorPage() {
             onCompare={handleCompare}
           />
 
-          <EditorCanvas className="flex-1" />
+          <div className="relative flex min-h-0 flex-1">
+            <EditorCanvas className={cn('flex-1 transition-opacity duration-200', (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60')} />
 
-          <EditorToolbar
-            totalBars={totalBars}
-            beatsPerBar={beatsPerBar}
-            className="z-10"
-          />
+            <EditorToolbar
+              totalBars={totalBars}
+              beatsPerBar={beatsPerBar}
+              className="z-20"
+            />
+
+            {isRendering || isVersionSwitching ? (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/8 backdrop-blur-sm">
+                <div className="w-full max-w-[720px] px-8">
+                  <div className="rounded-[28px] border border-border/80 bg-surface-0/90 p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="size-5 animate-spin text-text-primary" />
+                      <span className="text-base font-medium text-text-primary">
+                        {isVersionSwitching ? 'Switching version...' : 'Loading score...'}
+                      </span>
+                    </div>
+                    <div className="mt-5 space-y-3">
+                      <div className="h-4 w-40 animate-pulse rounded-full bg-surface-2" />
+                      <div className="h-24 animate-pulse rounded-[20px] bg-surface-1" />
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="h-16 animate-pulse rounded-[18px] bg-surface-1" />
+                        <div className="h-16 animate-pulse rounded-[18px] bg-surface-1" />
+                        <div className="h-16 animate-pulse rounded-[18px] bg-surface-1" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        {!isMobile && <EditorChatPanel className="w-[356px] min-w-[356px] max-w-[356px] bg-surface-0" />}
+        {!isMobile && <EditorChatPanel className="min-w-[360px] bg-surface-0" />}
       </div>
 
       {isMobile && !chatCollapsed && (
@@ -420,6 +651,22 @@ export function EditorPage() {
           <EditorChatPanel />
         </div>
       )}
+
+      <ExportPdfDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        packName={projectName || 'Untitled'}
+        defaultLayout={exportLayout}
+        keyValue={scoreDocument.keySignature.key}
+        tempo={scoreDocument.tempo}
+        timeSignature={`${scoreDocument.meter.numerator}/${scoreDocument.meter.denominator}`}
+        tuningLabel={tuningLabel}
+        capo={scoreDocument.tracks[0]?.capo ?? 0}
+        sections={sections.map((section) => ({
+          label: section.label,
+          bars: section.measures.length,
+        }))}
+      />
     </div>
   )
 }

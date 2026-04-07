@@ -1,22 +1,26 @@
 import type {
-  CommandResult,
   GuitarPlacement,
   KeySignature,
   NoteValue,
   PlacementPolicy,
-  ScoreCommand,
-  ScoreCommandPatch,
   ScoreDocument,
   ScoreHarmony,
   ScoreMeasureMeta,
   ScoreNoteEvent,
   ScorePitch,
-  ScoreTrack,
-  TechniqueSet,
+  Technique,
   TimeSignature,
 } from '@lava/shared'
-import { STANDARD_TUNING, fretToMidi, midiToFret, midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
-
+import { STANDARD_TUNING, midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
+import {
+  choosePlacement,
+  createId,
+  createMeasureMeta,
+  DEFAULT_PLACEMENT_POLICY,
+  divisionsToNoteType,
+  noteTypeToDivisions,
+  resolvePitchFromPlacement as resolvePitchFromPlacementHelper,
+} from '@/spaces/pack/editor-core/helpers'
 const parser = new DOMParser()
 const serializer = new XMLSerializer()
 
@@ -56,26 +60,7 @@ const FIFTHS_FROM_KEY: Record<string, number> = {
   'C#': 7,
 }
 
-const NOTE_TYPE_TO_DIVISOR: Record<NoteValue, number> = {
-  whole: 1,
-  half: 2,
-  quarter: 4,
-  eighth: 8,
-  sixteenth: 16,
-}
 
-const DEFAULT_POLICY: PlacementPolicy = {
-  preferMinimalMovement: true,
-  preferStringContinuity: true,
-  maxFret: 18,
-}
-
-function createId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`
-  }
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
-}
 
 export function cloneScoreDocument(document: ScoreDocument): ScoreDocument {
   return structuredClone(document)
@@ -132,19 +117,6 @@ function getText(el: Element | null | undefined, selector: string): string | nul
   return el?.querySelector(selector)?.textContent?.trim() ?? null
 }
 
-function noteTypeToDivisions(type: NoteValue, divisions: number): number {
-  const divisor = NOTE_TYPE_TO_DIVISOR[type] ?? 4
-  return Math.max(1, Math.round((divisions * 4) / divisor))
-}
-
-function divisionsToNoteType(durationDivisions: number, divisions: number): NoteValue {
-  const ratio = durationDivisions / Math.max(divisions, 1)
-  if (ratio >= 4) return 'whole'
-  if (ratio >= 2) return 'half'
-  if (ratio >= 1) return 'quarter'
-  if (ratio >= 0.5) return 'eighth'
-  return 'sixteenth'
-}
 
 function buildHarmonySymbol(harmony: Element): string {
   const rootStep = getText(harmony, 'root-step') ?? 'C'
@@ -172,18 +144,69 @@ function buildHarmonySymbol(harmony: Element): string {
   return `${rootStep}${accidental}${kindMap[kind] ?? ''}`
 }
 
-function parseTechniqueSet(noteEl: Element): TechniqueSet {
+function parseTechniques(noteEl: Element): Technique[] {
+  const techniques: Technique[] = []
   const notations = noteEl.querySelector('notations')
-  if (!notations) return {}
-  const techniques: TechniqueSet = {}
-  if (notations.querySelector('technical > bend')) techniques.bend = true
-  if (notations.querySelector('technical > hammer-on')) techniques.hammerOn = true
-  if (notations.querySelector('technical > pull-off')) techniques.pullOff = true
-  if (notations.querySelector('articulations > strong-accent')) techniques.palmMute = true
-  if (notations.querySelector('technical > harmonic')) techniques.harmonic = true
-  if (notations.querySelector('ornaments > wavy-line')) techniques.vibrato = true
-  if (notations.querySelector('slide[type="up"], glissando[type="up"]')) techniques.slide = 'up'
-  if (notations.querySelector('slide[type="down"], glissando[type="down"]')) techniques.slide = 'down'
+  if (!notations) return techniques
+
+  // Technical
+  const technical = notations.querySelector('technical')
+  if (technical) {
+    if (technical.querySelector('bend')) {
+      const alter = parseFloat(technical.querySelector('bend > bend-alter')?.textContent ?? '2')
+      if (alter < 0) {
+        techniques.push({ type: 'tremoloBar', semitones: Math.abs(alter) })
+      } else {
+        techniques.push({ type: 'bend', style: 'full', semitones: alter })
+      }
+    }
+    if (technical.querySelector('slide')) techniques.push({ type: 'slide', style: 'shift' })
+    if (technical.querySelector('hammer-on')) techniques.push({ type: 'hammerOn' })
+    if (technical.querySelector('pull-off')) techniques.push({ type: 'pullOff' })
+    if (technical.querySelector('tap')) techniques.push({ type: 'tap' })
+    if (technical.querySelector('harmonic')) {
+      const style = technical.querySelector('harmonic > artificial') ? 'artificial' : 'natural'
+      techniques.push({ type: 'harmonic', style: style as 'natural' | 'artificial' })
+    }
+    if (technical.querySelector('let-ring')) techniques.push({ type: 'letRing' })
+    if (technical.querySelector('palm-mute')) techniques.push({ type: 'palmMute' })
+  }
+
+  // Ornaments
+  const ornaments = notations.querySelector('ornaments')
+  if (ornaments) {
+    const tremolo = ornaments.querySelector('tremolo')
+    if (tremolo) {
+      const val = parseInt(tremolo.textContent ?? '2', 10)
+      const speed = val >= 3 ? 'thirtySecond' : val >= 2 ? 'sixteenth' : 'eighth'
+      techniques.push({ type: 'tremoloPicking', speed: speed as 'thirtySecond' | 'sixteenth' | 'eighth' })
+    }
+    if (ornaments.querySelector('wavy-line')) techniques.push({ type: 'vibrato', style: 'normal' })
+  }
+
+  // Articulations
+  const articulations = notations.querySelector('articulations')
+  if (articulations) {
+    if (articulations.querySelector('strong-accent')) techniques.push({ type: 'accent', style: 'heavy' })
+    else if (articulations.querySelector('accent')) techniques.push({ type: 'accent', style: 'normal' })
+    if (articulations.querySelector('staccato')) techniques.push({ type: 'staccato' })
+    if (articulations.querySelector('tenuto')) techniques.push({ type: 'tenuto' })
+  }
+
+  // Arpeggiate
+  const arp = notations.querySelector('arpeggiate')
+  if (arp) {
+    const direction = (arp.getAttribute('direction') ?? 'up') as 'up' | 'down'
+    techniques.push({ type: 'arpeggio', direction })
+  }
+
+  // Notehead
+  const notehead = noteEl.querySelector('notehead')
+  if (notehead) {
+    if (notehead.textContent === 'x') techniques.push({ type: 'deadNote' })
+    else if (notehead.getAttribute('parentheses') === 'yes') techniques.push({ type: 'ghostNote' })
+  }
+
   return techniques
 }
 
@@ -263,46 +286,8 @@ function parseMeasureMeta(
   }
 }
 
-function createMeasureMeta(index: number): ScoreMeasureMeta {
-  return {
-    id: createId(`measure-${index}`),
-    index,
-    harmony: [],
-    annotations: [],
-    chordDiagramPlacement: 'hidden',
-  }
-}
 
-function choosePlacement(
-  midi: number,
-  tuning: number[],
-  capo: number,
-  previous: GuitarPlacement | null,
-  policy: PlacementPolicy = DEFAULT_POLICY,
-): GuitarPlacement | null {
-  const effectiveTuning = tuning.map((value) => value + capo)
-  const candidates = midiToFret(midi, effectiveTuning).filter((candidate) => candidate.fret <= policy.maxFret)
-  if (candidates.length === 0) return null
-
-  candidates.sort((a, b) => {
-    const prevDistanceA = previous ? Math.abs(previous.fret - a.fret) + Math.abs(previous.string - a.string) : 0
-    const prevDistanceB = previous ? Math.abs(previous.fret - b.fret) + Math.abs(previous.string - b.string) : 0
-    if (policy.preferMinimalMovement && prevDistanceA !== prevDistanceB) return prevDistanceA - prevDistanceB
-    if (policy.preferStringContinuity && previous && a.string !== b.string) {
-      return Math.abs(previous.string - a.string) - Math.abs(previous.string - b.string)
-    }
-    return a.fret - b.fret
-  })
-
-  const best = candidates[0]
-  return {
-    string: best.string,
-    fret: best.fret,
-    confidence: previous ? 'derived' : 'low',
-  }
-}
-
-export function assignGuitarPlacement(document: ScoreDocument, policy: PlacementPolicy = DEFAULT_POLICY): ScoreDocument {
+export function assignGuitarPlacement(document: ScoreDocument, policy: PlacementPolicy = DEFAULT_PLACEMENT_POLICY): ScoreDocument {
   const next = cloneScoreDocument(document)
   const track = next.tracks[0]
   if (!track) return next
@@ -373,6 +358,13 @@ export function parseMusicXmlToScoreDocument(xml: string): ScoreDocument {
           }
         : null
 
+      // Tuplet
+      const timeMod = noteEl.querySelector('time-modification')
+      const tuplet = timeMod ? {
+        actual: parseInt(timeMod.querySelector('actual-notes')?.textContent ?? '3', 10),
+        normal: parseInt(timeMod.querySelector('normal-notes')?.textContent ?? '2', 10),
+      } : undefined
+
       const note: ScoreNoteEvent = {
         id: createId(`note-${measureIndex}-${noteOrdinal}`),
         measureIndex,
@@ -384,7 +376,8 @@ export function parseMusicXmlToScoreDocument(xml: string): ScoreDocument {
         isRest: noteEl.querySelector('rest') !== null,
         pitch,
         placement,
-        techniques: parseTechniqueSet(noteEl),
+        techniques: parseTechniques(noteEl),
+        tuplet,
         lyric: getText(noteEl, 'lyric > text') ?? undefined,
         tieStart: noteEl.querySelector('tie[type="start"]') !== null,
         tieStop: noteEl.querySelector('tie[type="stop"]') !== null,
@@ -470,8 +463,9 @@ function renderHarmony(harmony: ScoreHarmony, divisions: number): string {
   ].join('')
 }
 
-function renderNote(note: ScoreNoteEvent, track: ScoreTrack): string {
+function renderNote(note: ScoreNoteEvent): string {
   const lines: string[] = ['<note>']
+
   if (note.isRest || !note.pitch) {
     lines.push('<rest/>')
   } else {
@@ -481,38 +475,141 @@ function renderNote(note: ScoreNoteEvent, track: ScoreTrack): string {
     lines.push(`<octave>${note.pitch.octave}</octave>`)
     lines.push('</pitch>')
   }
+
   lines.push(`<duration>${note.durationDivisions}</duration>`)
   lines.push(`<voice>${note.voice}</voice>`)
   lines.push(`<type>${note.durationType}</type>`)
+
+  // Dots
   for (let dot = 0; dot < note.dots; dot += 1) lines.push('<dot/>')
+
+  // Tuplet time-modification
+  if (note.tuplet) {
+    lines.push('<time-modification>')
+    lines.push(`<actual-notes>${note.tuplet.actual}</actual-notes>`)
+    lines.push(`<normal-notes>${note.tuplet.normal}</normal-notes>`)
+    lines.push('</time-modification>')
+  }
+
+  // Ties (as elements on the note)
   if (note.tieStart) lines.push('<tie type="start"/>')
   if (note.tieStop) lines.push('<tie type="stop"/>')
-  if (note.lyric) {
-    lines.push(`<lyric><text>${xmlEscape(note.lyric)}</text></lyric>`)
+
+  // Notehead for ghost/dead notes
+  const ghostNote = note.techniques.find((t) => t.type === 'ghostNote')
+  const deadNote = note.techniques.find((t) => t.type === 'deadNote')
+  if (deadNote) {
+    lines.push('<notehead>x</notehead>')
+  } else if (ghostNote) {
+    lines.push('<notehead parentheses="yes">normal</notehead>')
   }
-  if (note.placement || note.tieStart || note.tieStop || Object.keys(note.techniques).length > 0) {
+
+  // Lyric
+  if (note.lyric) {
+    lines.push(`<lyric><syllabic>single</syllabic><text>${xmlEscape(note.lyric)}</text></lyric>`)
+  }
+
+  // Notations block
+  const hasNotations = note.tieStart || note.tieStop || note.tuplet || note.slurStart || note.placement || note.techniques.length > 0
+  if (hasNotations) {
     lines.push('<notations>')
+
     if (note.tieStart) lines.push('<tied type="start"/>')
     if (note.tieStop) lines.push('<tied type="stop"/>')
-    if (note.placement || Object.keys(note.techniques).length > 0) {
-      lines.push('<technical>')
-      if (note.placement) {
-        lines.push(`<string>${note.placement.string}</string>`)
-        lines.push(`<fret>${note.placement.fret}</fret>`)
+    if (note.tuplet) lines.push('<tuplet type="start" bracket="yes"/>')
+    if (note.slurStart) lines.push('<slur type="start"/>')
+
+    // Ornaments
+    const ornamentLines: string[] = []
+    for (const t of note.techniques) {
+      if (t.type === 'tremoloPicking') {
+        const val = t.speed === 'thirtySecond' ? 3 : t.speed === 'sixteenth' ? 2 : 1
+        ornamentLines.push(`<tremolo>${val}</tremolo>`)
       }
-      if (note.techniques.bend) lines.push('<bend><bend-alter>1</bend-alter></bend>')
-      if (note.techniques.hammerOn) lines.push('<hammer-on type="start">H</hammer-on>')
-      if (note.techniques.pullOff) lines.push('<pull-off type="start">P</pull-off>')
-      if (note.techniques.harmonic) lines.push('<harmonic><natural/></harmonic>')
+      if (t.type === 'vibrato') ornamentLines.push('<wavy-line type="start"/>')
+    }
+    if (ornamentLines.length) {
+      lines.push('<ornaments>')
+      lines.push(...ornamentLines)
+      lines.push('</ornaments>')
+    }
+
+    // Technical
+    const technicalLines: string[] = []
+    if (note.placement) {
+      technicalLines.push(`<string>${note.placement.string}</string>`)
+      technicalLines.push(`<fret>${note.placement.fret}</fret>`)
+    }
+    for (const t of note.techniques) {
+      if (t.type === 'bend') technicalLines.push(`<bend><bend-alter>${t.semitones}</bend-alter></bend>`)
+      if (t.type === 'tremoloBar') technicalLines.push(`<bend><bend-alter>${-t.semitones}</bend-alter></bend>`)
+      if (t.type === 'slide') technicalLines.push('<slide type="start"/>')
+      if (t.type === 'hammerOn') technicalLines.push('<hammer-on type="start">H</hammer-on>')
+      if (t.type === 'pullOff') technicalLines.push('<pull-off type="start">P</pull-off>')
+      if (t.type === 'tap') technicalLines.push('<tap/>')
+      if (t.type === 'harmonic') technicalLines.push(t.style === 'natural' ? '<harmonic><natural/></harmonic>' : '<harmonic><artificial/></harmonic>')
+      if (t.type === 'letRing') technicalLines.push('<let-ring/>')
+      if (t.type === 'palmMute') technicalLines.push('<palm-mute/>')
+    }
+    if (technicalLines.length) {
+      lines.push('<technical>')
+      lines.push(...technicalLines)
       lines.push('</technical>')
     }
-    if (note.techniques.slide) lines.push(`<slide type="${note.techniques.slide === 'down' ? 'down' : 'up'}"/>`)
-    if (note.techniques.vibrato) lines.push('<ornaments><wavy-line type="start"/></ornaments>')
-    if (note.techniques.palmMute) lines.push('<articulations><strong-accent type="up"/></articulations>')
+
+    // Articulations
+    const articulationLines: string[] = []
+    for (const t of note.techniques) {
+      if (t.type === 'accent') articulationLines.push(t.style === 'heavy' ? '<strong-accent/>' : '<accent/>')
+      if (t.type === 'staccato') articulationLines.push('<staccato/>')
+      if (t.type === 'tenuto') articulationLines.push('<tenuto/>')
+    }
+    if (articulationLines.length) {
+      lines.push('<articulations>')
+      lines.push(...articulationLines)
+      lines.push('</articulations>')
+    }
+
+    // Arpeggiate
+    const arp = note.techniques.find((t) => t.type === 'arpeggio')
+    if (arp && arp.type === 'arpeggio') lines.push(`<arpeggiate direction="${arp.direction}"/>`)
+
     lines.push('</notations>')
   }
+
   lines.push('</note>')
   return lines.join('')
+}
+
+function renderNoteDynamic(note: ScoreNoteEvent): string {
+  if (!note.dynamic) return ''
+  return `<direction placement="below"><direction-type><dynamics><${note.dynamic}/></dynamics></direction-type></direction>`
+}
+
+/**
+ * Emit filler rest elements to fill a gap in divisions.
+ * MusicXML note positions are determined by cumulative duration, not explicit offsets,
+ * so any gap between notes must be padded with explicit rests.
+ */
+function renderFillerRests(gapDivisions: number, divisions: number): string[] {
+  if (gapDivisions <= 0) return []
+  const lines: string[] = []
+  const restTypes = [
+    { dur: divisions * 4, type: 'whole' },
+    { dur: divisions * 2, type: 'half' },
+    { dur: divisions, type: 'quarter' },
+    { dur: Math.max(1, Math.round(divisions / 2)), type: 'eighth' },
+    { dur: Math.max(1, Math.round(divisions / 4)), type: 'sixteenth' },
+  ]
+  let remaining = gapDivisions
+  let guard = 0
+  while (remaining > 0 && guard++ < 64) {
+    const best = restTypes.find((rt) => rt.dur <= remaining)
+    if (!best) break
+    lines.push(`<note><rest/><duration>${best.dur}</duration><voice>1</voice><type>${best.type}</type></note>`)
+    remaining -= best.dur
+  }
+  return lines
 }
 
 export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
@@ -573,14 +670,54 @@ export function exportScoreDocumentToMusicXml(document: ScoreDocument): string {
     if (measure.tempo ?? (index === 0 ? document.tempo : undefined)) {
       lines.push(`<direction placement="above"><direction-type><words>Tempo</words></direction-type><sound tempo="${measure.tempo ?? document.tempo}"/></direction>`)
     }
+    if (measure.isRepeatStart) {
+      lines.push('<barline location="left"><bar-style>heavy-light</bar-style><repeat direction="forward"/></barline>')
+    }
     measure.harmony.forEach((harmony) => lines.push(renderHarmony(harmony, document.divisions)))
     measure.annotations.forEach((annotation) => {
       lines.push(`<direction placement="above"><direction-type><words>${xmlEscape(annotation)}</words></direction-type></direction>`)
     })
+    if (measure.repeatMarker) {
+      const markerText: Record<string, string> = {
+        'dc-al-fine': 'D.C. al Fine',
+        'ds-al-coda': 'D.S. al Coda',
+        segno: '\u{1D10B}',
+        fine: 'Fine',
+        coda: '\u{1D10C}',
+      }
+      const text = markerText[measure.repeatMarker]
+      if (text) lines.push(`<direction placement="above"><direction-type><words>${xmlEscape(text)}</words></direction-type></direction>`)
+    }
     const notes = (notesByMeasure.get(index) ?? []).sort((a, b) => a.beat - b.beat)
-    notes.forEach((note) => lines.push(renderNote(note, track)))
     if (notes.length === 0) {
       lines.push(`<note><rest/><duration>${document.divisions * currentMeter.numerator}</duration><voice>1</voice><type>whole</type></note>`)
+    } else {
+      let currentDivisions = 0
+      for (const note of notes) {
+        const expectedDivisions = Math.round(note.beat * document.divisions)
+        // Fill any gap between the current write-head and this note's onset with rests.
+        // Without this, AlphaTab (and any MusicXML reader) would place the note at the
+        // wrong beat because MusicXML positions are cumulative, not absolute.
+        if (expectedDivisions > currentDivisions) {
+          renderFillerRests(expectedDivisions - currentDivisions, document.divisions).forEach((r) => lines.push(r))
+          currentDivisions = expectedDivisions
+        }
+        lines.push(renderNoteDynamic(note))
+        lines.push(renderNote(note))
+        currentDivisions += note.durationDivisions
+      }
+    }
+    if (measure.isRepeatEnd) {
+      lines.push('<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>')
+    } else if (measure.barlineType && measure.barlineType !== 'single') {
+      const barStyleMap: Record<string, string> = {
+        double: 'light-light',
+        final: 'light-heavy',
+        dashed: 'dashed',
+        dotted: 'dotted',
+      }
+      const barStyle = barStyleMap[measure.barlineType]
+      if (barStyle) lines.push(`<barline location="right"><bar-style>${barStyle}</bar-style></barline>`)
     }
     lines.push('</measure>')
   })
@@ -613,457 +750,6 @@ export function buildScoreDigest(document: ScoreDocument): string {
   ].filter(Boolean).join(' | ')
 }
 
-function updateTrackNotes(track: ScoreTrack, updater: (notes: ScoreNoteEvent[]) => ScoreNoteEvent[]): ScoreTrack {
-  return {
-    ...track,
-    notes: updater(track.notes).sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat),
-  }
-}
 
-function resolvePitchFromPlacement(track: ScoreTrack, placement: GuitarPlacement): ScorePitch {
-  const pitch = midiToPitch(fretToMidi(placement.string, placement.fret, track.tuning.map((value) => value + track.capo)))
-  return {
-    step: pitch.step as ScorePitch['step'],
-    octave: pitch.octave,
-    alter: pitch.alter,
-  }
-}
-
-export function applyCommandToDocument(document: ScoreDocument, command: ScoreCommand): CommandResult {
-  const next = cloneScoreDocument(document)
-  const track = next.tracks[0]
-  const warnings: string[] = []
-
-  if (!track) return { document: next, warnings: ['No editable guitar track found.'] }
-
-  const findNote = (noteId: string) => track.notes.find((note) => note.id === noteId)
-
-  switch (command.type) {
-    case 'insertNote': {
-      const inferredPlacement = command.note?.placement ?? { string: 1, fret: 0, confidence: 'low' as const }
-      const inferredPitch = command.note?.pitch ?? resolvePitchFromPlacement(track, inferredPlacement)
-      const newNote: ScoreNoteEvent = {
-        id: createId('note'),
-        measureIndex: command.measureIndex,
-        voice: 1,
-        beat: command.beat,
-        durationDivisions: command.note?.durationDivisions ?? noteTypeToDivisions(command.note?.durationType ?? 'quarter', next.divisions),
-        durationType: command.note?.durationType ?? 'quarter',
-        dots: command.note?.dots ?? 0,
-        isRest: command.note?.isRest ?? false,
-        pitch: inferredPitch,
-        placement: inferredPlacement,
-        techniques: command.note?.techniques ?? {},
-        lyric: command.note?.lyric,
-        tieStart: command.note?.tieStart,
-        tieStop: command.note?.tieStop,
-        displayHints: command.note?.displayHints ?? { staffVisible: true, tabVisible: true },
-      }
-      track.notes = [...track.notes, newNote].sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat)
-      break
-    }
-    case 'insertNoteAtCaret': {
-      if (command.measureIndex < 0 || command.measureIndex >= next.measures.length) {
-        warnings.push(`Measure index ${command.measureIndex} is out of bounds.`)
-        break
-      }
-      const existing = track.notes.find((note) =>
-        note.measureIndex === command.measureIndex
-        && Math.abs(note.beat - command.beat) < 0.02
-        && note.placement?.string === command.string,
-      )
-      if (existing) {
-        track.notes = track.notes.map((note) => note.id === existing.id
-          ? {
-              ...note,
-              isRest: false,
-              durationType: command.durationType ?? note.durationType,
-              durationDivisions: noteTypeToDivisions(command.durationType ?? note.durationType, next.divisions),
-              placement: {
-                string: command.string,
-                fret: command.fret,
-                confidence: 'explicit',
-              },
-              pitch: resolvePitchFromPlacement(track, {
-                string: command.string,
-                fret: command.fret,
-                confidence: 'explicit',
-              }),
-            }
-          : note)
-        break
-      }
-      const placement = {
-        string: command.string,
-        fret: command.fret,
-        confidence: 'explicit' as const,
-      }
-      const durationType = command.durationType ?? 'quarter'
-      const newNote: ScoreNoteEvent = {
-        id: createId('note'),
-        measureIndex: command.measureIndex,
-        voice: 1,
-        beat: command.beat,
-        durationDivisions: noteTypeToDivisions(durationType, next.divisions),
-        durationType,
-        dots: 0,
-        isRest: false,
-        pitch: resolvePitchFromPlacement(track, placement),
-        placement,
-        techniques: {},
-        displayHints: { staffVisible: true, tabVisible: true },
-      }
-      track.notes = [...track.notes, newNote].sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat)
-      break
-    }
-    case 'insertRestAtCaret': {
-      const durationType = command.durationType ?? 'quarter'
-      const existing = track.notes.find((note) =>
-        note.measureIndex === command.measureIndex && Math.abs(note.beat - command.beat) < 0.02,
-      )
-      if (existing) {
-        track.notes = track.notes.map((note) => note.id === existing.id
-          ? {
-              ...note,
-              isRest: true,
-              durationType,
-              durationDivisions: noteTypeToDivisions(durationType, next.divisions),
-              placement: null,
-              pitch: null,
-            }
-          : note)
-        break
-      }
-      const newNote: ScoreNoteEvent = {
-        id: createId('note'),
-        measureIndex: command.measureIndex,
-        voice: 1,
-        beat: command.beat,
-        durationDivisions: noteTypeToDivisions(durationType, next.divisions),
-        durationType,
-        dots: 0,
-        isRest: true,
-        pitch: null,
-        placement: null,
-        techniques: {},
-        displayHints: { staffVisible: true, tabVisible: true },
-      }
-      track.notes = [...track.notes, newNote].sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat)
-      break
-    }
-    case 'deleteNote':
-      track.notes = track.notes.filter((note) => note.id !== command.noteId)
-      break
-    case 'moveNoteToBeat':
-      track.notes = track.notes.map((note) => {
-        if (note.id !== command.noteId) return note
-        const nextString = command.string ?? note.placement?.string
-        const nextPlacement = nextString && note.placement
-          ? {
-              ...note.placement,
-              string: nextString,
-            }
-          : note.placement
-        return {
-          ...note,
-          measureIndex: command.measureIndex,
-          beat: command.beat,
-          placement: nextPlacement,
-        }
-      }).sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat)
-      break
-    case 'setDuration':
-      track.notes = track.notes.map((note) => note.id === command.noteId
-        ? {
-            ...note,
-            durationType: command.durationType,
-            durationDivisions: command.durationDivisions > 0
-              ? command.durationDivisions
-              : noteTypeToDivisions(command.durationType, next.divisions),
-          }
-        : note)
-      break
-    case 'setPitch':
-      track.notes = track.notes.map((note) => {
-        if (note.id !== command.noteId) return note
-        const updated = { ...note, isRest: command.pitch === null, pitch: command.pitch }
-        if (command.pitch) {
-          const placement = choosePlacement(
-            pitchToMidi(command.pitch),
-            track.tuning,
-            track.capo,
-            note.placement,
-          )
-          updated.placement = placement
-          if (!placement) warnings.push(`No playable placement found for ${command.pitch.step}${command.pitch.octave}.`)
-        } else {
-          updated.placement = null
-        }
-        return updated
-      })
-      break
-    case 'setStringFret':
-      track.notes = track.notes.map((note) => note.id === command.noteId
-        ? {
-            ...note,
-            isRest: false,
-            placement: {
-              string: command.string,
-              fret: command.fret,
-              confidence: 'explicit',
-            },
-            pitch: resolvePitchFromPlacement(track, {
-              string: command.string,
-              fret: command.fret,
-              confidence: 'explicit',
-            }),
-          }
-        : note)
-      break
-    case 'splitNote': {
-      const note = findNote(command.noteId)
-      if (!note) break
-      const rightDuration = Math.max(1, note.durationDivisions - command.leftDurationDivisions)
-      track.notes = track.notes.flatMap((entry) => {
-        if (entry.id !== command.noteId) return [entry]
-        return [
-          { ...entry, durationDivisions: command.leftDurationDivisions, durationType: divisionsToNoteType(command.leftDurationDivisions, next.divisions) },
-          {
-            ...entry,
-            id: createId('note'),
-            beat: entry.beat + command.leftDurationDivisions / next.divisions,
-            durationDivisions: rightDuration,
-            durationType: divisionsToNoteType(rightDuration, next.divisions),
-          },
-        ]
-      })
-      break
-    }
-    case 'mergeWithNext': {
-      const ordered = track.notes
-        .slice()
-        .sort((a, b) => a.measureIndex - b.measureIndex || a.beat - b.beat)
-      const index = ordered.findIndex((note) => note.id === command.noteId)
-      const current = ordered[index]
-      const nextNote = index >= 0 ? ordered[index + 1] : null
-      if (!current || !nextNote) break
-      if (current.measureIndex !== nextNote.measureIndex) break
-      track.notes = ordered
-        .filter((note) => note.id !== nextNote.id)
-        .map((note) => note.id === current.id
-          ? {
-              ...note,
-              durationDivisions: note.durationDivisions + nextNote.durationDivisions,
-              durationType: divisionsToNoteType(note.durationDivisions + nextNote.durationDivisions, next.divisions),
-            }
-          : note)
-      break
-    }
-    case 'toggleRest':
-      track.notes = track.notes.map((note) => note.id === command.noteId
-        ? {
-            ...note,
-            isRest: !note.isRest,
-            placement: note.isRest ? (note.placement ?? { string: 1, fret: 0, confidence: 'low' }) : null,
-            pitch: note.isRest ? (note.pitch ?? { step: 'E', octave: 4 }) : null,
-          }
-        : note)
-      break
-    case 'toggleTie':
-      track.notes = track.notes.map((note) => note.id === command.noteId
-        ? { ...note, tieStart: !note.tieStart }
-        : note)
-      break
-    case 'toggleSlur':
-      track.notes = track.notes.map((note) => note.id === command.noteId
-        ? { ...note, slurStart: !note.slurStart }
-        : note)
-      break
-    case 'transposeSelection': {
-      const targetNotes = new Set(
-        command.noteIds
-          ?? track.notes
-            .filter((note) => {
-              if (!command.measureRange) return true
-              return note.measureIndex >= command.measureRange[0] && note.measureIndex <= command.measureRange[1]
-            })
-            .map((note) => note.id),
-      )
-      track.notes = track.notes.map((note) => {
-        if (!targetNotes.has(note.id) || !note.pitch) return note
-        const nextPitchRaw = midiToPitch(pitchToMidi(note.pitch) + command.semitones)
-        const nextPitch: ScorePitch = {
-          step: nextPitchRaw.step as ScorePitch['step'],
-          octave: nextPitchRaw.octave,
-          alter: nextPitchRaw.alter,
-        }
-        const placement = choosePlacement(pitchToMidi(nextPitch), track.tuning, track.capo, note.placement)
-        return {
-          ...note,
-          pitch: nextPitch,
-          placement,
-        }
-      })
-      break
-    }
-    case 'setTuning':
-    case 'changeTuning':
-      track.tuning = [...command.tuning]
-      track.notes = track.notes.map((note) => {
-        if (!note.pitch) return note
-        const placement = choosePlacement(pitchToMidi(note.pitch), track.tuning, track.capo, note.placement)
-        return { ...note, placement }
-      })
-      break
-    case 'setCapo':
-      track.capo = command.capo
-      track.notes = track.notes.map((note) => {
-        if (!note.pitch) return note
-        const placement = choosePlacement(pitchToMidi(note.pitch), track.tuning, track.capo, note.placement)
-        return { ...note, placement }
-      })
-      break
-    case 'setChordSymbol': {
-      const measure = next.measures[command.measureIndex]
-      if (measure) {
-        measure.harmony = [
-          ...measure.harmony.filter((entry) => entry.beat !== command.beat),
-          { id: createId('harmony'), beat: command.beat, symbol: command.symbol },
-        ].sort((a, b) => a.beat - b.beat)
-      }
-      break
-    }
-    case 'setAnnotation': {
-      const measure = next.measures[command.measureIndex]
-      if (measure) {
-        const text = command.text.trim()
-        measure.annotations = text ? [text] : []
-      }
-      break
-    }
-    case 'setSectionLabel': {
-      const label = command.label.trim()
-      next.measures = next.measures.map((measure) => {
-        if (measure.index < command.startMeasureIndex || measure.index > command.endMeasureIndex) return measure
-        return {
-          ...measure,
-          sectionLabel: measure.index === command.startMeasureIndex && label ? label : undefined,
-        }
-      })
-      break
-    }
-    case 'setChordDiagramPlacement': {
-      const measure = next.measures[command.measureIndex]
-      if (measure) {
-        measure.chordDiagramPlacement = command.placement
-      }
-      break
-    }
-    case 'deleteMeasureRange': {
-      const [start, end] = [command.start, command.end]
-      const deleteCount = end - start + 1
-      if (deleteCount >= next.measures.length) {
-        next.measures = [createMeasureMeta(0)]
-        track.notes = []
-        break
-      }
-      next.measures = next.measures
-        .filter((measure) => measure.index < start || measure.index > end)
-        .map((measure, index) => ({ ...measure, index }))
-      track.notes = track.notes
-        .filter((note) => note.measureIndex < start || note.measureIndex > end)
-        .map((note) => ({
-          ...note,
-          measureIndex: note.measureIndex > end ? note.measureIndex - deleteCount : note.measureIndex,
-      }))
-      break
-    }
-    case 'addMeasureBefore': {
-      const newMeasures = Array.from({ length: command.count }, (_, idx) => createMeasureMeta(command.beforeIndex + idx))
-      const prefix = next.measures.slice(0, command.beforeIndex)
-      const suffix = next.measures.slice(command.beforeIndex).map((measure) => ({
-        ...measure,
-        index: measure.index + command.count,
-      }))
-      next.measures = [...prefix, ...newMeasures, ...suffix]
-      track.notes = track.notes.map((note) => ({
-        ...note,
-        measureIndex: note.measureIndex >= command.beforeIndex ? note.measureIndex + command.count : note.measureIndex,
-      }))
-      break
-    }
-    case 'addMeasureAfter': {
-      const newMeasures = Array.from({ length: command.count }, (_, idx) => createMeasureMeta(command.afterIndex + idx + 1))
-      const prefix = next.measures.slice(0, command.afterIndex + 1)
-      const suffix = next.measures.slice(command.afterIndex + 1).map((measure) => ({
-        ...measure,
-        index: measure.index + command.count,
-      }))
-      next.measures = [...prefix, ...newMeasures, ...suffix]
-      track.notes = track.notes.map((note) => ({
-        ...note,
-        measureIndex: note.measureIndex > command.afterIndex ? note.measureIndex + command.count : note.measureIndex,
-      }))
-      break
-    }
-    case 'simplifyFingering':
-      track.notes = track.notes.map((note) => {
-        if (!note.pitch) return note
-        const placement = choosePlacement(pitchToMidi(note.pitch), track.tuning, track.capo, null, DEFAULT_POLICY)
-        return { ...note, placement }
-      })
-      break
-    case 'reharmonizeSelection': {
-      const [start, end] = command.measureRange ?? [0, next.measures.length - 1]
-      for (let index = start; index <= end; index += 1) {
-        const measure = next.measures[index]
-        if (!measure) continue
-        measure.harmony = command.chords.map((entry) => ({
-          id: createId('harmony'),
-          beat: entry.beat,
-          symbol: entry.symbol,
-        }))
-      }
-      break
-    }
-    case 'addTechnique':
-      track.notes = track.notes.map((note) => note.id === command.noteId
-        ? {
-            ...note,
-            techniques: {
-              ...note.techniques,
-              [command.technique]: command.value ?? true,
-            },
-          }
-        : note)
-      break
-    case 'removeTechnique':
-      track.notes = track.notes.map((note) => {
-        if (note.id !== command.noteId) return note
-        const techniques = { ...note.techniques }
-        delete techniques[command.technique]
-        return { ...note, techniques }
-      })
-      break
-    case 'moveCursor':
-    case 'selectNotes':
-    case 'setMeasureRange':
-      break
-  }
-
-  next.lastExportedXml = exportScoreDocumentToMusicXml(next)
-  return { document: next, warnings }
-}
-
-export function applyCommandPatch(document: ScoreDocument, patch: ScoreCommandPatch): CommandResult {
-  return patch.commands.reduce<CommandResult>(
-    (result, command) => {
-      const next = applyCommandToDocument(result.document, command)
-      return {
-        document: next.document,
-        warnings: [...result.warnings, ...next.warnings],
-      }
-    },
-    { document, warnings: patch.warnings ?? [] },
-  )
-}
+// Command handling has moved to editor-core/commandRouter.ts
+// This file retains: document creation, MusicXML import/export, and utility functions.

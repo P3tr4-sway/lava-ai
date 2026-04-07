@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyCommandToDocument, exportScoreDocumentToMusicXml, parseMusicXmlToScoreDocument } from './scoreDocument'
+import { exportScoreDocumentToMusicXml, parseMusicXmlToScoreDocument } from './scoreDocument'
+import { applyCommandToDocument } from '@/spaces/pack/editor-core/commandRouter'
 
 const SIMPLE_GUITAR_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="3.1">

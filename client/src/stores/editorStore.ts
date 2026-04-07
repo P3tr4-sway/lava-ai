@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { NoteValue } from '@lava/shared'
+import type { NoteValue, ScoreClipboard } from '@lava/shared'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 
@@ -77,11 +77,13 @@ interface EditorStore {
   setDragState: (state: Partial<DragState>) => void
 
   // Clipboard
-  clipboard: string | null
-  setClipboard: (fragment: string | null) => void
+  clipboard: ScoreClipboard | null
+  setClipboard: (clipboard: ScoreClipboard | null) => void
   inspectorFocus: InspectorFocus
   requestInspectorFocus: (focus: Exclude<InspectorFocus, null>) => void
   clearInspectorFocus: () => void
+  lyricEditingNoteId: string | null
+  setLyricEditingNoteId: (noteId: string | null) => void
 
   // Training wheels
   showChordDiagrams: boolean
@@ -237,7 +239,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // Clipboard
   clipboard: null,
-  setClipboard: (fragment) => set({ clipboard: fragment }),
+  setClipboard: (clipboard) => set({ clipboard }),
+  lyricEditingNoteId: null,
+  setLyricEditingNoteId: (noteId) => set({ lyricEditingNoteId: noteId }),
   inspectorFocus: null,
   requestInspectorFocus: (inspectorFocus) => set({ inspectorFocus }),
   clearInspectorFocus: () => set({ inspectorFocus: null }),

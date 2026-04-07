@@ -17,6 +17,7 @@ interface ChatInputProps {
   className?: string
   onAttachClick?: () => void
   canSend?: boolean
+  onValueChange?: (value: string) => void
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({
@@ -24,19 +25,23 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   disabled,
   compact,
   density = 'default',
-  placeholder = 'Ask anything about your practice...',
+  placeholder = 'Describe the version you want to create...',
   className,
   onAttachClick,
   canSend = false,
+  onValueChange,
 }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useImperativeHandle(ref, () => ({
-    setValue,
+    setValue: (nextValue: string) => {
+      setValue(nextValue)
+      onValueChange?.(nextValue)
+    },
     focus: () => textareaRef.current?.focus(),
-  }), [])
+  }), [onValueChange])
 
   const hasContent = value.trim().length > 0
   const canSubmit = hasContent || canSend
@@ -48,6 +53,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     if (!canSubmit || disabled) return
     onSend(trimmed)
     setValue('')
+    onValueChange?.('')
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -69,7 +75,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
       <textarea
         ref={textareaRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value)
+          onValueChange?.(e.target.value)
+        }}
         onKeyDown={handleKeyDown}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

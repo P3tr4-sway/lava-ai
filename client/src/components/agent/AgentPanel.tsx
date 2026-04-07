@@ -9,8 +9,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAgentPanelControls } from '@/hooks/useAgentPanelControls'
 
 const PANEL_HEADINGS: Record<string, string> = {
-  home: 'What do you want to practice?',
-  create: 'What do you want to write or arrange?',
+  home: 'What do you want to create?',
+  create: 'What do you want to create or adapt?',
   projects: 'What would you like to open or organize?',
 }
 
@@ -47,7 +47,7 @@ export function AgentPanel() {
 
   const hasMessages = messages.length > 0 || (isStreaming && streamingContent)
   const canClearContext = messages.length > 0 || toolActivities.length > 0 || Boolean(streamingContent)
-  const heading = PANEL_HEADINGS[currentSpace] ?? 'What can I help with?'
+  const heading = PANEL_HEADINGS[currentSpace] ?? 'What do you want to make?'
 
   if (!canShowPanel) {
     return null

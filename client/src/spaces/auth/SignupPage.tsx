@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { LavaLogo } from '@/components/layout/LavaLogo'
+import { TopRightUtilityBar } from '@/components/layout/TopRightUtilityBar'
 import { Button, Input } from '@/components/ui'
 import { useAuthStore } from '@/stores/authStore'
 import { useTheme } from '@/hooks/useTheme'
@@ -44,6 +45,7 @@ export function SignupPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-0 px-4">
+      <TopRightUtilityBar compact className="fixed right-4 top-4 z-30 max-w-[calc(100vw-1rem)]" />
       <button
         onClick={() => navigate(-1)}
         className="fixed top-4 left-4 flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary transition-colors"
@@ -56,10 +58,10 @@ export function SignupPage() {
         <div className="flex flex-col items-center gap-3">
           <LavaLogo />
           <h1 className="text-2xl font-semibold text-text-primary">
-            Create your LAVA account
+            Create your Lava account
           </h1>
           <p className="text-sm text-text-secondary">
-            Your AI-powered practice partner
+            Create, adapt, and publish guitar content faster
           </p>
         </div>
 

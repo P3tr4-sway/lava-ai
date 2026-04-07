@@ -81,6 +81,14 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
 
   const visibleMessages = messages.filter((m) => !m.hidden)
   const hasMessages = visibleMessages.length > 0
+  const scopeLabel = selectedBars.length > 0
+    ? (() => {
+        const start = Math.min(...selectedBars) + 1
+        const end = Math.max(...selectedBars) + 1
+        return start === end ? `Bar ${start}` : `Bars ${start}-${end}`
+      })()
+    : 'Whole project'
+  const scopeBadgeLabel = selectedBars.length > 0 ? scopeLabel : 'Working on whole project'
 
   const streamingMessage: AgentMessage | null =
     isStreaming && streamingContent
@@ -123,17 +131,21 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
       />
 
       {/* Header */}
-      <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border px-5">
-        <span className="text-sm font-semibold text-text-primary">New chat</span>
+      <div className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border px-5">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary">Transform</p>
+        </div>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={clearMessages}
-            className="flex size-7 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
-            aria-label="New chat"
-          >
-            <MessageSquarePlus className="size-4" />
-          </button>
+          {hasMessages ? (
+            <button
+              type="button"
+              onClick={clearMessages}
+              className="flex size-7 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+              aria-label="Start new transform"
+            >
+              <MessageSquarePlus className="size-4" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={toggleChat}
@@ -172,21 +184,19 @@ export function EditorChatPanel({ className }: EditorChatPanelProps) {
         <EditorChatEmptyState onSuggestionClick={handleSuggestionClick} selectedBars={selectedBars} />
       )}
 
-      {/* Footer */}
-      <div className="flex-shrink-0 border-t border-border px-4 py-3">
-        {selectedBars.length > 0 && (
-          <div className="mb-1.5 flex">
-            <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs text-text-secondary">
-              Selected: bars {selectedBars.reduce((a, b) => Math.min(a, b)) + 1}–{selectedBars.reduce((a, b) => Math.max(a, b)) + 1}
-            </span>
-          </div>
-        )}
+      <div className="flex-shrink-0 bg-surface-0 px-4 py-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="rounded-full bg-surface-2 px-3 py-1 text-[11px] font-medium text-text-secondary">
+            {scopeBadgeLabel}
+          </span>
+        </div>
         <ChatInput
           ref={chatInputRef}
           onSend={sendMessage}
           disabled={isStreaming}
           compact
-          placeholder="Start with an idea..."
+          placeholder="Describe the change you want..."
+          className="min-h-[96px] rounded-[22px]"
         />
       </div>
     </div>

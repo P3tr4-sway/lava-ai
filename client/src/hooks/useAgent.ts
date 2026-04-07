@@ -35,6 +35,43 @@ function buildWorkspacePreview(route: string, title: string, description: string
   }
 }
 
+function toTitleCase(value: string) {
+  return value.replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function deriveVersionNameFromPrompt(prompt: string, fallback?: string) {
+  const normalized = prompt.trim().toLowerCase()
+  if (!normalized) return fallback ?? 'New Version'
+
+  const rules: Array<{ match: RegExp; name: string }> = [
+    { match: /fingerstyle|fingerpicking/, name: 'Fingerstyle Version' },
+    { match: /open chord/, name: 'Open Chords Version' },
+    { match: /transpose/, name: 'Transposed Version' },
+    { match: /blues/, name: 'Blues Version' },
+    { match: /fresh cover|cover/, name: 'Fresh Cover Version' },
+    { match: /simplify rhythm|rhythm/, name: 'Rhythm Simplified' },
+    { match: /more teachable|easier to teach|easier|simpler/, name: 'Simplified Version' },
+    { match: /solo section|guitar solo|solo/, name: 'Solo Section Version' },
+    { match: /strumming/, name: 'New Strumming Version' },
+    { match: /fills|embellishments/, name: 'Fills Version' },
+    { match: /change chords|alternative chords|open chords/, name: 'Chord Rewrite' },
+  ]
+
+  const matched = rules.find((rule) => rule.match.test(normalized))
+  if (matched) return matched.name
+
+  const cleaned = normalized
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\b(make|create|turn|rewrite|change|use|add|suggest|give|this|song|version|section|bars?|into|for|of|the|a|an|my|me)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const keyword = cleaned.split(' ').slice(0, 3).join(' ').trim()
+  if (!keyword) return fallback ?? 'New Version'
+
+  return `${toTitleCase(keyword)} Version`
+}
+
 export function useAgent() {
   const navigate = useNavigate()
   const {
@@ -63,6 +100,12 @@ export function useAgent() {
     }).catch((error) => {
       console.error('[useAgent] Failed to persist version:', error)
     })
+  }
+
+  const getLatestUserPrompt = () => {
+    const messages = useAgentStore.getState().messages
+    const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user')
+    return latestUserMessage?.content?.trim() ?? ''
   }
 
   const handleToolResult = (resultContent: string) => {
@@ -175,13 +218,16 @@ export function useAgent() {
       case 'version_created': {
         const payload = event.versionPayload
         if (payload) {
+          const prompt = getLatestUserPrompt()
+          const derivedName = deriveVersionNameFromPrompt(prompt, payload.name)
           const version: Version = {
             id: payload.versionId,
-            name: payload.name,
+            name: derivedName,
             source: 'ai-transform',
             musicXml: payload.musicXml,
             scoreSnapshot: payload.scoreSnapshot ?? parseMusicXmlToScoreDocument(payload.musicXml),
             createdAt: Date.now(),
+            prompt,
           }
           useVersionStore.getState().addVersion(version)
           persistVersion(version, payload.changeSummary)
@@ -193,7 +239,7 @@ export function useAgent() {
             subtype: 'versionCreated',
             versionAction: {
               versionId: payload.versionId,
-              name: payload.name,
+              name: derivedName,
               changeSummary: payload.changeSummary,
             },
             createdAt: Date.now(),
@@ -237,11 +283,14 @@ export function useAgent() {
       case 'score_patch_session_end': {
         const payload = event.patchSessionEndPayload
         if (payload) {
+          const prompt = getLatestUserPrompt()
+          const derivedName = deriveVersionNameFromPrompt(prompt, payload.name)
           useVersionStore.getState().endPatchSession(
             payload.versionId,
-            payload.name,
+            derivedName,
             payload.changeSummary,
           )
+          useVersionStore.getState().updateVersion(payload.versionId, { prompt, name: derivedName })
           const version = useVersionStore.getState().versions.find((entry) => entry.id === payload.versionId)
           if (version) {
             persistVersion(version, payload.changeSummary)
@@ -254,7 +303,7 @@ export function useAgent() {
             subtype: 'versionCreated',
             versionAction: {
               versionId: payload.versionId,
-              name: payload.name,
+              name: derivedName,
               changeSummary: payload.changeSummary,
             },
             createdAt: Date.now(),

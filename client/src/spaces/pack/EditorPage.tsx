@@ -26,6 +26,7 @@ import { EditorToolbar } from './EditorToolbar'
 import { useTabEditorStore } from '@/stores/tabEditorStore'
 import { useAlphaTabBridge } from '@/hooks/useAlphaTabBridge'
 import { useTabEditorInput } from '@/hooks/useTabEditorInput'
+import { parse as parseAlphaTex } from '@/editor/ast/parser'
 import { OverlayLayer } from '@/render/overlayLayer'
 import { OverlayCanvas } from '@/components/overlay/OverlayCanvas'
 import type { OverlayRect } from '@/render/overlayLayer'
@@ -83,7 +84,7 @@ function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string
 // Phase 6 feature flag — set to true to activate the new alphaTex engine.
 // When false all existing MusicXML behaviour is completely unchanged.
 // ---------------------------------------------------------------------------
-const USE_ALPHATEX_ENGINE = false
+const USE_ALPHATEX_ENGINE = true
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -544,9 +545,6 @@ export function EditorPage() {
   // Phase 6 — alphaTex engine integration (guarded by USE_ALPHATEX_ENGINE flag)
   // ---------------------------------------------------------------------------
 
-  // Container ref for the alphaTab rendering surface (rendered below when flag is on)
-  const alphaTabContainerRef = useRef<HTMLDivElement | null>(null)
-
   // Overlay rects derived from selection (recomputed after each render)
   const [overlayRects, setOverlayRects] = useState<OverlayRect[]>([])
 
@@ -579,8 +577,7 @@ export function EditorPage() {
   // Keep alphaTabInputRef current after every render
   alphaTabInputRef.current = alphaTabInput
 
-  const { bridgeRef, renderAst } = useAlphaTabBridge({
-    containerRef: alphaTabContainerRef as React.RefObject<HTMLElement | null>,
+  const { bridgeRef, renderAst, setContainer: setAlphaTabContainer, containerRef: alphaTabContainerRef } = useAlphaTabBridge({
     onBeatClick: (hit) => {
       if (!USE_ALPHATEX_ENGINE) return
       alphaTabInputRef.current?.handleBeatClick(hit)
@@ -598,6 +595,23 @@ export function EditorPage() {
     if (!USE_ALPHATEX_ENGINE || !alphaTabAst) return
     renderAst(alphaTabAst)
   }, [alphaTabAst, renderAst])
+
+  // Initialize an empty AST once the project is loaded, so the alphaTab canvas
+  // has something to render. Placeholder for the full MusicXML→AST converter;
+  // for now we create N empty whole-rest bars matching the project's bar count.
+  useEffect(() => {
+    if (!USE_ALPHATEX_ENGINE) return
+    if (projectLoadState !== 'ready') return
+    if (useTabEditorStore.getState().ast) return
+
+    const barCount = Math.max(1, totalBars)
+    const source = `.\n${Array.from({ length: barCount }, () => ':1 r').join(' | ')}`
+    const { score, errors } = parseAlphaTex(source)
+    if (errors.length > 0) {
+      console.warn('[EditorPage] Initial alphaTex parse produced errors:', errors)
+    }
+    useTabEditorStore.getState().setAst(score)
+  }, [projectLoadState, totalBars])
 
   // ---------------------------------------------------------------------------
   // Phase 7 — Playback engine (guarded by USE_ALPHATEX_ENGINE flag)
@@ -967,7 +981,7 @@ export function EditorPage() {
                     </Button>
                   </div>
                   <div
-                    ref={alphaTabContainerRef}
+                    ref={setAlphaTabContainer}
                     className={cn(
                       'min-h-full w-full transition-opacity duration-200',
                       (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60',

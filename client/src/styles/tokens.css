@@ -207,3 +207,13 @@
 .lava-beat-marker-downbeat {
   opacity: 0.5;
 }
+
+/* Tab editor cursor blink animation */
+@keyframes lava-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.lava-cursor-blink {
+  animation: lava-cursor-blink 0.5s ease-in-out infinite;
+}

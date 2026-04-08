@@ -60,6 +60,19 @@
   --text-muted: #ababab;
 }
 
+@font-face {
+  font-family: 'Bravura';
+  src: url('/vendor/alphatab/font/Bravura.woff2') format('woff2');
+  font-display: swap;
+}
+
+.lava-smufl {
+  font-family: 'Bravura', serif;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+}
+
 /* ── Coach highlight pulse ─────────────────────────────── */
 @keyframes coach-pulse {
   0%, 100% { box-shadow: 0 0 0 0 transparent; }

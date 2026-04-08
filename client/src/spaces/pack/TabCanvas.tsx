@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { ChevronDown, PanelRightClose, SlidersHorizontal } from 'lucide-react'
+import { PanelRightClose, SlidersHorizontal } from 'lucide-react'
 import {
   AlphaTabApi,
   LayoutMode,
@@ -9,10 +9,7 @@ import {
   synth,
 } from '@coderline/alphatab'
 import type { NoteValue, ScoreNoteEvent, ScoreTrack } from '@lava/shared'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
 import { cn } from '@/components/ui/utils'
 import { durationToBeats, moveCaretByStep } from '@/spaces/pack/editor-core/commands'
 import { pitchToMidi } from '@/lib/pitchUtils'
@@ -64,6 +61,16 @@ interface AlphaTabNoteLike {
   }
 }
 
+interface AlphaTabBeatLike {
+  start?: number
+  playbackStart?: number
+  voice: {
+    bar: {
+      index: number
+    }
+  }
+}
+
 const DURATION_OPTIONS: NoteValue[] = ['whole', 'half', 'quarter', 'eighth', 'sixteenth']
 const TAB_CANVAS_RENDER_ERROR_MESSAGE = 'Unable to render the current score.'
 
@@ -82,6 +89,10 @@ function noteLabel(note: ScoreNoteEvent): string {
 
 function alphaTabStringToDocumentString(alphaString: number, stringCount: number): number {
   return Math.max(1, stringCount - alphaString + 1)
+}
+
+function barsToSeconds(bar: number, bpm: number, beatsPerBar: number) {
+  return bar * beatsPerBar * (60 / bpm)
 }
 
 function getMeasureNotes(track: ScoreTrack, measureIndex: number) {
@@ -338,7 +349,6 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
   const [noteRects, setNoteRects] = useState<OverlayRect[]>([])
   const [caretRect, setCaretRect] = useState<OverlayRect | null>(null)
   const [hoverRect, setHoverRect] = useState<OverlayRect | null>(null)
-  const [addBarRect, setAddBarRect] = useState<OverlayRect | null>(null)
   const [chordDraft, setChordDraft] = useState('')
   const [annotationDraft, setAnnotationDraft] = useState('')
   const [capoDraft, setCapoDraft] = useState('0')
@@ -346,6 +356,7 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
   const [noteFretDraft, setNoteFretDraft] = useState('0')
   const [noteDurationDraft, setNoteDurationDraft] = useState<NoteValue>('quarter')
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [paperMetrics, setPaperMetrics] = useState({ width: 0, height: 0 })
   const syncOverlaysRef = useRef<() => void>(() => {})
   const noteDurationSelectRef = useRef<HTMLSelectElement | null>(null)
 
@@ -353,6 +364,20 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
   useEffect(() => {
     onScoreRerenderRef.current = onScoreRerender
   }, [onScoreRerender])
+
+  const syncPaperMetrics = useCallback(() => {
+    const root = alphaTabRootRef.current
+    if (!root) return
+
+    const nextWidth = Math.max(root.scrollWidth, root.offsetWidth, root.clientWidth)
+    const nextHeight = Math.max(root.scrollHeight, root.offsetHeight, root.clientHeight)
+
+    setPaperMetrics((current) => (
+      current.width === nextWidth && current.height === nextHeight
+        ? current
+        : { width: nextWidth, height: nextHeight }
+    ))
+  }, [])
 
   // Derive measure bounds from alphaTab boundsLookup using resolveTabStaffBounds.
   // Returns coordinates in EditorCanvas content space so CursorOverlay aligns correctly.
@@ -397,7 +422,6 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
       setBarRects([])
       setNoteRects([])
       setCaretRect(null)
-      setAddBarRect(null)
       return
     }
 
@@ -407,7 +431,6 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
       setBarRects([])
       setNoteRects([])
       setCaretRect(null)
-      setAddBarRect(null)
       return
     }
 
@@ -428,24 +451,11 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
     if (!track) {
       setNoteRects([])
       setCaretRect(null)
-      setAddBarRect(null)
       return
     }
     setNoteRects(buildNoteOverlayRects(api, track, selectedNoteIds))
     setCaretRect(caret ? buildCaretOverlayRect(api, caret.measureIndex, caret.beat, caret.string, beatsPerBar, track.tuning.length) : null)
-
-    const addBarAnchorIndex = focusedMeasureIndex ?? document.measures.length - 1
-    const addBarBounds = resolveTabStaffBounds(api, addBarAnchorIndex)
-    setAddBarRect(addBarBounds
-      ? {
-          id: `add-bar-${addBarAnchorIndex}`,
-          x: addBarBounds.x + addBarBounds.w + 18,
-          y: addBarBounds.y + addBarBounds.h / 2 - 18,
-          width: 36,
-          height: 36,
-        }
-      : null)
-  }, [beatsPerBar, caret, document.measures.length, focusedMeasureIndex, selectedBars, selectedNoteIds, track])
+  }, [beatsPerBar, caret, selectedBars, selectedNoteIds, track])
 
   useEffect(() => {
     syncOverlaysRef.current = syncOverlays
@@ -473,8 +483,6 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
   useEffect(() => {
     if (!alphaTabRootRef.current || !surfaceRef.current) return
 
-    const scrollEl = surfaceRef.current
-
     const api = new AlphaTabApi(alphaTabRootRef.current, {
       core: {
         engine: 'svg',
@@ -495,7 +503,6 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
       player: {
         playerMode: PlayerMode.EnabledAutomatic,
         soundFont: '/vendor/alphatab/sonivox.sf2',
-        scrollElement: scrollEl,
         enableCursor: true,
         enableAnimatedBeatCursor: true,
         enableUserInteraction: false,
@@ -504,8 +511,11 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
 
     const offRenderFinished = api.renderFinished.on(() => {
       setRenderError(null)
-      syncOverlaysRef.current()
-      onScoreRerenderRef.current?.()
+      window.requestAnimationFrame(() => {
+        syncPaperMetrics()
+        syncOverlaysRef.current()
+        onScoreRerenderRef.current?.()
+      })
     })
 
     // Sync alphaTab player state → audioStore
@@ -597,7 +607,7 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
       api.destroy()
       apiRef.current = null
     }
-  }, [staveProfile]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [staveProfile, syncPaperMetrics]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const api = apiRef.current
@@ -618,6 +628,21 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
     api.settings.display.scale = zoom / 100
     api.render()
   }, [zoom])
+
+  useEffect(() => {
+    const root = alphaTabRootRef.current
+    if (!root) return
+
+    syncPaperMetrics()
+
+    const observer = new ResizeObserver(() => {
+      syncPaperMetrics()
+      syncOverlaysRef.current()
+    })
+
+    observer.observe(root)
+    return () => observer.disconnect()
+  }, [syncPaperMetrics, exportCacheXml, zoom, staveProfile])
 
   useEffect(() => {
     syncOverlays()
@@ -714,6 +739,29 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
     setHoverTarget(target)
   }, [resolveHoverState, setHoverTarget])
 
+  const seekPlaybackCursorToBeat = useCallback((api: AlphaTabApi, beat: AlphaTabBeatLike) => {
+    const barIndex = beat.voice.bar.index
+    const score = api.score
+    const masterBar = score?.masterBars?.[barIndex]
+    const explicitTick = 'playbackStart' in beat && typeof beat.playbackStart === 'number'
+      ? beat.playbackStart
+      : 'start' in beat && typeof beat.start === 'number'
+        ? beat.start
+        : masterBar?.start
+
+    if (typeof explicitTick === 'number') {
+      try {
+        api.tickPosition = explicitTick
+      } catch {
+        // alphaTab player may still be settling after a rerender.
+      }
+    }
+
+    const { bpm, setCurrentBar, setCurrentTime } = useAudioStore.getState()
+    setCurrentBar(barIndex)
+    setCurrentTime(barsToSeconds(barIndex, bpm, beatsPerBar))
+  }, [beatsPerBar])
+
   const handleSurfaceClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const api = apiRef.current
     const alphaTabRoot = alphaTabRootRef.current
@@ -759,6 +807,7 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
           string: pointerTarget.string,
         })
       } else if (documentNote) {
+        seekPlaybackCursorToBeat(api, beat)
         selectNoteById(documentNote.id, event.shiftKey)
         if (editorMode === 'fineEdit' && !compact) setInspectorOpen(true)
         // Audition the note
@@ -777,6 +826,7 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
         pointerTarget.string,
       )
       if (nearbyNote) {
+        seekPlaybackCursorToBeat(api, beat)
         selectNoteById(nearbyNote.id, event.shiftKey)
         if (!compact) setInspectorOpen(true)
         return
@@ -784,6 +834,7 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
     }
 
     if (editorMode === 'fineEdit') {
+      seekPlaybackCursorToBeat(api, beat)
       const nextCaret = pointerTarget ?? {
         trackId: track.id,
         measureIndex: beat.voice.bar.index,
@@ -848,11 +899,12 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
       return
     }
 
+    seekPlaybackCursorToBeat(api, beat)
     selectBar(beat.voice.bar.index, event.shiftKey)
 
     // Audition: play the clicked beat (we're in transform mode here — fineEdit path returned above)
     try { api.playBeat(beat) } catch { /* ignore if player not ready */ }
-  }, [activeToolGroup, applyCommand, beatsPerBar, clearSelection, compact, document.measures.length, document.meter.numerator, editorMode, entryDuration, entryMode, selectBar, selectNoteById, setCaret, setHoverTarget, track])
+  }, [activeToolGroup, applyCommand, beatsPerBar, clearSelection, compact, document.measures.length, document.meter.numerator, editorMode, entryDuration, entryMode, seekPlaybackCursorToBeat, selectBar, selectNoteById, setCaret, setHoverTarget, track])
 
   const handleApplySelectedNote = useCallback(() => {
     if (!track || !selectedNote) return
@@ -925,131 +977,38 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
     })
   }, [applyCommand, capoDraft, track])
 
-  const handleAddBarAfterFocused = useCallback(() => {
-    const afterIndex = focusedMeasureIndex ?? Math.max(document.measures.length - 1, 0)
-    applyCommand({
-      type: 'addMeasureAfter',
-      afterIndex,
-      count: 1,
-    })
-    selectBar(afterIndex + 1)
-  }, [applyCommand, document.measures.length, focusedMeasureIndex, selectBar])
-
-  const [addBarsOpen, setAddBarsOpen] = useState(false)
-  const [addBarsCount, setAddBarsCount] = useState('4')
-  const addBarsRef = useRef<HTMLDivElement>(null)
-
-  const handleAddBars = useCallback((count: number) => {
-    const safeCount = Math.max(1, Math.min(64, Math.floor(count)))
-    const afterIndex = focusedMeasureIndex ?? Math.max(document.measures.length - 1, 0)
-    applyCommand({
-      type: 'addMeasureAfter',
-      afterIndex,
-      count: safeCount,
-    })
-    selectBar(afterIndex + 1)
-    setAddBarsOpen(false)
-  }, [applyCommand, document.measures.length, focusedMeasureIndex, selectBar])
-
-  useEffect(() => {
-    if (!addBarsOpen) return
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!addBarsRef.current?.contains(event.target as Node)) {
-        setAddBarsOpen(false)
-      }
-    }
-
-    window.document.addEventListener('mousedown', handlePointerDown)
-    return () => window.document.removeEventListener('mousedown', handlePointerDown)
-  }, [addBarsOpen])
-
   if (!track) return null
 
   return (
-    <div className={cn('relative min-h-0 flex-1 overflow-hidden', className)}>
-      <div
-        ref={surfaceRef}
-        data-testid="tab-canvas-surface"
-        className={cn('relative h-full overflow-auto px-5 pb-8 pt-4', !compact && inspectorOpen && 'pr-[24rem]')}
-        onMouseMove={handleSurfaceMouseMove}
-        onMouseLeave={() => {
-          setHoverRect(null)
-          setHoverTarget(null)
-        }}
-        onClick={handleSurfaceClick}
-      >
-        <div className="pointer-events-none absolute left-5 top-4 z-20 flex flex-wrap items-center gap-2">
-          <Badge className="bg-surface-0 text-text-primary">{track.name}</Badge>
-          <Badge>{document.measures.length} bars</Badge>
-          <Badge>{editorMode === 'fineEdit' ? 'Edit mode' : 'Play mode'}</Badge>
-          {!compact && isTabView && <Badge>Tuning: {tuningLabels.join(' ')}</Badge>}
-          {!compact && isTabView && <Badge>Capo: {track.capo}</Badge>}
-        </div>
+    <div
+      ref={surfaceRef}
+      data-testid="tab-canvas-surface"
+      className={cn(
+        'relative min-h-0 flex-1 overflow-auto overscroll-contain',
+        !compact && inspectorOpen && 'pr-[24rem]',
+        className,
+      )}
+      onMouseMove={handleSurfaceMouseMove}
+      onMouseLeave={() => {
+        setHoverRect(null)
+        setHoverTarget(null)
+      }}
+      onClick={handleSurfaceClick}
+    >
+      <div className="relative w-max min-w-full px-8 pb-24 pt-8">
+        <div
+          className="relative mx-auto"
+          style={{
+            minWidth: Math.max(960, paperMetrics.width || 0),
+            minHeight: paperMetrics.height || undefined,
+          }}
+        >
+          <div
+            ref={alphaTabRootRef}
+            className="score-paper-bg relative block min-w-[960px] overflow-visible rounded-[28px] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_24px_48px_rgba(15,23,42,0.04)]"
+          />
 
-        {!compact && (
-          <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
-            {editorMode === 'fineEdit' && (
-              <div ref={addBarsRef} className="relative">
-                <Button
-                  size="sm"
-                  onClick={() => setAddBarsOpen((current) => !current)}
-                  aria-expanded={addBarsOpen}
-                  aria-haspopup="dialog"
-                >
-                  Add Bars
-                  <ChevronDown className="size-4" />
-                </Button>
-
-                {addBarsOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-[220px] rounded-2xl border border-border bg-surface-0 p-3 shadow-sm">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted">
-                      Add bars
-                    </p>
-
-                    <div className="mt-3 flex gap-2">
-                      {[4, 8, 16].map((count) => (
-                        <button
-                          key={count}
-                          type="button"
-                          onClick={() => {
-                            setAddBarsCount(String(count))
-                            handleAddBars(count)
-                          }}
-                          className="inline-flex h-9 min-w-[44px] items-center justify-center rounded-full border border-border px-3 text-[13px] font-medium text-text-primary transition-colors hover:bg-surface-1"
-                        >
-                          {count}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        value={addBarsCount}
-                        onChange={(event) => setAddBarsCount(event.target.value.replace(/[^\d]/g, '').slice(0, 2))}
-                        inputMode="numeric"
-                        aria-label="Number of bars to add"
-                        className="h-9"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => handleAddBars(Number(addBarsCount) || 1)}
-                      >
-                        Add
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="pt-10">
-          <div className="relative min-h-full min-w-[720px]">
-            <div ref={alphaTabRootRef} className="score-paper-bg relative min-h-full min-w-[720px]" />
-
-            <div className="pointer-events-none absolute inset-0">
+          <div className="pointer-events-none absolute inset-0">
               {hoverRect && (
                 <div
                   className={cn(
@@ -1122,31 +1081,9 @@ export function TabCanvas({ className, compact = false, viewMode = 'tab', getMea
                   {entryPreviewLabel(entryMode)}
                 </div>
               )}
-
-              {addBarRect && editorMode === 'fineEdit' && (
-                <button
-                  type="button"
-                  className="pointer-events-auto absolute flex items-center justify-center rounded-full border border-border bg-surface-0 text-sm font-semibold text-text-primary shadow-sm transition-colors hover:border-border-hover hover:bg-surface-1"
-                  style={{
-                    left: addBarRect.x,
-                    top: addBarRect.y,
-                    width: addBarRect.width,
-                    height: addBarRect.height,
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleAddBarAfterFocused()
-                  }}
-                  aria-label="Add bar after current bar"
-                  title="Add bar after current bar"
-                >
-                  +
-                </button>
-              )}
             </div>
           </div>
         </div>
-      </div>
 
       {(renderError || lastWarnings.length > 0) && (
         <div className="border-t border-border px-4 py-3 text-xs">

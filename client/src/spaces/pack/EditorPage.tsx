@@ -78,6 +78,7 @@ export function EditorPage() {
   const chatCollapsed = useEditorStore((s) => s.chatPanelCollapsed)
   const saveStatus = useEditorStore((s) => s.saveStatus)
   const viewMode = useEditorStore((s) => s.viewMode)
+  const zoom = useEditorStore((s) => s.zoom)
   const bpm = useAudioStore((s) => s.bpm)
   const playbackRate = useAudioStore((s) => s.playbackRate)
   const scoreDocument = useScoreDocumentStore((s) => s.document)
@@ -113,6 +114,14 @@ export function EditorPage() {
       entry.midi.length === currentTuning.length && entry.midi.every((value, index) => value === currentTuning[index]),
     )?.label ?? 'Custom tuning'
   }, [scoreDocument.tracks])
+  const primaryTrack = scoreDocument.tracks[0]
+  const tuningOptionValue = useMemo(() => {
+    if (!primaryTrack) return NEW_PACK_TUNINGS[0]?.id ?? 'standard'
+    const matched = NEW_PACK_TUNINGS.find((entry) =>
+      entry.midi.length === primaryTrack.tuning.length && entry.midi.every((value, index) => value === primaryTrack.tuning[index]),
+    )
+    return matched?.id ?? `custom:${primaryTrack.tuning.join(',')}`
+  }, [primaryTrack])
 
   const exportLayout = useMemo<'tab' | 'staff' | 'split'>(() => {
     if (viewMode === 'leadSheet' || viewMode === 'staff') return 'staff'
@@ -132,6 +141,149 @@ export function EditorPage() {
     const metadata = activeProject?.metadata as Record<string, unknown> | undefined
     return typeof metadata?.sourceLabel === 'string' ? metadata.sourceLabel : projectName || 'Untitled'
   }, [activeProject?.metadata, projectName])
+
+  const handleTempoChange = useCallback((value: number) => {
+    const bpmValue = Math.max(40, Math.min(240, Math.round(value) || 120))
+    useScoreDocumentStore.getState().applyCommand({ type: 'setTempo', bpm: bpmValue })
+    useAudioStore.getState().setBpm(bpmValue)
+  }, [])
+
+  const handleKeySignatureChange = useCallback((value: string) => {
+    const [key, modeValue] = value.split(':')
+    useScoreDocumentStore.getState().applyCommand({
+      type: 'setKeySignature',
+      key: key || 'C',
+      mode: modeValue === 'minor' ? 'minor' : 'major',
+    })
+  }, [])
+
+  const handleTimeSignatureChange = useCallback((value: string) => {
+    const [numeratorPart, denominatorPart] = value.split('/')
+    const numerator = Math.max(1, Number(numeratorPart) || 4)
+    const denominator = Math.max(1, Number(denominatorPart) || 4)
+    useScoreDocumentStore.getState().applyCommand({ type: 'setTimeSignature', numerator, denominator })
+  }, [])
+
+  const handleTuningChange = useCallback((value: string) => {
+    if (!primaryTrack || value.startsWith('custom:')) return
+    const tuning = NEW_PACK_TUNINGS.find((entry) => entry.id === value)
+    if (!tuning) return
+    useScoreDocumentStore.getState().applyCommand({
+      type: 'changeTuning',
+      trackId: primaryTrack.id,
+      tuning: tuning.midi,
+    })
+  }, [primaryTrack])
+
+  const handleCapoChange = useCallback((value: number) => {
+    if (!primaryTrack) return
+    useScoreDocumentStore.getState().applyCommand({
+      type: 'setCapo',
+      trackId: primaryTrack.id,
+      capo: Math.max(0, Math.min(24, Math.round(value) || 0)),
+    })
+  }, [primaryTrack])
+
+  const scoreSetupContent = (
+    <div className="space-y-3">
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-muted">Score setup</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-text-secondary">Tempo</span>
+          <input
+            type="number"
+            min={40}
+            max={240}
+            value={scoreDocument.tempo}
+            onChange={(event) => handleTempoChange(Number(event.target.value))}
+            className="h-9 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-text-secondary">View</span>
+          <select
+            value={viewMode}
+            onChange={(event) => useEditorStore.getState().setViewMode(event.target.value as typeof viewMode)}
+            className="h-9 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+          >
+            <option value="tab">Tab</option>
+            <option value="split">Split</option>
+            <option value="staff">Staff</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-text-secondary">Key</span>
+          <select
+            value={`${scoreDocument.keySignature.key}:${scoreDocument.keySignature.mode}`}
+            onChange={(event) => handleKeySignatureChange(event.target.value)}
+            className="h-9 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+          >
+            <option value="C:major">C major</option>
+            <option value="G:major">G major</option>
+            <option value="D:major">D major</option>
+            <option value="F:major">F major</option>
+            <option value="Bb:major">Bb major</option>
+            <option value="A:minor">A minor</option>
+            <option value="E:minor">E minor</option>
+            <option value="D:minor">D minor</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-text-secondary">Meter</span>
+          <select
+            value={`${scoreDocument.meter.numerator}/${scoreDocument.meter.denominator}`}
+            onChange={(event) => handleTimeSignatureChange(event.target.value)}
+            className="h-9 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+          >
+            <option value="4/4">4/4</option>
+            <option value="3/4">3/4</option>
+            <option value="2/4">2/4</option>
+            <option value="6/8">6/8</option>
+            <option value="9/8">9/8</option>
+            <option value="12/8">12/8</option>
+            <option value="5/4">5/4</option>
+            <option value="7/8">7/8</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-text-secondary">Tuning</span>
+          <select
+            value={tuningOptionValue}
+            onChange={(event) => handleTuningChange(event.target.value)}
+            className="h-9 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+          >
+            {NEW_PACK_TUNINGS.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+            {!NEW_PACK_TUNINGS.some((entry) => entry.id === tuningOptionValue) ? (
+              <option value={tuningOptionValue}>Custom tuning</option>
+            ) : null}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-text-secondary">Capo</span>
+          <input
+            type="number"
+            min={0}
+            max={24}
+            value={primaryTrack?.capo ?? 0}
+            onChange={(event) => handleCapoChange(Number(event.target.value))}
+            className="h-9 rounded-xl border border-border bg-surface-0 px-3 text-sm text-text-primary outline-none focus:border-border-hover"
+          />
+        </label>
+      </div>
+    </div>
+  )
 
   // Load project from server when navigating to /pack/:id
   useEffect(() => {
@@ -192,17 +344,11 @@ export function EditorPage() {
   }, [id, reloadCount])
 
   useEffect(() => {
-    const entry = searchParams.get('entry')
-    if (entry === 'edit') {
-      useEditorStore.getState().setEditorMode('fineEdit')
-      return
-    }
-    if (entry === 'play' || entry === 'practice' || entry === null) {
-      useEditorStore.getState().setEditorMode('transform')
-      return
-    }
-    useEditorStore.getState().setEditorMode('transform')
-  }, [searchParams])
+    const editor = useEditorStore.getState()
+    editor.setEditorMode('fineEdit')
+    editor.setActiveToolGroup('selection')
+    editor.setToolMode('pointer')
+  }, [id])
 
   useEffect(() => {
     if (!id || projectLoadState !== 'ready') return
@@ -581,7 +727,7 @@ export function EditorPage() {
   return (
     <div className="flex h-screen w-screen flex-col bg-surface-1">
       <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex min-w-0 flex-1 flex-col bg-surface-1">
+        <div className="relative flex min-w-0 flex-1 flex-col bg-[#f3f2ee]">
           <EditorTitleBar
             packName={projectName || 'Untitled'}
             onNameChange={handleNameChange}
@@ -590,6 +736,9 @@ export function EditorPage() {
             onSelectVersion={handleSelectVersion}
             versionSwitching={isVersionSwitching}
             loadingVersionId={switchingVersionId}
+            settingsContent={scoreSetupContent}
+            zoom={zoom}
+            onZoomChange={(nextZoom) => useEditorStore.getState().setZoom(nextZoom)}
           />
 
           {showReadyBar ? (
@@ -608,8 +757,22 @@ export function EditorPage() {
             onCompare={handleCompare}
           />
 
+          <div className="flex flex-wrap items-center gap-5 px-6 py-3 text-[13px]">
+            <span className="rounded-full bg-white px-3 py-1 text-[13px] font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+              {primaryTrack?.name || 'Guitar'}
+            </span>
+            <span className="font-medium text-text-secondary">
+              {totalBars} bars
+            </span>
+            <span className="font-medium text-text-secondary">
+              {viewMode === 'tab' ? 'Tab' : viewMode === 'split' ? 'Split' : 'Staff'}
+            </span>
+          </div>
+
           <div className="relative flex min-h-0 flex-1">
-            <EditorCanvas className={cn('flex-1 transition-opacity duration-200', (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60')} />
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-black/6 bg-[#efede8]">
+              <EditorCanvas className={cn('flex-1 transition-opacity duration-200', (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60')} />
+            </div>
 
             <EditorToolbar
               totalBars={totalBars}
@@ -643,7 +806,7 @@ export function EditorPage() {
           </div>
         </div>
 
-        {!isMobile && <EditorChatPanel className="min-w-[360px] bg-surface-0" />}
+        {!isMobile && <EditorChatPanel className="w-[380px] min-w-[380px] bg-surface-0" />}
       </div>
 
       {isMobile && !chatCollapsed && (

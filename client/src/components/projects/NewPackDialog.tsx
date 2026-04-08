@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, X } from 'lucide-react'
+import { AlertCircle, ChevronDown, Loader2, Pause, Play, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { projectService } from '@/services/projectService'
 import { useProjectStore } from '@/stores/projectStore'
@@ -23,6 +23,10 @@ interface NewPackDialogProps {
   detectedFields?: Array<{ label: string; value: string }>
   submitLabel?: string
   onSubmitDraft?: (draft: NewPackDraft, requestSummary: string) => Promise<void> | void
+  previewVersionLabel?: string
+  previewStatus?: 'ready' | 'generating' | 'error'
+  previewError?: string | null
+  onRegeneratePreview?: () => Promise<void> | void
 }
 
 interface PresetOption {
@@ -122,10 +126,11 @@ const DEFAULT_DRAFT: NewPackDraft = {
 }
 
 const CARD_CLASS_NAME =
-  'rounded-2xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3 text-left'
+  'rounded-2xl bg-[#f7f6f3] px-4 py-3 text-left'
 
 const VALUE_INPUT_CLASS_NAME =
   'w-full border-0 bg-transparent p-0 text-[16px] font-medium leading-[1.2] text-[#111111] outline-none placeholder:text-[#a3a3a3]'
+const PREVIEW_DURATION_SECONDS = 12
 
 function clampNumber(value: string, min: number, max: number, fallback: number) {
   const parsed = Number(value)
@@ -198,6 +203,45 @@ function DetailCard({
   )
 }
 
+function ImportStageCard({
+  title,
+  status,
+  error,
+  action,
+  children,
+}: {
+  title: string
+  status?: React.ReactNode
+  error?: string | null
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="space-y-4">
+        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-[19px] font-semibold leading-[1.2] tracking-[-0.02em] text-[#111111]">{title}</h4>
+              {status}
+            </div>
+          </div>
+          {action ? <div className="shrink-0">{action}</div> : null}
+        </div>
+
+        {children}
+
+        {error ? (
+          <div role="alert" className="inline-flex items-center gap-2 text-[12px] font-medium text-[#b24d37]">
+            <AlertCircle size={14} />
+            <span>{error}</span>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 function SelectValue({
   value,
   options,
@@ -241,6 +285,10 @@ export function NewPackDialog({
   detectedFields = [],
   submitLabel,
   onSubmitDraft,
+  previewVersionLabel,
+  previewStatus = 'ready',
+  previewError = null,
+  onRegeneratePreview,
 }: NewPackDialogProps) {
   const navigate = useNavigate()
   const upsertProject = useProjectStore((state) => state.upsertProject)
@@ -250,6 +298,9 @@ export function NewPackDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
+  const [regeneratingPreview, setRegeneratingPreview] = useState(false)
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
+  const [previewProgress, setPreviewProgress] = useState(0)
   const isImportMode = mode === 'import'
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -264,7 +315,28 @@ export function NewPackDialog({
     setSubmitting(false)
     setError(null)
     setShowAdvancedSettings(false)
+    setRegeneratingPreview(false)
+    setIsPreviewPlaying(false)
+    setPreviewProgress(0)
   }, [initialDraft, initialRequestSummary, open])
+
+  useEffect(() => {
+    if (!isImportMode || !isPreviewPlaying) return
+    const tickMs = 250
+    const timer = window.setInterval(() => {
+      setPreviewProgress((current) => {
+        const next = current + tickMs / 1000
+        if (next >= PREVIEW_DURATION_SECONDS) {
+          window.clearInterval(timer)
+          setIsPreviewPlaying(false)
+          return 0
+        }
+        return next
+      })
+    }, tickMs)
+
+    return () => window.clearInterval(timer)
+  }, [isImportMode, isPreviewPlaying])
 
   useEffect(() => {
     if (!open) return
@@ -319,21 +391,54 @@ export function NewPackDialog({
     return detectedFields.length > 0 ? detectedFields : fallbackFields
   }, [detectedFields, draft.key, draft.tempo, draft.timeSignature])
 
+  const resolvedPreviewStatus = regeneratingPreview ? 'generating' : previewStatus
+  const canRegeneratePreview = Boolean(onRegeneratePreview) && !regeneratingPreview && !submitting
+
+  const handleRegeneratePreview = useCallback(async () => {
+    if (!onRegeneratePreview || regeneratingPreview || submitting) return
+    setRegeneratingPreview(true)
+    setError(null)
+    setIsPreviewPlaying(false)
+    setPreviewProgress(0)
+    try {
+      await onRegeneratePreview()
+    } catch (regenerateError) {
+      console.error('Failed to regenerate import preview', regenerateError)
+      setError('Could not regenerate the style preview. Please try again.')
+    } finally {
+      setRegeneratingPreview(false)
+    }
+  }, [onRegeneratePreview, regeneratingPreview, submitting])
+
+  const handleTogglePreviewPlayback = useCallback(() => {
+    if (resolvedPreviewStatus !== 'ready' || regeneratingPreview) return
+    setIsPreviewPlaying((current) => {
+      if (current) return false
+      setPreviewProgress((progress) => (progress >= PREVIEW_DURATION_SECONDS ? 0 : progress))
+      return true
+    })
+  }, [regeneratingPreview, resolvedPreviewStatus])
+
+  const previewProgressPercent = Math.min(100, (previewProgress / PREVIEW_DURATION_SECONDS) * 100)
+  const currentPreviewSeconds = Math.floor(previewProgress)
+  const previewTimeLabel = `00:${currentPreviewSeconds.toString().padStart(2, '0')}`
+  const previewDurationLabel = `00:${PREVIEW_DURATION_SECONDS.toString().padStart(2, '0')}`
+
   if (!open) return null
 
   const dialog = (
     <div className="fixed inset-0 z-[2147483647] overflow-y-auto">
       <div className="fixed inset-0 bg-[rgba(0,0,0,0.42)]" onClick={onClose} />
-      <div className="relative flex min-h-full items-center justify-center p-4 sm:p-6">
+      <div className="relative grid min-h-[100dvh] place-items-center p-4 sm:p-6">
 
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="new-pack-dialog-title"
-          className="relative isolate my-6 flex w-full flex-col overflow-hidden rounded-[28px] border border-[#e5e5e5] bg-[#ffffff] text-[#111111] shadow-[0px_28px_70px_rgba(0,0,0,0.14)] ring-1 ring-[rgba(255,255,255,0.55)]"
+          className="relative isolate flex w-full flex-col overflow-hidden rounded-[28px] border border-[#e9e7e2] bg-[#ffffff] text-[#111111] shadow-[0px_24px_60px_rgba(0,0,0,0.10)]"
           style={{
-            width: 'min(860px, calc(100vw - 32px))',
-            maxHeight: 'min(720px, calc(100vh - 32px))',
+            width: 'min(780px, calc(100vw - 32px))',
+            maxHeight: 'min(720px, calc(100dvh - 32px))',
             backgroundColor: '#ffffff',
             opacity: 1,
           }}
@@ -342,10 +447,10 @@ export function NewPackDialog({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h2 id="new-pack-dialog-title" className="text-[24px] font-semibold leading-none tracking-[-0.03em] text-[#111111]">
-                {isImportMode ? 'Create project' : 'Create a guitar project'}
+                {isImportMode ? 'Review imported song' : 'Create a guitar project'}
               </h2>
               {isImportMode ? (
-                <span className="rounded-full bg-[#ececec] px-3 py-1 text-[11px] font-medium text-[#5a5a5a]">
+                <span className="rounded-full bg-[#f3f2ee] px-3 py-1 text-[11px] font-medium text-[#6a6a64]">
                   Step 2 of 3
                 </span>
               ) : null}
@@ -363,29 +468,26 @@ export function NewPackDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#ffffff] px-5 pb-3.5 pt-1">
-          <div className={cn('grid gap-4', isImportMode ? 'md:grid-cols-[236px_minmax(0,1fr)] md:items-start' : 'md:grid-cols-[228px_minmax(0,1fr)]')}>
+          <div className={cn('grid gap-5', isImportMode ? 'md:grid-cols-[200px_minmax(0,1fr)] md:items-start' : 'md:grid-cols-[228px_minmax(0,1fr)]')}>
             <section>
               {isImportMode ? (
                 <>
-                  <h3 className="text-[14px] font-semibold text-[#111111]">From import</h3>
-                  <section className={cn(CARD_CLASS_NAME, 'mt-3 flex flex-col gap-4 px-4 py-4')}>
+                  <h3 className="text-[14px] font-semibold text-[#111111]">Source</h3>
+                  <section className="mt-3 space-y-4">
                     <div className="space-y-1">
                       <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Source</p>
                       <p className="truncate text-[15px] font-medium leading-[1.35] text-[#111111]">
                         {sourceLabel || draft.name}
                       </p>
-                      <p className="text-[11px] leading-[1.35] text-[#8a8a8a]">
-                        Auto-detected from your file.
-                      </p>
                     </div>
 
-                    <div className="grid gap-3">
+                    <div className="space-y-3">
                       {summaryFields.map((field) => (
-                        <div key={field.label} className="flex items-baseline justify-between gap-3">
-                          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">
+                        <div key={field.label} className="space-y-0.5">
+                          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#8a8a84]">
                             {field.label}
                           </p>
-                          <p className="text-[14px] font-medium leading-[1.25] text-[#111111]">
+                          <p className="text-[15px] font-medium leading-[1.25] text-[#111111]">
                             {field.value}
                           </p>
                         </div>
@@ -412,30 +514,140 @@ export function NewPackDialog({
             </section>
 
             <section>
-              <h3 className="text-[14px] font-semibold text-[#111111]">Details</h3>
+              <h3 className="text-[14px] font-semibold text-[#111111]">{isImportMode ? 'Review' : 'Details'}</h3>
 
               <div className="mt-3 grid gap-3">
                 {isImportMode ? (
-                  <DetailCard
-                    label="Creative brief"
-                    helper="Optional"
-                    className="min-h-[144px] gap-2 rounded-[24px] px-5 py-4"
-                  >
-                    <textarea
-                      aria-label="Creative brief"
-                      value={requestSummary}
-                      onChange={(event) => setRequestSummary(event.target.value)}
-                      placeholder="Describe the version you want to create."
-                      rows={4}
-                      className={cn(
-                        VALUE_INPUT_CLASS_NAME,
-                        'min-h-[92px] resize-none leading-[1.5] placeholder:text-[#a3a3a3]',
-                      )}
-                    />
-                  </DetailCard>
+                  <>
+                    <ImportStageCard
+                      title="Audio preview"
+                      status={
+                        resolvedPreviewStatus === 'generating' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#6a6a64]">
+                            <Loader2 size={13} className="animate-spin" />
+                            Generating
+                          </span>
+                        ) : resolvedPreviewStatus === 'error' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#b24d37]">
+                            <AlertCircle size={13} />
+                            Retry needed
+                          </span>
+                        ) : null
+                      }
+                      error={!regeneratingPreview && resolvedPreviewStatus === 'error' ? previewError : null}
+                      action={
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleTogglePreviewPlayback}
+                            disabled={resolvedPreviewStatus !== 'ready'}
+                            aria-label={isPreviewPlaying ? 'Pause audio preview' : 'Play audio preview'}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-white transition-opacity hover:opacity-92 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {isPreviewPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRegeneratePreview}
+                            disabled={!canRegeneratePreview}
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-[#dfddd7] bg-white px-4 text-[13px] font-medium text-[#222222] transition-colors hover:bg-[#f7f6f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {regeneratingPreview ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                            {regeneratingPreview ? 'Regenerating...' : 'Regenerate'}
+                          </button>
+                        </div>
+                      }
+                    >
+                      <div className="space-y-3">
+                        {previewVersionLabel ? <p className="text-[15px] font-medium text-[#111111]">{previewVersionLabel}</p> : null}
+                        <div className="flex items-end gap-1.5" aria-hidden="true">
+                          {[18, 26, 14, 32, 20, 28, 12, 22, 16, 30, 18, 24].map((height, index) => (
+                            <span
+                              key={`${height}-${index}`}
+                              className={cn(
+                                'w-full rounded-full bg-[#d7d5cf] transition-opacity',
+                                resolvedPreviewStatus === 'generating' && 'animate-pulse',
+                              )}
+                              style={{ height }}
+                            />
+                          ))}
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="h-1 rounded-full bg-[#ece9e2]">
+                            <div
+                              className="h-full rounded-full bg-[#111111] transition-[width] duration-200"
+                              style={{ width: `${previewProgressPercent}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-[#7b7b75]">
+                            <span>{previewTimeLabel}</span>
+                            <span>{previewDurationLabel}</span>
+                          </div>
+                        </div>
+                        {requestSummary.trim() ? (
+                          <p className="text-[13px] leading-[1.5] text-[#666666]">{requestSummary.trim()}</p>
+                        ) : null}
+                      </div>
+                    </ImportStageCard>
+
+                    <ImportStageCard
+                      title="Score info"
+                    >
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <DetailCard label="Key">
+                          <SelectValue
+                            ariaLabel="Key"
+                            value={draft.key}
+                            onChange={(value) => updateDraft('key', value)}
+                            options={KEY_OPTIONS.map((key) => ({ value: key, label: key }))}
+                          />
+                        </DetailCard>
+                        <DetailCard label="Meter">
+                          <SelectValue
+                            ariaLabel="Meter"
+                            value={draft.timeSignature}
+                            onChange={(value) => updateDraft('timeSignature', value)}
+                            options={TIME_SIGNATURE_OPTIONS.map((option) => ({ value: option, label: option }))}
+                          />
+                        </DetailCard>
+                        <DetailCard label="Tempo">
+                          <div className="flex items-center gap-2">
+                            <input
+                              aria-label="Tempo"
+                              inputMode="numeric"
+                              value={String(draft.tempo)}
+                              onChange={(event) =>
+                                updateDraft('tempo', clampNumber(event.target.value, 40, 240, draft.tempo))
+                              }
+                              className={cn(VALUE_INPUT_CLASS_NAME, 'min-w-0')}
+                            />
+                            <span className="shrink-0 text-[17px] font-medium text-[#3f3f3b]">BPM</span>
+                          </div>
+                        </DetailCard>
+                      </div>
+
+                      <DetailCard
+                        label="Style prompt"
+                        helper="Optional"
+                        className="min-h-[120px] gap-2 px-5 py-4"
+                      >
+                        <textarea
+                          aria-label="Style prompt"
+                          value={requestSummary}
+                          onChange={(event) => setRequestSummary(event.target.value)}
+                          placeholder="Any last adjustment."
+                          rows={3}
+                          className={cn(
+                            VALUE_INPUT_CLASS_NAME,
+                            'min-h-[72px] resize-none leading-[1.5] placeholder:text-[#a3a3a3]',
+                          )}
+                        />
+                      </DetailCard>
+                    </ImportStageCard>
+                  </>
                 ) : null}
 
-                <DetailCard label="Project name">
+                <DetailCard label={isImportMode ? 'Project name' : 'Project name'}>
                   <input
                     aria-label="Project name"
                     value={draft.name}
@@ -445,40 +657,7 @@ export function NewPackDialog({
                   />
                 </DetailCard>
 
-                {isImportMode ? (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <DetailCard label="Key">
-                      <SelectValue
-                        ariaLabel="Key"
-                        value={draft.key}
-                        onChange={(value) => updateDraft('key', value)}
-                        options={KEY_OPTIONS.map((key) => ({ value: key, label: key }))}
-                      />
-                    </DetailCard>
-                    <DetailCard label="Meter">
-                      <SelectValue
-                        ariaLabel="Meter"
-                        value={draft.timeSignature}
-                        onChange={(value) => updateDraft('timeSignature', value)}
-                        options={TIME_SIGNATURE_OPTIONS.map((option) => ({ value: option, label: option }))}
-                      />
-                    </DetailCard>
-                    <DetailCard label="Tempo">
-                      <div className="flex items-center gap-2">
-                        <input
-                          aria-label="Tempo"
-                          inputMode="numeric"
-                          value={String(draft.tempo)}
-                          onChange={(event) =>
-                            updateDraft('tempo', clampNumber(event.target.value, 40, 240, draft.tempo))
-                          }
-                          className={cn(VALUE_INPUT_CLASS_NAME, 'min-w-0')}
-                        />
-                        <span className="shrink-0 text-[17px] font-medium text-[#3f3f3b]">BPM</span>
-                      </div>
-                    </DetailCard>
-                  </div>
-                ) : (
+                {isImportMode ? null : (
                   <>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <DetailCard label="Bars">
@@ -555,7 +734,7 @@ export function NewPackDialog({
                   <button
                     type="button"
                     onClick={() => setShowAdvancedSettings((current) => !current)}
-                    className="inline-flex h-10 items-center justify-between rounded-[16px] border border-[#e5e5e5] bg-[#fafafa] px-4 text-left text-[13px] font-medium text-[#333333] transition-colors hover:bg-[#f2f2f2]"
+                    className="inline-flex h-10 items-center justify-between rounded-[16px] bg-[#f7f6f3] px-4 text-left text-[13px] font-medium text-[#333333] transition-colors hover:bg-[#f1f0ec]"
                     aria-expanded={showAdvancedSettings}
                   >
                     <span>More settings</span>
@@ -603,8 +782,8 @@ export function NewPackDialog({
 
         <div className="flex flex-col gap-4 bg-[#ffffff] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] text-[#737373]">{isImportMode ? 'You can edit this later.' : 'Edit later if needed.'}</p>
-            {error ? <p className="text-[11px] text-[#b24d37]">{error}</p> : null}
+            <p className="text-[11px] text-[#737373]">{isImportMode ? 'You can still edit the score after this step.' : 'Edit later if needed.'}</p>
+            {error ? <p role="alert" className="text-[11px] text-[#b24d37]" aria-live="polite">{error}</p> : null}
           </div>
 
           <div className="flex items-center justify-end gap-2.5">
@@ -622,7 +801,7 @@ export function NewPackDialog({
               disabled={submitting || !draft.name.trim()}
               className="inline-flex h-10 min-w-[136px] items-center justify-center rounded-full bg-[#111111] px-5 text-sm font-medium text-white transition-opacity hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? 'Creating...' : submitLabel ?? (isImportMode ? 'Create project' : createActionLabel(draft.layout))}
+              {submitting ? 'Creating...' : submitLabel ?? (isImportMode ? 'Build score' : createActionLabel(draft.layout))}
             </button>
           </div>
         </div>

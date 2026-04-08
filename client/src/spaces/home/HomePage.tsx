@@ -129,6 +129,7 @@ type SetupState = {
   detectedFields: Array<{ label: string; value: string }>
   requestSummary: string
   queueItemId?: string
+  previewVersion: number
 }
 
 type WaitingState = {
@@ -288,6 +289,22 @@ function shouldMockFail(file: File | null, message: string) {
   return sourceText.includes('noisy') || sourceText.includes('fail')
 }
 
+function regenerateImportDraft(draft: NewPackDraft, previewVersion: number): NewPackDraft {
+  const keyCycle = ['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Am', 'Em'] as const
+  const meterCycle = ['4/4', '3/4', '6/8', '12/8'] as const
+  const currentKeyIndex = Math.max(0, keyCycle.indexOf(draft.key as (typeof keyCycle)[number]))
+  const currentMeterIndex = Math.max(0, meterCycle.indexOf(draft.timeSignature as (typeof meterCycle)[number]))
+  const tempoOffsets = [0, -6, 4, 8, -10]
+  const nextTempo = Math.max(40, Math.min(240, draft.tempo + tempoOffsets[previewVersion % tempoOffsets.length]))
+
+  return {
+    ...draft,
+    key: keyCycle[(currentKeyIndex + 1) % keyCycle.length],
+    timeSignature: meterCycle[(currentMeterIndex + (previewVersion % 2 === 0 ? 0 : 1)) % meterCycle.length],
+    tempo: nextTempo,
+  }
+}
+
 type SubmitPhase = 'idle' | 'analyzing' | 'arranging' | 'building'
 
 declare global {
@@ -406,6 +423,7 @@ export function HomePage() {
           sourceLabel: resolvedSourceLabel,
           detectedFields: buildDetectedFields(draft),
           requestSummary,
+          previewVersion: 1,
         })
         return
       }
@@ -468,6 +486,7 @@ export function HomePage() {
         sourceLabel: processingState.sourceLabel,
         detectedFields: buildDetectedFields(processingState.draft),
         requestSummary: processingState.requestSummary,
+        previewVersion: 1,
       }
 
       if (processingState.source === 'pdf-image') {
@@ -477,6 +496,7 @@ export function HomePage() {
           sourceLabel: processingState.sourceLabel,
           detectedFields: buildDetectedFields(processingState.draft),
           requestSummary: processingState.requestSummary,
+          previewVersion: 1,
         })
       } else {
         setSetupState(nextSetup)
@@ -895,6 +915,7 @@ export function HomePage() {
                                   detectedFields: buildDetectedFields(item.draft),
                                   requestSummary: item.requestSummary,
                                   queueItemId: item.id,
+                                  previewVersion: 1,
                                 })
                               }}
                               className="rounded-full bg-text-primary px-4 py-2 text-sm font-medium text-surface-0 transition-opacity hover:opacity-90"
@@ -1169,7 +1190,23 @@ export function HomePage() {
         initialRequestSummary={setupState?.requestSummary ?? ''}
         sourceLabel={setupState?.sourceLabel}
         detectedFields={setupState?.detectedFields}
-        submitLabel="Create project"
+        previewVersionLabel={setupState?.previewVersion ? `Preview ${setupState.previewVersion}` : undefined}
+        submitLabel="Build score"
+        onRegeneratePreview={async () => {
+          if (!setupState) return
+          await new Promise((resolve) => window.setTimeout(resolve, 900))
+          setSetupState((current) => {
+            if (!current) return current
+            const previewVersion = current.previewVersion + 1
+            const draft = regenerateImportDraft(current.draft, previewVersion)
+            return {
+              ...current,
+              draft,
+              detectedFields: buildDetectedFields(draft),
+              previewVersion,
+            }
+          })
+        }}
         onSubmitDraft={(draft, requestSummary) => {
           if (!setupState) return
           void (async () => {

@@ -52,17 +52,25 @@ export function EditorCanvas({ className }: EditorCanvasProps) {
     <div
       ref={containerRef}
       className={cn(
-        'relative grid min-h-0 w-full flex-1 gap-5 overflow-auto px-5 pb-32 pt-4',
-        editorMode === 'fineEdit' && 'pl-24',
+        'relative flex min-h-0 w-full flex-1 flex-col overflow-hidden',
         className,
       )}
-      style={cursorStyle}
+      style={{
+        ...cursorStyle,
+        backgroundColor: '#efede8',
+        backgroundImage: `
+          linear-gradient(rgba(17,17,17,0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(17,17,17,0.035) 1px, transparent 1px)
+        `,
+        backgroundSize: '24px 24px',
+        backgroundPosition: '0 0, 0 0',
+      }}
       onMouseDown={isStaffView ? rangeSelect.onMouseDown : undefined}
       onMouseMove={isStaffView ? rangeSelect.onMouseMove : undefined}
       onMouseUp={isStaffView ? rangeSelect.onMouseUp : undefined}
     >
       <PracticeSurface
-        className="min-h-0"
+        className="min-h-0 flex-1"
         viewMode={viewMode}
         getMeasureBoundsRef={getMeasureBoundsRef}
         editorContainerRef={containerRef}

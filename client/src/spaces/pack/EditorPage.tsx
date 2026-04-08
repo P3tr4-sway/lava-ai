@@ -38,6 +38,10 @@ import { PreviewBar } from './PreviewBar'
 import { PackReadyBar } from './PackReadyBar'
 import { ExportPdfDialog } from './ExportPdfDialog'
 import { NEW_PACK_TUNINGS } from './newPack'
+// Phase 9 imports (only activated when USE_ALPHATEX_ENGINE = true)
+import { useTabAutoSave } from '@/hooks/useTabAutoSave'
+import { importGpFile } from '@/io/gp-import'
+import { TabEditorToolbar } from './TabEditorToolbar'
 
 type ProjectLoadState = 'loading' | 'ready' | 'error'
 type RenderStatus = 'idle' | 'running' | 'error'
@@ -622,6 +626,42 @@ export function EditorPage() {
     return () => window.removeEventListener('lava-tab-play-pause', handleSpace)
   }, [playerPlay, playerPause])
 
+  // ---------------------------------------------------------------------------
+  // Phase 9 — auto-save + GP import (guarded by USE_ALPHATEX_ENGINE flag)
+  // ---------------------------------------------------------------------------
+
+  // Auto-save to localStorage every 10 s; Cmd+S downloads .json
+  const { hasSavedState, loadSaved } = useTabAutoSave({ enabled: USE_ALPHATEX_ENGINE })
+
+  // On first load with a saved state, offer restore (only in alphaTex engine path)
+  useEffect(() => {
+    if (!USE_ALPHATEX_ENGINE || !hasSavedState) return
+    // Non-blocking: the user can ignore or restore via toolbar
+    console.info('[EditorPage] Auto-save found — call loadSaved() to restore.')
+  }, [hasSavedState, loadSaved])
+
+  // Hidden file input for GP file import
+  const gpFileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const handleOpenGpFile = useCallback(() => {
+    gpFileInputRef.current?.click()
+  }, [])
+
+  const handleGpFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const ast = await importGpFile(file)
+      useTabEditorStore.getState().setAst(ast)
+      toast(`Imported: ${file.name}`, 'success')
+    } catch (err) {
+      toast(`Import failed: ${(err as Error).message}`, 'error')
+    } finally {
+      // Reset so the same file can be re-selected
+      event.target.value = ''
+    }
+  }, [toast])
+
   // Recompute overlay rects whenever selection changes and the bridge is ready
   useEffect(() => {
     if (!USE_ALPHATEX_ENGINE) return
@@ -951,11 +991,30 @@ export function EditorPage() {
               )}
             </div>
 
-            <EditorToolbar
-              totalBars={totalBars}
-              beatsPerBar={beatsPerBar}
-              className="z-20"
-            />
+            {USE_ALPHATEX_ENGINE ? (
+              <>
+                {/* Hidden GP file input */}
+                <input
+                  ref={gpFileInputRef}
+                  type="file"
+                  accept=".gp,.gp4,.gp5,.gpx,.gp7"
+                  className="sr-only"
+                  onChange={handleGpFileChange}
+                  aria-hidden="true"
+                />
+                <TabEditorToolbar
+                  className="z-20"
+                  bridgeRef={bridgeRef as React.RefObject<import('@/render/alphaTabBridge').AlphaTabBridge | null>}
+                  onOpenFile={handleOpenGpFile}
+                />
+              </>
+            ) : (
+              <EditorToolbar
+                totalBars={totalBars}
+                beatsPerBar={beatsPerBar}
+                className="z-20"
+              />
+            )}
 
             {isRendering || isVersionSwitching ? (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/8 backdrop-blur-sm">

@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "client",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "client", "dev"],
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd /Users/p3tr4/Documents/LavaAI-demo/client && /Users/p3tr4/.nvm/versions/node/v24.14.0/bin/node ./node_modules/vite/bin/vite.js"],
       "port": 5173
     },
     {

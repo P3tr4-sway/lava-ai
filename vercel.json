@@ -1,0 +1,8 @@
+{
+  "buildCommand": "pnpm --filter @lava/client build",
+  "outputDirectory": "client/dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

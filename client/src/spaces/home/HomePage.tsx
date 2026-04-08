@@ -1009,14 +1009,9 @@ export function HomePage() {
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {EXPLORE_USE_CASES.map((item) => (
-                <button
+                <div
                   key={item.title}
-                  type="button"
-                  onClick={() => handleQuickActionClick(item.prompt)}
-                  className={cn(
-                    'flex min-h-[320px] flex-col overflow-hidden rounded-[32px] border border-border bg-surface-0 text-center transition-colors',
-                    'hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
-                  )}
+                  className="flex min-h-[320px] flex-col overflow-hidden rounded-[32px] border border-border bg-surface-0 text-center"
                 >
                   <div className="h-40 w-full bg-surface-1">
                     <img
@@ -1033,7 +1028,7 @@ export function HomePage() {
                       </p>
                     </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>

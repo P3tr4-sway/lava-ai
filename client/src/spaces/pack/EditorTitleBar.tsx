@@ -55,7 +55,7 @@ export function EditorTitleBar({
       )}
     >
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/')}
         className="flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-2 hover:text-text-primary"
         aria-label="Go back"
       >

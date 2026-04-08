@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tab Editor Benchmark</title>
+  <style>
+    body {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      padding: 32px;
+      line-height: 1.6;
+    }
+    h1 { color: #ffffff; font-size: 1.25rem; margin-bottom: 8px; }
+    p  { color: #888888; font-size: 0.875rem; margin-bottom: 24px; }
+    button {
+      background: #1e1e1e;
+      color: #e5e5e5;
+      border: 1px solid #333333;
+      border-radius: 4px;
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+    button:hover { border-color: #555555; }
+    #output {
+      margin-top: 24px;
+      background: #141414;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+      padding: 16px;
+      min-height: 120px;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+    }
+    .running { color: #f59e0b; }
+    .done    { color: #22c55e; }
+    .error   { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>Tab Editor Performance Benchmark</h1>
+  <p>
+    Measures AST print time and AST diff time for 200, 500, and 1000-bar scores.<br />
+    Open DevTools → Console for the full <code>console.table()</code> output.
+  </p>
+
+  <button id="runBtn" onclick="runBenchmark()">Run Benchmark</button>
+  <button onclick="clearOutput()">Clear</button>
+
+  <div id="output">Click "Run Benchmark" to start…</div>
+
+  <script type="module">
+    // Set autorun flag off (we use the button instead)
+    window.__BENCH_AUTORUN__ = false
+
+    import { runBench } from './tabEditorBench.ts'
+
+    window.runBenchmark = async function () {
+      const out = document.getElementById('output')
+      const btn = document.getElementById('runBtn')
+
+      out.className = 'running'
+      out.textContent = 'Running benchmark…\n'
+      btn.disabled = true
+
+      try {
+        const results = await runBench()
+        out.className = 'done'
+        out.textContent =
+          'Results (median of 5 runs per bar count):\n\n' +
+          'barCount | printMs | texLength | diffMs | diffChangedBars\n' +
+          '---------|---------|-----------|--------|----------------\n' +
+          results
+            .map(
+              (r) =>
+                `${String(r.barCount).padStart(8)} | ` +
+                `${r.printMs.toFixed(2).padStart(7)} | ` +
+                `${String(r.texLength).padStart(9)} | ` +
+                `${r.diffMs.toFixed(3).padStart(6)} | ` +
+                `${String(r.diffChangedBars).padStart(15)}`,
+            )
+            .join('\n') +
+          '\n\nSee DevTools console for console.table() output.'
+      } catch (err) {
+        out.className = 'error'
+        out.textContent = 'Error: ' + String(err)
+        console.error(err)
+      } finally {
+        btn.disabled = false
+      }
+    }
+
+    window.clearOutput = function () {
+      const out = document.getElementById('output')
+      out.className = ''
+      out.textContent = 'Cleared.'
+    }
+  </script>
+</body>
+</html>

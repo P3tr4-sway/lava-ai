@@ -205,13 +205,56 @@ export class AlphaTabBridge {
 
   /**
    * Feed the AST through the printer and call api.tex() for a full re-render.
-   * Dirty-region optimisation is deferred to Phase 8.
    */
   renderAst(ast: ScoreNode): void {
     if (!this.api) {
       console.warn('[AlphaTabBridge] renderAst() called before init()')
       return
     }
+    const texString = print(ast)
+    this.api.tex(texString)
+  }
+
+  /**
+   * Attempt to re-render only the bars that changed.
+   *
+   * ## alphaTab 1.8.1 partial-render research
+   *
+   * alphaTab 1.8.1 exposes `api.renderTracks(tracks: Track[])` but this
+   * operates at the *track* level — it re-renders a specific set of tracks but
+   * still triggers a full layout pass for those tracks, not a bar-level
+   * incremental update. It is primarily intended for toggling track visibility,
+   * not for hot-patching individual bars.
+   *
+   * There is no public API for bar-level partial rendering in 1.8.1.
+   * The internal renderer re-builds the full SVG layout from the alphaTex
+   * string on every `api.tex()` call.
+   *
+   * **Resolution**: This method falls back to a full `api.tex()` render but is
+   * guarded by the `RenderScheduler`'s rAF batching, which already collapses
+   * multiple mutations within a single frame into one render call. The
+   * meaningful optimisation for Phase 8 is therefore the scheduler (step 2),
+   * not true bar-level incremental SVG patching.
+   *
+   * Future: alphaTab 2.x is expected to expose a `renderRange()` or similar
+   * API. When available, replace this implementation.
+   *
+   * @param ast - The full AST (needed to reconstruct the alphaTex string)
+   * @param changedBarIds - Bar IDs that changed (used for logging / future use)
+   */
+  renderDirtyBars(ast: ScoreNode, changedBarIds: string[]): void {
+    if (!this.api) {
+      console.warn('[AlphaTabBridge] renderDirtyBars() called before init()')
+      return
+    }
+    // Log for observability — useful when alphaTab gains partial-render support
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug(
+        `[AlphaTabBridge] renderDirtyBars: ${changedBarIds.length} bars changed — full render (alphaTab 1.8.1 limitation)`,
+        changedBarIds,
+      )
+    }
+    // Full re-render (batched by RenderScheduler to ≤1 per rAF frame)
     const texString = print(ast)
     this.api.tex(texString)
   }

@@ -6,6 +6,8 @@ interface OverlayCanvasProps {
   width: number
   height: number
   className?: string
+  /** CSS color value for cursor rects. Defaults to 'var(--accent)'. */
+  cursorColor?: string
 }
 
 /**
@@ -14,7 +16,13 @@ interface OverlayCanvasProps {
  * Renders cursor, selection, and hover rectangles from OverlayLayer.
  * pointer-events: none so all mouse events pass through to the score below.
  */
-export function OverlayCanvas({ rects, width, height, className }: OverlayCanvasProps) {
+export function OverlayCanvas({
+  rects,
+  width,
+  height,
+  className,
+  cursorColor = 'var(--accent)',
+}: OverlayCanvasProps) {
   return (
     <svg
       className={cn('pointer-events-none absolute inset-0', className)}
@@ -30,9 +38,10 @@ export function OverlayCanvas({ rects, width, height, className }: OverlayCanvas
           y={rect.y}
           width={rect.width}
           height={rect.height}
+          className={rect.kind === 'cursor' ? 'lava-cursor-blink' : undefined}
           fill={
             rect.kind === 'cursor'
-              ? 'var(--accent)'
+              ? cursorColor
               : rect.kind === 'selection'
                 ? 'color-mix(in srgb, var(--accent) 30%, transparent)'
                 : 'color-mix(in srgb, var(--accent) 15%, transparent)'

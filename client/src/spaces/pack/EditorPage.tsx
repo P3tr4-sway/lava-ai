@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { Version } from '@lava/shared'
 import { Loader2 } from 'lucide-react'
@@ -22,6 +22,17 @@ import { registerToolbarBridge } from '@/spaces/pack/editor-core/toolbarBridge'
 import { EditorTitleBar } from './EditorTitleBar'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
+// Phase 6 imports (only activated when USE_ALPHATEX_ENGINE = true)
+import { useTabEditorStore } from '@/stores/tabEditorStore'
+import { useAlphaTabBridge } from '@/hooks/useAlphaTabBridge'
+import { useTabEditorInput } from '@/hooks/useTabEditorInput'
+import { OverlayLayer } from '@/render/overlayLayer'
+import { OverlayCanvas } from '@/components/overlay/OverlayCanvas'
+import type { OverlayRect } from '@/render/overlayLayer'
+// Phase 7 imports (only activated when USE_ALPHATEX_ENGINE = true)
+import { usePlayer } from '@/hooks/usePlayer'
+import { usePlaybackStore } from '@/stores/playbackStore'
+import { PlaybackCursor } from '@/components/playback/PlaybackCursor'
 import { EditorChatPanel } from './EditorChatPanel'
 import { PreviewBar } from './PreviewBar'
 import { PackReadyBar } from './PackReadyBar'
@@ -64,8 +75,11 @@ function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string
   })
 }
 
-// Phase 6: AlphaTabBridge will be initialized here via useRef<AlphaTabBridge>
-// and renderAst() called whenever the editor store's AST changes.
+// ---------------------------------------------------------------------------
+// Phase 6 feature flag — set to true to activate the new alphaTex engine.
+// When false all existing MusicXML behaviour is completely unchanged.
+// ---------------------------------------------------------------------------
+const USE_ALPHATEX_ENGINE = false
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -522,6 +536,124 @@ export function EditorPage() {
   useEditorCommandBridge()
   usePlaybackStateBridge()
 
+  // ---------------------------------------------------------------------------
+  // Phase 6 — alphaTex engine integration (guarded by USE_ALPHATEX_ENGINE flag)
+  // ---------------------------------------------------------------------------
+
+  // Container ref for the alphaTab rendering surface (rendered below when flag is on)
+  const alphaTabContainerRef = useRef<HTMLDivElement | null>(null)
+
+  // Overlay rects derived from selection (recomputed after each render)
+  const [overlayRects, setOverlayRects] = useState<OverlayRect[]>([])
+
+  const alphaTabAst = useTabEditorStore((s) => s.ast)
+  const alphaTabSelection = useTabEditorStore((s) => s.selection)
+
+  // Stable ref so beat-click can call the hook's handler at any time
+  const alphaTabInputRef = useRef<ReturnType<typeof useTabEditorInput> | null>(null)
+
+  const alphaTabInput = useTabEditorInput({
+    onUndo: () => useTabEditorStore.getState().undo(),
+    onRedo: () => useTabEditorStore.getState().redo(),
+    onPlay: () => {
+      if (USE_ALPHATEX_ENGINE) {
+        // Dispatch the play-pause event; the Phase 7 listener handles it
+        window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))
+      } else {
+        // Delegate to existing audio store transport state toggle
+        const audioStore = useAudioStore.getState()
+        const playbackState = audioStore.playbackState
+        if (playbackState === 'playing') {
+          audioStore.setPlaybackState('paused')
+        } else {
+          audioStore.setPlaybackState('playing')
+        }
+      }
+    },
+  })
+
+  // Keep alphaTabInputRef current after every render
+  alphaTabInputRef.current = alphaTabInput
+
+  const { bridgeRef, renderAst } = useAlphaTabBridge({
+    containerRef: alphaTabContainerRef as React.RefObject<HTMLElement | null>,
+    onBeatClick: (hit) => {
+      if (!USE_ALPHATEX_ENGINE) return
+      alphaTabInputRef.current?.handleBeatClick(hit)
+    },
+    onReady: () => {
+      if (!USE_ALPHATEX_ENGINE) return
+      // Render initial AST when bridge is ready
+      const ast = useTabEditorStore.getState().ast
+      if (ast) renderAst(ast)
+    },
+  })
+
+  // Re-render alphaTex AST whenever it changes
+  useEffect(() => {
+    if (!USE_ALPHATEX_ENGINE || !alphaTabAst) return
+    renderAst(alphaTabAst)
+  }, [alphaTabAst, renderAst])
+
+  // ---------------------------------------------------------------------------
+  // Phase 7 — Playback engine (guarded by USE_ALPHATEX_ENGINE flag)
+  // ---------------------------------------------------------------------------
+
+  const {
+    play: playerPlay,
+    pause: playerPause,
+    playerRef,
+  } = usePlayer(bridgeRef as React.RefObject<import('@/render/alphaTabBridge').AlphaTabBridge | null>)
+
+  const alphaTabPlaybackState = usePlaybackStore((s) => s.state)
+
+  // Wire Space key → play/pause toggle for the alphaTex engine
+  useEffect(() => {
+    if (!USE_ALPHATEX_ENGINE) return
+    const handleSpace = () => {
+      const { state } = usePlaybackStore.getState()
+      if (state === 'playing') {
+        playerPause()
+      } else {
+        playerPlay()
+      }
+    }
+    window.addEventListener('lava-tab-play-pause', handleSpace)
+    return () => window.removeEventListener('lava-tab-play-pause', handleSpace)
+  }, [playerPlay, playerPause])
+
+  // Recompute overlay rects whenever selection changes and the bridge is ready
+  useEffect(() => {
+    if (!USE_ALPHATEX_ENGINE) return
+    const bridge = bridgeRef.current
+    if (!bridge || !alphaTabSelection) {
+      setOverlayRects([])
+      return
+    }
+
+    const layer = new OverlayLayer(bridge)
+
+    if (alphaTabSelection.kind === 'caret') {
+      const c = alphaTabSelection.cursor
+      const cursorRect = layer.getCursorRect({
+        trackIndex: c.trackIndex,
+        barIndex: c.barIndex,
+        voiceIndex: c.voiceIndex,
+        beatIndex: c.beatIndex,
+        stringIndex: c.stringIndex,
+      })
+      setOverlayRects(cursorRect ? [cursorRect] : [])
+    } else {
+      const from = alphaTabSelection.anchor
+      const to = alphaTabSelection.focus
+      const selRects = layer.getSelectionRects(
+        { trackIndex: from.trackIndex, barIndex: from.barIndex, voiceIndex: from.voiceIndex, beatIndex: from.beatIndex, stringIndex: from.stringIndex },
+        { trackIndex: to.trackIndex, barIndex: to.barIndex, voiceIndex: to.voiceIndex, beatIndex: to.beatIndex, stringIndex: to.stringIndex },
+      )
+      setOverlayRects(selRects)
+    }
+  }, [alphaTabSelection, bridgeRef])
+
   // Bar management
   const handleDeleteBars = useCallback(() => {
     const { selectedBars, clearSelection } = useEditorStore.getState()
@@ -774,7 +906,49 @@ export function EditorPage() {
 
           <div className="relative flex min-h-0 flex-1">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-black/6 bg-[#efede8]">
-              <EditorCanvas className={cn('flex-1 transition-opacity duration-200', (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60')} />
+              {USE_ALPHATEX_ENGINE ? (
+                /* Phase 6/7 — alphaTab rendering surface with overlays */
+                <div className="relative flex-1 overflow-auto">
+                  {/* Play / Pause button */}
+                  <div className="absolute left-3 top-3 z-10 flex gap-2">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if (alphaTabPlaybackState === 'playing') {
+                          playerPause()
+                        } else {
+                          playerPlay()
+                        }
+                      }}
+                      aria-label={alphaTabPlaybackState === 'playing' ? 'Pause' : 'Play'}
+                    >
+                      {alphaTabPlaybackState === 'playing' ? '⏸' : '▶'}
+                    </Button>
+                  </div>
+                  <div
+                    ref={alphaTabContainerRef}
+                    className={cn(
+                      'min-h-full w-full transition-opacity duration-200',
+                      (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60',
+                    )}
+                  />
+                  {/* Edit cursor overlay */}
+                  <OverlayCanvas
+                    rects={overlayRects}
+                    width={alphaTabContainerRef.current?.scrollWidth ?? 0}
+                    height={alphaTabContainerRef.current?.scrollHeight ?? 0}
+                  />
+                  {/* Playback cursor overlay */}
+                  <PlaybackCursor
+                    bridge={bridgeRef.current}
+                    width={alphaTabContainerRef.current?.scrollWidth ?? 0}
+                    height={alphaTabContainerRef.current?.scrollHeight ?? 0}
+                  />
+                </div>
+              ) : (
+                <EditorCanvas className={cn('flex-1 transition-opacity duration-200', (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60')} />
+              )}
             </div>
 
             <EditorToolbar

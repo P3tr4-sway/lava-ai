@@ -217,6 +217,14 @@ export class AlphaTabBridge {
   }
 
   /**
+   * Expose the underlying AlphaTabApi instance.
+   * Returns null if the bridge has not been initialised yet.
+   */
+  getApi(): AlphaTabApi | null {
+    return this.api
+  }
+
+  /**
    * Expose the live boundsLookup for hit-testing.
    * Returns null if alphaTab is not yet initialised or has not rendered.
    */

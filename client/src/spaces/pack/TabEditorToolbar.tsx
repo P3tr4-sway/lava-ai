@@ -1,7 +1,7 @@
 /**
  * TabEditorToolbar — alphaTex tab editor toolbar.
  *
- * Replaces EditorToolbar for the USE_ALPHATEX_ENGINE path.
+ *
  * Implements: Duration, Technique, Dynamics, Bar-ops, Track-panel,
  * Import/Export, and Keyboard-shortcuts button groups.
  *

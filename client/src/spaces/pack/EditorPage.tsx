@@ -11,26 +11,21 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useScoreDocumentStore } from '@/stores/scoreDocumentStore'
 import { useVersionStore } from '@/stores/versionStore'
 import { projectService } from '@/services/projectService'
-import { useEditorCommandBridge } from '@/hooks/useEditorCommandBridge'
-import { useEditorKeyboard } from '@/hooks/useEditorKeyboard'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { usePlaybackStateBridge } from '@/hooks/usePlaybackStateBridge'
 import { useTheme } from '@/hooks/useTheme'
 import { buildScoreDigest, cloneScoreDocument, exportScoreDocumentToMusicXml } from '@/lib/scoreDocument'
 import { useAudioStore } from '@/stores/audioStore'
-import { registerToolbarBridge } from '@/spaces/pack/editor-core/toolbarBridge'
 import { EditorTitleBar } from './EditorTitleBar'
-import { EditorCanvas } from './EditorCanvas'
-import { EditorToolbar } from './EditorToolbar'
-// Phase 6 imports (only activated when USE_ALPHATEX_ENGINE = true)
 import { useTabEditorStore } from '@/stores/tabEditorStore'
 import { useAlphaTabBridge } from '@/hooks/useAlphaTabBridge'
+import type { AlphaTabBridge } from '@/render/alphaTabBridge'
 import { useTabEditorInput } from '@/hooks/useTabEditorInput'
+import { useTabEditorPlacement } from '@/hooks/useTabEditorPlacement'
 import { parse as parseAlphaTex } from '@/editor/ast/parser'
 import { OverlayLayer } from '@/render/overlayLayer'
 import { OverlayCanvas } from '@/components/overlay/OverlayCanvas'
+import { HoverNotePreview } from '@/components/overlay/HoverNotePreview'
 import type { OverlayRect } from '@/render/overlayLayer'
-// Phase 7 imports (only activated when USE_ALPHATEX_ENGINE = true)
 import { usePlayer } from '@/hooks/usePlayer'
 import { usePlaybackStore } from '@/stores/playbackStore'
 import { PlaybackCursor } from '@/components/playback/PlaybackCursor'
@@ -39,20 +34,11 @@ import { PreviewBar } from './PreviewBar'
 import { PackReadyBar } from './PackReadyBar'
 import { ExportPdfDialog } from './ExportPdfDialog'
 import { NEW_PACK_TUNINGS } from './newPack'
-// Phase 9 imports (only activated when USE_ALPHATEX_ENGINE = true)
 import { useTabAutoSave } from '@/hooks/useTabAutoSave'
 import { importGpFile } from '@/io/gp-import'
 import { TabEditorToolbar } from './TabEditorToolbar'
 
 type ProjectLoadState = 'loading' | 'ready' | 'error'
-type RenderStatus = 'idle' | 'running' | 'error'
-
-const PACK_RENDER_STAGES: Record<string, string[]> = {
-  audio: ['Read audio', 'Prepare pack', 'Finish pack'],
-  youtube: ['Read link', 'Prepare pack', 'Finish pack'],
-  'pdf-image': ['Generate score', 'Prepare pack', 'Finish pack'],
-  musicxml: ['Prepare pack', 'Finish pack'],
-}
 
 function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string, unknown>; createdAt: number }>): Version[] {
   return snapshots.flatMap((entry) => {
@@ -80,11 +66,6 @@ function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string
   })
 }
 
-// ---------------------------------------------------------------------------
-// Phase 6 feature flag — set to true to activate the new alphaTex engine.
-// When false all existing MusicXML behaviour is completely unchanged.
-// ---------------------------------------------------------------------------
-const USE_ALPHATEX_ENGINE = true
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -110,8 +91,6 @@ export function EditorPage() {
   const [reloadCount, setReloadCount] = useState(0)
   const [showReadyBar, setShowReadyBar] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
-  const [renderStatus, setRenderStatus] = useState<RenderStatus>('idle')
-  const [renderStageIndex, setRenderStageIndex] = useState(0)
   const [switchingVersionId, setSwitchingVersionId] = useState<string | null>(null)
 
   const { totalBars, beatsPerBar } = useMemo(() => {
@@ -151,13 +130,7 @@ export function EditorPage() {
     return 'tab'
   }, [viewMode])
 
-  const renderSource = searchParams.get('source') ?? 'pdf-image'
-  const renderStages = useMemo(
-    () => PACK_RENDER_STAGES[renderSource] ?? PACK_RENDER_STAGES['pdf-image'],
-    [renderSource],
-  )
   const isRendering = searchParams.get('rendering') === '1'
-  const shouldRenderFail = searchParams.get('renderFail') === '1'
   const isVersionSwitching = switchingVersionId !== null
   const renderSourceLabel = useMemo(() => {
     const metadata = activeProject?.metadata as Record<string, unknown> | undefined
@@ -380,41 +353,6 @@ export function EditorPage() {
     setShowReadyBar(shouldShow && !isRendering)
   }, [id, isRendering, projectLoadState, readyDismissKey, searchParams])
 
-  useEffect(() => {
-    if (!isRendering || projectLoadState !== 'ready') {
-      setRenderStatus('idle')
-      setRenderStageIndex(0)
-      return
-    }
-
-    setRenderStatus('running')
-    setRenderStageIndex(0)
-
-    const timer = window.setInterval(() => {
-      setRenderStageIndex((current) => {
-        if (current < renderStages.length - 1) return current + 1
-
-        window.clearInterval(timer)
-
-        if (shouldRenderFail) {
-          setRenderStatus('error')
-          toast('Could not finish the pack.', 'error')
-          return current
-        }
-
-        setRenderStatus('idle')
-        const nextParams = new URLSearchParams(searchParams)
-        nextParams.delete('rendering')
-        nextParams.delete('source')
-        nextParams.delete('renderFail')
-        setSearchParams(nextParams, { replace: true })
-        return current
-      })
-    }, 1100)
-
-    return () => window.clearInterval(timer)
-  }, [isRendering, projectLoadState, renderStages.length, searchParams, setSearchParams, shouldRenderFail, toast])
-
   // Sync editor context to agent store — Trigger 1: musicXml changes (debounced)
   const contextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevDigestRef = useRef<string | null>(null)
@@ -536,20 +474,13 @@ export function EditorPage() {
     return unsub
   }, [])
 
-  // Keyboard shortcuts (stores-driven, no callbacks needed)
-  useEditorKeyboard()
-  useEditorCommandBridge()
-  usePlaybackStateBridge()
-
-  // ---------------------------------------------------------------------------
-  // Phase 6 — alphaTex engine integration (guarded by USE_ALPHATEX_ENGINE flag)
-  // ---------------------------------------------------------------------------
-
   // Overlay rects derived from selection (recomputed after each render)
   const [overlayRects, setOverlayRects] = useState<OverlayRect[]>([])
 
   const alphaTabAst = useTabEditorStore((s) => s.ast)
   const alphaTabSelection = useTabEditorStore((s) => s.selection)
+  const currentDuration = useTabEditorStore((s) => s.currentDuration)
+  const stringCount = useMemo(() => scoreDocument.tracks[0]?.tuning?.length ?? 6, [scoreDocument.tracks])
 
   // Stable ref so beat-click can call the hook's handler at any time
   const alphaTabInputRef = useRef<ReturnType<typeof useTabEditorInput> | null>(null)
@@ -558,19 +489,7 @@ export function EditorPage() {
     onUndo: () => useTabEditorStore.getState().undo(),
     onRedo: () => useTabEditorStore.getState().redo(),
     onPlay: () => {
-      if (USE_ALPHATEX_ENGINE) {
-        // Dispatch the play-pause event; the Phase 7 listener handles it
-        window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))
-      } else {
-        // Delegate to existing audio store transport state toggle
-        const audioStore = useAudioStore.getState()
-        const playbackState = audioStore.playbackState
-        if (playbackState === 'playing') {
-          audioStore.setPlaybackState('paused')
-        } else {
-          audioStore.setPlaybackState('playing')
-        }
-      }
+      window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))
     },
   })
 
@@ -579,20 +498,24 @@ export function EditorPage() {
 
   const { bridgeRef, renderAst, setContainer: setAlphaTabContainer, containerRef: alphaTabContainerRef } = useAlphaTabBridge({
     onBeatClick: (hit) => {
-      if (!USE_ALPHATEX_ENGINE) return
       alphaTabInputRef.current?.handleBeatClick(hit)
     },
     onReady: () => {
-      if (!USE_ALPHATEX_ENGINE) return
-      // Render initial AST when bridge is ready
       const ast = useTabEditorStore.getState().ast
       if (ast) renderAst(ast)
     },
   })
 
+  const { handleMouseMove: handleScoreMouseMove, handleMouseLeave: handleScoreMouseLeave, hoverState } = useTabEditorPlacement(
+    bridgeRef as React.RefObject<AlphaTabBridge | null>,
+    alphaTabContainerRef as React.RefObject<HTMLElement | null>,
+    stringCount,
+    (hit) => { alphaTabInputRef.current?.handleBeatClick(hit) },
+  )
+
   // Re-render alphaTex AST whenever it changes
   useEffect(() => {
-    if (!USE_ALPHATEX_ENGINE || !alphaTabAst) return
+    if (!alphaTabAst) return
     renderAst(alphaTabAst)
   }, [alphaTabAst, renderAst])
 
@@ -600,7 +523,6 @@ export function EditorPage() {
   // has something to render. Placeholder for the full MusicXML→AST converter;
   // for now we create N empty whole-rest bars matching the project's bar count.
   useEffect(() => {
-    if (!USE_ALPHATEX_ENGINE) return
     if (projectLoadState !== 'ready') return
     if (useTabEditorStore.getState().ast) return
 
@@ -613,10 +535,6 @@ export function EditorPage() {
     useTabEditorStore.getState().setAst(score)
   }, [projectLoadState, totalBars])
 
-  // ---------------------------------------------------------------------------
-  // Phase 7 — Playback engine (guarded by USE_ALPHATEX_ENGINE flag)
-  // ---------------------------------------------------------------------------
-
   const {
     play: playerPlay,
     pause: playerPause,
@@ -625,9 +543,8 @@ export function EditorPage() {
 
   const alphaTabPlaybackState = usePlaybackStore((s) => s.state)
 
-  // Wire Space key → play/pause toggle for the alphaTex engine
+  // Wire Space key → play/pause toggle
   useEffect(() => {
-    if (!USE_ALPHATEX_ENGINE) return
     const handleSpace = () => {
       const { state } = usePlaybackStore.getState()
       if (state === 'playing') {
@@ -640,17 +557,11 @@ export function EditorPage() {
     return () => window.removeEventListener('lava-tab-play-pause', handleSpace)
   }, [playerPlay, playerPause])
 
-  // ---------------------------------------------------------------------------
-  // Phase 9 — auto-save + GP import (guarded by USE_ALPHATEX_ENGINE flag)
-  // ---------------------------------------------------------------------------
-
   // Auto-save to localStorage every 10 s; Cmd+S downloads .json
-  const { hasSavedState, loadSaved } = useTabAutoSave({ enabled: USE_ALPHATEX_ENGINE })
+  const { hasSavedState, loadSaved } = useTabAutoSave({ enabled: true })
 
-  // On first load with a saved state, offer restore (only in alphaTex engine path)
   useEffect(() => {
-    if (!USE_ALPHATEX_ENGINE || !hasSavedState) return
-    // Non-blocking: the user can ignore or restore via toolbar
+    if (!hasSavedState) return
     console.info('[EditorPage] Auto-save found — call loadSaved() to restore.')
   }, [hasSavedState, loadSaved])
 
@@ -678,7 +589,6 @@ export function EditorPage() {
 
   // Recompute overlay rects whenever selection changes and the bridge is ready
   useEffect(() => {
-    if (!USE_ALPHATEX_ENGINE) return
     const bridge = bridgeRef.current
     if (!bridge || !alphaTabSelection) {
       setOverlayRects([])
@@ -874,10 +784,6 @@ export function EditorPage() {
     return () => window.removeEventListener('lava-audio-error', handleAudioError as EventListener)
   }, [toast])
 
-  useEffect(() => {
-    const cleanup = registerToolbarBridge()
-    return cleanup
-  }, [])
 
   if (projectLoadState === 'loading') {
     return (
@@ -960,75 +866,71 @@ export function EditorPage() {
 
           <div className="relative flex min-h-0 flex-1">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-black/6 bg-[#efede8]">
-              {USE_ALPHATEX_ENGINE ? (
-                /* Phase 6/7 — alphaTab rendering surface with overlays */
-                <div className="relative flex-1 overflow-auto">
-                  {/* Play / Pause button */}
-                  <div className="absolute left-3 top-3 z-10 flex gap-2">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      onClick={() => {
-                        if (alphaTabPlaybackState === 'playing') {
-                          playerPause()
-                        } else {
-                          playerPlay()
-                        }
-                      }}
-                      aria-label={alphaTabPlaybackState === 'playing' ? 'Pause' : 'Play'}
-                    >
-                      {alphaTabPlaybackState === 'playing' ? '⏸' : '▶'}
-                    </Button>
-                  </div>
-                  <div
-                    ref={setAlphaTabContainer}
-                    className={cn(
-                      'min-h-full w-full transition-opacity duration-200',
-                      (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60',
-                    )}
-                  />
-                  {/* Edit cursor overlay */}
-                  <OverlayCanvas
-                    rects={overlayRects}
-                    width={alphaTabContainerRef.current?.scrollWidth ?? 0}
-                    height={alphaTabContainerRef.current?.scrollHeight ?? 0}
-                  />
-                  {/* Playback cursor overlay */}
-                  <PlaybackCursor
-                    bridge={bridgeRef.current}
-                    width={alphaTabContainerRef.current?.scrollWidth ?? 0}
-                    height={alphaTabContainerRef.current?.scrollHeight ?? 0}
-                  />
+              <div
+                className="relative flex-1 overflow-auto"
+                onMouseMove={handleScoreMouseMove}
+                onMouseLeave={handleScoreMouseLeave}
+              >
+                {/* Play / Pause button */}
+                <div className="absolute left-3 top-3 z-10 flex gap-2">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (alphaTabPlaybackState === 'playing') {
+                        playerPause()
+                      } else {
+                        playerPlay()
+                      }
+                    }}
+                    aria-label={alphaTabPlaybackState === 'playing' ? 'Pause' : 'Play'}
+                  >
+                    {alphaTabPlaybackState === 'playing' ? '⏸' : '▶'}
+                  </Button>
                 </div>
-              ) : (
-                <EditorCanvas className={cn('flex-1 transition-opacity duration-200', (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60')} />
-              )}
+                <div
+                  ref={setAlphaTabContainer}
+                  className={cn(
+                    'min-h-full w-full transition-opacity duration-200',
+                    (isRendering || isVersionSwitching) && 'pointer-events-none opacity-60',
+                  )}
+                />
+                <OverlayCanvas
+                  rects={overlayRects}
+                  width={alphaTabContainerRef.current?.scrollWidth ?? 0}
+                  height={alphaTabContainerRef.current?.scrollHeight ?? 0}
+                />
+                <PlaybackCursor
+                  bridge={bridgeRef.current}
+                  width={alphaTabContainerRef.current?.scrollWidth ?? 0}
+                  height={alphaTabContainerRef.current?.scrollHeight ?? 0}
+                />
+                <HoverNotePreview
+                  hoverState={hoverState}
+                  duration={currentDuration.value}
+                  dots={currentDuration.dots}
+                  isRest={false}
+                  isTabMode={viewMode !== 'staff'}
+                  width={alphaTabContainerRef.current?.scrollWidth ?? 0}
+                  height={alphaTabContainerRef.current?.scrollHeight ?? 0}
+                />
+              </div>
             </div>
 
-            {USE_ALPHATEX_ENGINE ? (
-              <>
-                {/* Hidden GP file input */}
-                <input
-                  ref={gpFileInputRef}
-                  type="file"
-                  accept=".gp,.gp4,.gp5,.gpx,.gp7"
-                  className="sr-only"
-                  onChange={handleGpFileChange}
-                  aria-hidden="true"
-                />
-                <TabEditorToolbar
-                  className="z-20"
-                  bridgeRef={bridgeRef as React.RefObject<import('@/render/alphaTabBridge').AlphaTabBridge | null>}
-                  onOpenFile={handleOpenGpFile}
-                />
-              </>
-            ) : (
-              <EditorToolbar
-                totalBars={totalBars}
-                beatsPerBar={beatsPerBar}
-                className="z-20"
-              />
-            )}
+            {/* Hidden GP file input */}
+            <input
+              ref={gpFileInputRef}
+              type="file"
+              accept=".gp,.gp4,.gp5,.gpx,.gp7"
+              className="sr-only"
+              onChange={handleGpFileChange}
+              aria-hidden="true"
+            />
+            <TabEditorToolbar
+              className="z-20"
+              bridgeRef={bridgeRef as React.RefObject<import('@/render/alphaTabBridge').AlphaTabBridge | null>}
+              onOpenFile={handleOpenGpFile}
+            />
 
             {isRendering || isVersionSwitching ? (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/8 backdrop-blur-sm">

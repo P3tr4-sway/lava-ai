@@ -64,6 +64,9 @@ function extractVersionsFromSnapshots(snapshots: Array<{ snapshot: Record<string
   })
 }
 
+// Phase 6: AlphaTabBridge will be initialized here via useRef<AlphaTabBridge>
+// and renderAst() called whenever the editor store's AST changes.
+
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()

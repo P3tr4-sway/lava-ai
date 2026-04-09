@@ -14,6 +14,8 @@ import { ChevronRight, ChevronDown, Plus, Minus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Button } from '@/components/ui/Button'
 import { useTabEditorStore } from '@/stores/tabEditorStore'
+import { GLYPH, dynamicGlyph } from '@/components/editor/smuflGlyphs'
+import { SmuflGlyph, NoteGlyph } from '@/components/editor/SmuflGlyph'
 import {
   SetDuration,
   SetRest,
@@ -30,6 +32,7 @@ import {
   SetLetRing,
   SetAccent,
   SetStroke,
+  SetDynamics,
   SetFret,
   SetString,
 } from '@/editor/commands'
@@ -63,7 +66,8 @@ function resolveIds(
   sel: ReturnType<typeof useTabEditorStore.getState>['selection'],
 ): ResolvedIds | null {
   if (!ast || !sel) return null
-  const cursor = sel.kind === 'caret' ? sel.cursor : sel.anchor
+  const cursor = sel.kind === 'caret' ? sel.cursor : sel.kind === 'range' ? sel.anchor : null
+  if (!cursor) return null
   const track = ast.tracks[cursor.trackIndex]
   if (!track) return null
   const bar = track.staves[0]?.bars[cursor.barIndex]
@@ -260,13 +264,13 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
         {/* ── Beat ── */}
         <Section title="Beat">
           <Row label="Duration">
-            {DURATIONS.map(({ value, label }) => (
+            {DURATIONS.map(({ value }) => (
               <PillButton
                 key={value}
                 active={currentDuration.value === value}
                 onClick={() => applyDuration(value)}
               >
-                {label}
+                <NoteGlyph duration={value} />
               </PillButton>
             ))}
           </Row>
@@ -276,12 +280,12 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
               onClick={toggleDot}
               title={`Augmentation dot (currently ${currentDuration.dots})`}
             >
-              .
+              <SmuflGlyph glyph={GLYPH.augDot} size="md" />
             </PillButton>
           </Row>
           <Row label="Rest">
             <PillButton active={beat.rest === true} onClick={toggleRest}>
-              rest
+              <SmuflGlyph glyph={GLYPH.restQuarter} size="md" />
             </PillButton>
           </Row>
           <Row label="Dynamics">
@@ -290,11 +294,11 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                 key={d}
                 active={beat.dynamics === d}
                 onClick={() => {
-                  // TODO(phase10): add SetDynamics command
-                  console.warn('[PropertyPanel] SetDynamics command not yet implemented — needs phase 10')
+                  const newValue = beat.dynamics === d ? undefined : d
+                  applyCommand(new SetDynamics(beatLoc, newValue, beat.dynamics))
                 }}
               >
-                {d}
+                <SmuflGlyph glyph={dynamicGlyph(d)} size="sm" />
               </PillButton>
             ))}
           </Row>
@@ -305,7 +309,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                 active={beat.pickStroke === dir}
                 onClick={() => applyStroke(dir)}
               >
-                {dir === 'up' ? '↑' : '↓'}
+                <SmuflGlyph glyph={dir === 'up' ? GLYPH.pickUp : GLYPH.pickDown} size="sm" />
               </PillButton>
             ))}
           </Row>
@@ -345,7 +349,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                 }
                 title="Hammer-on / Pull-off"
               >
-                H/P
+                <span className="glyph-text-fallback">H/P</span>
               </PillButton>
               {SLIDES.map(({ value, label }) => (
                 <PillButton
@@ -355,7 +359,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                     applyCommand(new SetSlide(noteLoc, note.slide === value ? undefined : value, note.slide))
                   }
                 >
-                  {label}
+                  <span className="glyph-text-fallback">{label}</span>
                 </PillButton>
               ))}
               <PillButton
@@ -364,37 +368,37 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                   applyCommand(new SetVibrato(noteLoc, note.vibrato ? undefined : 'slight', note.vibrato))
                 }
               >
-                vib
+                <SmuflGlyph glyph={GLYPH.vibrato} size="sm" />
               </PillButton>
               <PillButton
                 active={note.ghost === true}
                 onClick={() => applyCommand(new SetGhost(noteLoc, !note.ghost, note.ghost))}
               >
-                ghost
+                <SmuflGlyph glyph={GLYPH.ghostNote} size="sm" />
               </PillButton>
               <PillButton
                 active={note.dead === true}
                 onClick={() => applyCommand(new SetDeadNote(noteLoc, !note.dead, note.dead))}
               >
-                X
+                <SmuflGlyph glyph={GLYPH.deadNote} size="sm" />
               </PillButton>
               <PillButton
                 active={note.palmMute === true}
                 onClick={() => applyCommand(new SetPalmMute(noteLoc, !note.palmMute, note.palmMute))}
               >
-                pm
+                <span className="glyph-text-fallback">pm</span>
               </PillButton>
               <PillButton
                 active={note.letRing === true}
                 onClick={() => applyCommand(new SetLetRing(noteLoc, !note.letRing, note.letRing))}
               >
-                lr
+                <span className="glyph-text-fallback">lr</span>
               </PillButton>
               <PillButton
                 active={note.tie === true}
                 onClick={() => applyCommand(new SetTie(noteLoc, !note.tie, note.tie))}
               >
-                tie
+                <span className="glyph-text-fallback">tie</span>
               </PillButton>
               {(['normal', 'heavy', 'tenuto'] as AccentType[]).map((type) => (
                 <PillButton
@@ -406,7 +410,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                     )
                   }
                 >
-                  {type === 'normal' ? 'ac' : type === 'heavy' ? 'hac' : 'ten'}
+                  <SmuflGlyph glyph={type === 'normal' ? GLYPH.articAccent : type === 'heavy' ? GLYPH.articMarcato : GLYPH.articTenuto} size="sm" />
                 </PillButton>
               ))}
               <PillButton
@@ -417,13 +421,13 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                   )
                 }
               >
-                nh
+                <SmuflGlyph glyph={GLYPH.harmonic} size="sm" />
               </PillButton>
               <PillButton
                 active={note.leftHandTap === true}
                 onClick={() => applyCommand(new SetTap(noteLoc, !note.leftHandTap, note.leftHandTap))}
               >
-                tap
+                <span className="glyph-text-fallback">tap</span>
               </PillButton>
             </Row>
 

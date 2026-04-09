@@ -31,16 +31,6 @@ interface NoteGlyphProps {
   className?: string
 }
 
-/** Duration value → number of flags needed (0 for whole/half/quarter) */
-function flagCount(duration: Duration): number {
-  if (duration >= 32) return 3
-  if (duration >= 16) return 2
-  if (duration >= 8) return 1
-  return 0
-}
-
-const FLAG_GLYPHS = [GLYPH.flag8th, GLYPH.flag16th, GLYPH.flag32nd]
-
 export function NoteGlyph({ duration, className }: NoteGlyphProps) {
   // Whole and half: just the note head
   if (duration === 1) {
@@ -50,17 +40,21 @@ export function NoteGlyph({ duration, className }: NoteGlyphProps) {
     return <SmuflGlyph glyph={GLYPH.noteHalf} size="md" className={className} />
   }
 
-  // Quarter and shorter: note head + stem + optional flags
-  const flags = flagCount(duration)
+  // Quarter: just the filled note head
+  if (duration === 4) {
+    return <SmuflGlyph glyph={GLYPH.noteQuarter} size="md" className={className} />
+  }
+
+  // 8th/16th/32nd: filled note head + flag glyph side by side
+  const flagGlyph =
+    duration >= 32 ? GLYPH.flag32nd
+    : duration >= 16 ? GLYPH.flag16th
+    : GLYPH.flag8th
+
   return (
-    <span className={cn('note-glyph', className)}>
-      <span className="lava-smufl lava-smufl-md">{GLYPH.noteQuarter}</span>
-      <span className="note-glyph__stem" />
-      {flags > 0 && (
-        <span className="note-glyph__flag lava-smufl lava-smufl-sm">
-          {FLAG_GLYPHS.slice(0, flags).join('')}
-        </span>
-      )}
+    <span className={cn('inline-flex items-center gap-px', className)}>
+      <SmuflGlyph glyph={GLYPH.noteQuarter} size="md" />
+      <SmuflGlyph glyph={flagGlyph} size="sm" />
     </span>
   )
 }

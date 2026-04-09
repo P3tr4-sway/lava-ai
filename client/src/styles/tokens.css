@@ -78,26 +78,6 @@
 .lava-smufl-md  { font-size: 18px; }
 .lava-smufl-lg  { font-size: 22px; }
 
-/* Composed note glyph (note head + stem + flags) */
-.note-glyph {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  position: relative;
-  line-height: 1;
-}
-.note-glyph__stem {
-  width: 1.5px;
-  background: currentColor;
-  margin-left: -1px;
-  height: 16px;
-}
-.note-glyph__flag {
-  position: absolute;
-  top: -4px;
-  left: -2px;
-}
-
 /* Text fallback for techniques without SMuFL glyphs */
 .glyph-text-fallback {
   font-style: italic;

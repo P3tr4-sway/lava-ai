@@ -66,8 +66,7 @@ import type {
 import { downloadAst } from '@/io/json'
 import type { AlphaTabBridge } from '@/render/alphaTabBridge'
 import { KeyboardShortcutsPanel, useKeyboardShortcutsPanel } from '@/components/editor/KeyboardShortcutsPanel'
-import { GLYPH, dynamicGlyph } from '@/components/editor/smuflGlyphs'
-import { SmuflGlyph, NoteGlyph } from '@/components/editor/SmuflGlyph'
+import { NoteSvg, DotSvg, RestSvg } from '@/components/editor/NoteSvg'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -418,15 +417,12 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
   // Technique helpers
   const TECHNIQUE_BUTTONS: Array<{
     label: string
-    glyph?: string
-    textFallback?: boolean
     title: string
     isActive: () => boolean
     onPress: () => void
   }> = [
     {
       label: 'H/P',
-      textFallback: true,
       title: 'Hammer-on / Pull-off',
       isActive: () => ids?.note?.hammerOrPull === true,
       onPress: () => {
@@ -436,7 +432,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'p-o',
-      textFallback: true,
       title: 'Pull-off',
       isActive: () => ids?.note?.hammerOrPull === true,
       onPress: () => {
@@ -446,7 +441,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: '/sl',
-      textFallback: true,
       title: 'Slide up (legato)',
       isActive: () => ids?.note?.slide === 'legato',
       onPress: () => {
@@ -456,7 +450,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: '\\sd',
-      textFallback: true,
       title: 'Slide down',
       isActive: () => ids?.note?.slide === 'shift',
       onPress: () => {
@@ -466,7 +459,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'vib',
-      glyph: GLYPH.vibrato,
       title: 'Vibrato (slight)',
       isActive: () => ids?.note?.vibrato !== undefined,
       onPress: () => {
@@ -476,7 +468,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'nh',
-      glyph: GLYPH.harmonic,
       title: 'Natural harmonic',
       isActive: () => ids?.note?.harmonic === 'natural',
       onPress: () => {
@@ -486,7 +477,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'X',
-      glyph: GLYPH.deadNote,
       title: 'Dead note',
       isActive: () => ids?.note?.dead === true,
       onPress: () => {
@@ -496,7 +486,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'g',
-      glyph: GLYPH.ghostNote,
       title: 'Ghost note',
       isActive: () => ids?.note?.ghost === true,
       onPress: () => {
@@ -506,7 +495,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'tap',
-      textFallback: true,
       title: 'Left-hand tap',
       isActive: () => ids?.note?.leftHandTap === true,
       onPress: () => {
@@ -516,7 +504,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'pm',
-      textFallback: true,
       title: 'Palm mute',
       isActive: () => ids?.note?.palmMute === true,
       onPress: () => {
@@ -526,7 +513,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'lr',
-      textFallback: true,
       title: 'Let ring',
       isActive: () => ids?.note?.letRing === true,
       onPress: () => {
@@ -575,7 +561,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                     onClick={() => { applyDuration(value); setOpenPanel(null) }}
                     title={shortcut}
                   >
-                    <NoteGlyph duration={value} />
+                    <NoteSvg duration={value} />
                   </ToolbarBtn>
                 ))}
                 <ToolbarBtn
@@ -583,14 +569,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   onClick={toggleDot}
                   title={`Dotted (${currentDuration.dots} dot${currentDuration.dots !== 1 ? 's' : ''})`}
                 >
-                  <SmuflGlyph glyph={GLYPH.augDot} size="md" />
+                  <DotSvg />
                 </ToolbarBtn>
                 <ToolbarBtn
                   active={ids?.beat?.duration?.tuplet?.numerator === 3}
                   onClick={toggleTriplet}
                   title="Triplet"
                 >
-                  <SmuflGlyph glyph={GLYPH.tuplet3} size="sm" />
+                  <span className="text-xs font-semibold">3</span>
                 </ToolbarBtn>
               </div>
             </PanelSection>
@@ -604,7 +590,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                 }}
                 title="Toggle rest"
               >
-                <SmuflGlyph glyph={GLYPH.restQuarter} size="md" />
+                <RestSvg />
               </ToolbarBtn>
             </PanelSection>
           </div>
@@ -621,11 +607,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   onClick={btn.onPress}
                   title={btn.title}
                 >
-                  {btn.glyph ? (
-                    <SmuflGlyph glyph={btn.glyph} size="sm" />
-                  ) : (
-                    <span className="glyph-text-fallback">{btn.label}</span>
-                  )}
+                  <span className="glyph-text-fallback">{btn.label}</span>
                 </ToolbarBtn>
               ))}
             </div>
@@ -642,7 +624,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   }}
                   title={`Accent: ${type}`}
                 >
-                  <SmuflGlyph glyph={type === 'normal' ? GLYPH.articAccent : type === 'heavy' ? GLYPH.articMarcato : GLYPH.articTenuto} size="sm" />
+                  {type === 'normal' ? 'ac' : type === 'heavy' ? 'hac' : 'ten'}
                 </ToolbarBtn>
               ))}
             </PanelSection>
@@ -667,7 +649,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   }}
                   title={beatLoc ? d : 'Select a beat first'}
                 >
-                  <SmuflGlyph glyph={dynamicGlyph(d)} size="sm" />
+                  <span className="italic text-xs font-medium">{d}</span>
                 </ToolbarBtn>
               ))}
             </div>
@@ -685,7 +667,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   }}
                   title={beatLoc ? `Pick stroke ${dir}` : 'Select a beat first'}
                 >
-                  <SmuflGlyph glyph={dir === 'up' ? GLYPH.pickUp : GLYPH.pickDown} size="sm" />
+                  {dir === 'up' ? '↑' : '↓'}
                 </ToolbarBtn>
               ))}
             </PanelSection>
@@ -872,7 +854,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                     onClick={() => applyDuration(value)}
                     title={shortcut}
                   >
-                    <NoteGlyph duration={value} />
+                    <NoteSvg duration={value} />
                   </ToolbarBtn>
                 ))}
                 <ToolbarBtn
@@ -880,14 +862,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   onClick={toggleDot}
                   title="Dot"
                 >
-                  <SmuflGlyph glyph={GLYPH.augDot} size="md" />
+                  <DotSvg />
                 </ToolbarBtn>
                 <ToolbarBtn
                   active={ids?.beat?.duration?.tuplet?.numerator === 3}
                   onClick={toggleTriplet}
                   title="Triplet"
                 >
-                  <SmuflGlyph glyph={GLYPH.tuplet3} size="sm" />
+                  <span className="text-xs font-semibold">3</span>
                 </ToolbarBtn>
               </div>
             </div>

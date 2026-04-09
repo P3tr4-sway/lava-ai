@@ -14,8 +14,7 @@ import { ChevronRight, ChevronDown, Plus, Minus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Button } from '@/components/ui/Button'
 import { useTabEditorStore } from '@/stores/tabEditorStore'
-import { GLYPH, dynamicGlyph } from '@/components/editor/smuflGlyphs'
-import { SmuflGlyph, NoteGlyph } from '@/components/editor/SmuflGlyph'
+import { NoteSvg, DotSvg, RestSvg } from '@/components/editor/NoteSvg'
 import {
   SetDuration,
   SetRest,
@@ -270,7 +269,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                 active={currentDuration.value === value}
                 onClick={() => applyDuration(value)}
               >
-                <NoteGlyph duration={value} />
+                <NoteSvg duration={value} />
               </PillButton>
             ))}
           </Row>
@@ -280,12 +279,12 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
               onClick={toggleDot}
               title={`Augmentation dot (currently ${currentDuration.dots})`}
             >
-              <SmuflGlyph glyph={GLYPH.augDot} size="md" />
+              <DotSvg />
             </PillButton>
           </Row>
           <Row label="Rest">
             <PillButton active={beat.rest === true} onClick={toggleRest}>
-              <SmuflGlyph glyph={GLYPH.restQuarter} size="md" />
+              <RestSvg />
             </PillButton>
           </Row>
           <Row label="Dynamics">
@@ -298,7 +297,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                   applyCommand(new SetDynamics(beatLoc, newValue, beat.dynamics))
                 }}
               >
-                <SmuflGlyph glyph={dynamicGlyph(d)} size="sm" />
+                <span className="italic text-xs font-medium">{d}</span>
               </PillButton>
             ))}
           </Row>
@@ -309,7 +308,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                 active={beat.pickStroke === dir}
                 onClick={() => applyStroke(dir)}
               >
-                <SmuflGlyph glyph={dir === 'up' ? GLYPH.pickUp : GLYPH.pickDown} size="sm" />
+                {dir === 'up' ? '↑' : '↓'}
               </PillButton>
             ))}
           </Row>
@@ -368,19 +367,19 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                   applyCommand(new SetVibrato(noteLoc, note.vibrato ? undefined : 'slight', note.vibrato))
                 }
               >
-                <SmuflGlyph glyph={GLYPH.vibrato} size="sm" />
+                vib
               </PillButton>
               <PillButton
                 active={note.ghost === true}
                 onClick={() => applyCommand(new SetGhost(noteLoc, !note.ghost, note.ghost))}
               >
-                <SmuflGlyph glyph={GLYPH.ghostNote} size="sm" />
+                ghost
               </PillButton>
               <PillButton
                 active={note.dead === true}
                 onClick={() => applyCommand(new SetDeadNote(noteLoc, !note.dead, note.dead))}
               >
-                <SmuflGlyph glyph={GLYPH.deadNote} size="sm" />
+                X
               </PillButton>
               <PillButton
                 active={note.palmMute === true}
@@ -410,7 +409,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                     )
                   }
                 >
-                  <SmuflGlyph glyph={type === 'normal' ? GLYPH.articAccent : type === 'heavy' ? GLYPH.articMarcato : GLYPH.articTenuto} size="sm" />
+                  {type === 'normal' ? 'ac' : type === 'heavy' ? 'hac' : 'ten'}
                 </PillButton>
               ))}
               <PillButton
@@ -421,7 +420,7 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
                   )
                 }
               >
-                <SmuflGlyph glyph={GLYPH.harmonic} size="sm" />
+                nh
               </PillButton>
               <PillButton
                 active={note.leftHandTap === true}

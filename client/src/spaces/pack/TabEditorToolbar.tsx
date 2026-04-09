@@ -67,7 +67,7 @@ import type {
 import { downloadAst } from '@/io/json'
 import type { AlphaTabBridge } from '@/render/alphaTabBridge'
 import { KeyboardShortcutsPanel, useKeyboardShortcutsPanel } from '@/components/editor/KeyboardShortcutsPanel'
-import { GLYPH } from '@/components/editor/smuflGlyphs'
+import { GLYPH, dynamicGlyph } from '@/components/editor/smuflGlyphs'
 import { SmuflGlyph, NoteGlyph } from '@/components/editor/SmuflGlyph'
 
 // ---------------------------------------------------------------------------
@@ -651,7 +651,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   }}
                   title={beatLoc ? d : 'Select a beat first'}
                 >
-                  {d}
+                  <SmuflGlyph glyph={dynamicGlyph(d)} size="sm" />
                 </ToolbarBtn>
               ))}
             </div>
@@ -669,7 +669,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   }}
                   title={beatLoc ? `Pick stroke ${dir}` : 'Select a beat first'}
                 >
-                  {dir === 'up' ? '↑' : '↓'}
+                  <SmuflGlyph glyph={dir === 'up' ? GLYPH.pickUp : GLYPH.pickDown} size="sm" />
                 </ToolbarBtn>
               ))}
             </PanelSection>

@@ -62,7 +62,6 @@ import type {
   DynamicsValue,
   SlideType,
   StrokeType,
-  AccentType,
 } from '@/editor/ast/types'
 import { downloadAst } from '@/io/json'
 import type { AlphaTabBridge } from '@/render/alphaTabBridge'
@@ -419,12 +418,15 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
   // Technique helpers
   const TECHNIQUE_BUTTONS: Array<{
     label: string
+    glyph?: string
+    textFallback?: boolean
     title: string
     isActive: () => boolean
     onPress: () => void
   }> = [
     {
       label: 'H/P',
+      textFallback: true,
       title: 'Hammer-on / Pull-off',
       isActive: () => ids?.note?.hammerOrPull === true,
       onPress: () => {
@@ -434,6 +436,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'p-o',
+      textFallback: true,
       title: 'Pull-off',
       isActive: () => ids?.note?.hammerOrPull === true,
       onPress: () => {
@@ -443,6 +446,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: '/sl',
+      textFallback: true,
       title: 'Slide up (legato)',
       isActive: () => ids?.note?.slide === 'legato',
       onPress: () => {
@@ -452,6 +456,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: '\\sd',
+      textFallback: true,
       title: 'Slide down',
       isActive: () => ids?.note?.slide === 'shift',
       onPress: () => {
@@ -461,6 +466,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'vib',
+      glyph: GLYPH.vibrato,
       title: 'Vibrato (slight)',
       isActive: () => ids?.note?.vibrato !== undefined,
       onPress: () => {
@@ -470,6 +476,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'nh',
+      glyph: GLYPH.harmonic,
       title: 'Natural harmonic',
       isActive: () => ids?.note?.harmonic === 'natural',
       onPress: () => {
@@ -479,6 +486,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'X',
+      glyph: GLYPH.deadNote,
       title: 'Dead note',
       isActive: () => ids?.note?.dead === true,
       onPress: () => {
@@ -488,6 +496,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'g',
+      glyph: GLYPH.ghostNote,
       title: 'Ghost note',
       isActive: () => ids?.note?.ghost === true,
       onPress: () => {
@@ -497,6 +506,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'tap',
+      textFallback: true,
       title: 'Left-hand tap',
       isActive: () => ids?.note?.leftHandTap === true,
       onPress: () => {
@@ -506,6 +516,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'pm',
+      textFallback: true,
       title: 'Palm mute',
       isActive: () => ids?.note?.palmMute === true,
       onPress: () => {
@@ -515,6 +526,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     },
     {
       label: 'lr',
+      textFallback: true,
       title: 'Let ring',
       isActive: () => ids?.note?.letRing === true,
       onPress: () => {
@@ -609,14 +621,18 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   onClick={btn.onPress}
                   title={btn.title}
                 >
-                  {btn.label}
+                  {btn.glyph ? (
+                    <SmuflGlyph glyph={btn.glyph} size="sm" />
+                  ) : (
+                    <span className="glyph-text-fallback">{btn.label}</span>
+                  )}
                 </ToolbarBtn>
               ))}
             </div>
           </PanelSection>
           <div className="mt-3 border-t border-border pt-3">
             <PanelSection title="Accent">
-              {(['normal', 'heavy', 'tenuto'] as AccentType[]).map((type) => (
+              {(['normal', 'heavy', 'tenuto'] as const).map((type) => (
                 <ToolbarBtn
                   key={type}
                   active={ids?.note?.accent === type}
@@ -626,7 +642,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   }}
                   title={`Accent: ${type}`}
                 >
-                  {type === 'normal' ? 'ac' : type === 'heavy' ? 'hac' : 'ten'}
+                  <SmuflGlyph glyph={type === 'normal' ? GLYPH.articAccent : type === 'heavy' ? GLYPH.articMarcato : GLYPH.articTenuto} size="sm" />
                 </ToolbarBtn>
               ))}
             </PanelSection>

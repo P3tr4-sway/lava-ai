@@ -53,8 +53,10 @@ import {
   SetLetRing,
   SetAccent,
   SetStroke,
+  SetDynamics,
   makeBeatLoc,
 } from '@/editor/commands'
+import { barCapacityUnits, durationToUnits, getEffectiveTimeSig, makeBarBeats } from '@/editor/ast/barFill'
 import type {
   Duration,
   DynamicsValue,
@@ -128,12 +130,14 @@ const MIDI_INSTRUMENTS = [
 
 function ToolbarBtn({
   active,
+  disabled,
   onClick,
   title,
   children,
   className,
 }: {
   active?: boolean
+  disabled?: boolean
   onClick: () => void
   title?: string
   children: React.ReactNode
@@ -144,12 +148,14 @@ function ToolbarBtn({
       type="button"
       title={title}
       aria-label={title}
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         'inline-flex h-8 items-center justify-center rounded-lg border px-2 text-xs font-medium transition-colors',
         active
           ? 'border-accent bg-accent text-surface-0'
           : 'border-border bg-surface-0 text-text-secondary hover:border-border-hover hover:bg-surface-1 hover:text-text-primary',
+        disabled && 'cursor-not-allowed opacity-40',
         className,
       )}
     >
@@ -202,7 +208,11 @@ function FloatingPanel({
   return (
     <div
       className={cn(
-        'absolute bottom-full mb-3 rounded-2xl border border-border bg-surface-0 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.12)]',
+        // pointer-events-auto: parent toolbar wrapper sets pointer-events-none
+        // so the empty space around the pill stays click-through to the score.
+        // Floating panels must opt back in or clicks pass through to the score
+        // and trigger spurious selections (and the panel buttons stop working).
+        'pointer-events-auto absolute bottom-full mb-3 rounded-2xl border border-border bg-surface-0 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.12)]',
         width,
       )}
       style={anchor ? { left: anchor.left, transform: 'translateX(-50%)' } : { left: '50%', transform: 'translateX(-50%)' }}
@@ -234,7 +244,8 @@ function useBeatIds() {
   const selection = useTabEditorStore((s) => s.selection)
 
   if (!ast || !selection) return null
-  const cursor = selection.kind === 'caret' ? selection.cursor : selection.anchor
+  const cursor = selection.kind === 'caret' ? selection.cursor : selection.kind === 'range' ? selection.anchor : null
+  if (!cursor) return null
   const track = ast.tracks[cursor.trackIndex]
   if (!track) return null
   const bar = track.staves[0]?.bars[cursor.barIndex]
@@ -267,13 +278,14 @@ interface TabEditorToolbarProps {
   className?: string
   bridgeRef?: React.RefObject<AlphaTabBridge | null>
   onOpenFile?: () => void
+  isInsertMode?: boolean
 }
 
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditorToolbarProps) {
+export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMode }: TabEditorToolbarProps) {
   const applyCommand = useTabEditorStore((s) => s.applyCommand)
   const currentDuration = useTabEditorStore((s) => s.currentDuration)
   const setDuration = useTabEditorStore((s) => s.setDuration)
@@ -340,6 +352,19 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
   // Duration picker
   const applyDuration = (value: Duration) => {
     if (beatLoc && ids) {
+      // Bar capacity guard — only apply if new duration fits within the beat's room
+      const voice = ids.bar.voices[ids.cursor.voiceIndex]
+      if (voice && ast) {
+        const timeSig = getEffectiveTimeSig(ast, ids.cursor.trackIndex, ids.barIndex)
+        const capacity = barCapacityUnits(timeSig)
+        const oldBeatUnits = durationToUnits(ids.beat.duration)
+        const totalUsed = voice.beats.reduce((sum, b) => sum + durationToUnits(b.duration), 0)
+        const room = capacity - (totalUsed - oldBeatUnits)
+        if (durationToUnits({ value, dots: currentDuration.dots }) > room) {
+          setDuration({ value, dots: currentDuration.dots })
+          return
+        }
+      }
       applyCommand(new SetDuration(beatLoc, { value, dots: currentDuration.dots }, ids.beat.duration))
     }
     setDuration({ value, dots: currentDuration.dots })
@@ -347,6 +372,19 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
 
   const toggleDot = () => {
     if (beatLoc && ids) {
+      const beatNextDots: 0 | 1 | 2 =
+        ids.beat.duration.dots === 0 ? 1 : ids.beat.duration.dots === 1 ? 2 : 0
+      if (beatNextDots > 0) {  // only check when adding dots, not cycling back to 0
+        const voice = ids.bar.voices[ids.cursor.voiceIndex]
+        if (voice && ast) {
+          const timeSig = getEffectiveTimeSig(ast, ids.cursor.trackIndex, ids.barIndex)
+          const capacity = barCapacityUnits(timeSig)
+          const oldBeatUnits = durationToUnits(ids.beat.duration)
+          const totalUsed = voice.beats.reduce((sum, b) => sum + durationToUnits(b.duration), 0)
+          const room = capacity - (totalUsed - oldBeatUnits)
+          if (durationToUnits({ value: ids.beat.duration.value, dots: beatNextDots }) > room) return
+        }
+      }
       applyCommand(new ToggleDot(beatLoc))
     }
     const nextDots: 0 | 1 | 2 =
@@ -600,12 +638,16 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
               {DYNAMICS_OPTIONS.map((d) => (
                 <ToolbarBtn
                   key={d}
+                  disabled={!beatLoc}
                   active={ids?.beat?.dynamics === d}
                   onClick={() => {
-                    // TODO(phase10): add SetDynamics command
-                    console.warn('[TabEditorToolbar] SetDynamics not yet implemented')
+                    if (!beatLoc || !ids) return
+                    // Toggle off if already active, otherwise set
+                    const newValue = ids.beat.dynamics === d ? undefined : d
+                    applyCommand(new SetDynamics(beatLoc, newValue, ids.beat.dynamics))
+                    setOpenPanel(null)
                   }}
-                  title={d}
+                  title={beatLoc ? d : 'Select a beat first'}
                 >
                   {d}
                 </ToolbarBtn>
@@ -617,12 +659,13 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
               {(['up', 'down'] as StrokeType[]).map((dir) => (
                 <ToolbarBtn
                   key={dir}
+                  disabled={!beatLoc}
                   active={ids?.beat?.pickStroke === dir}
                   onClick={() => {
                     if (!beatLoc || !ids) return
                     applyCommand(new SetStroke(beatLoc, ids.beat.pickStroke === dir ? undefined : dir, ids.beat.pickStroke))
                   }}
-                  title={`Pick stroke ${dir}`}
+                  title={beatLoc ? `Pick stroke ${dir}` : 'Select a beat first'}
                 >
                   {dir === 'up' ? '↑' : '↓'}
                 </ToolbarBtn>
@@ -641,10 +684,12 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
                   size="sm"
                   onClick={() => {
                     if (!ids || !ast) return
-                    const { nanoid: nid } = { nanoid: () => nanoid() }
+                    const nid = () => nanoid()
+                    // Inherit the time signature from the bar being displaced
+                    const timeSig = getEffectiveTimeSig(ast, ids.cursor.trackIndex, ids.barIndex)
                     const newBar = {
                       id: nid(),
-                      voices: [{ id: nid(), beats: [{ id: nid(), duration: { value: 4 as Duration, dots: 0 as const }, notes: [] }] }],
+                      voices: [{ id: nid(), beats: makeBarBeats(timeSig, nid) }],
                     }
                     applyCommand(new InsertBar(ids.trackId, 0, newBar, ids.barIndex))
                     setOpenPanel(null)
@@ -658,9 +703,11 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
                   onClick={() => {
                     if (!ids || !ast) return
                     const nid = () => nanoid()
+                    // Inherit the time signature from the bar before the new one
+                    const timeSig = getEffectiveTimeSig(ast, ids.cursor.trackIndex, ids.barIndex)
                     const newBar = {
                       id: nid(),
-                      voices: [{ id: nid(), beats: [{ id: nid(), duration: { value: 4 as Duration, dots: 0 as const }, notes: [] }] }],
+                      voices: [{ id: nid(), beats: makeBarBeats(timeSig, nid) }],
                     }
                     applyCommand(new InsertBar(ids.trackId, 0, newBar, ids.barIndex + 1))
                     setOpenPanel(null)
@@ -775,6 +822,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile }: TabEditor
         {/* Main pill */}
         <div className="pointer-events-auto rounded-[18px] border border-border bg-surface-0 p-2 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
           <div className="flex flex-wrap items-center gap-0.5">
+            {/* Input mode indicator */}
+            {isInsertMode && (
+              <div className="flex h-8 items-center gap-1.5 rounded-lg bg-[rgba(255,138,0,0.15)] px-2.5">
+                <span className="size-1.5 animate-pulse rounded-full bg-[rgba(255,138,0,0.9)]" />
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[rgba(255,138,0,0.9)]">Input</span>
+              </div>
+            )}
+
             {/* Playback */}
             <ToolbarBtn onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))} title="Play / Pause">
               <Play className="size-4" />

@@ -23,7 +23,7 @@ export function SmuflGlyph({ glyph, size = 'sm', className }: SmuflGlyphProps) {
 }
 
 // ---------------------------------------------------------------------------
-// NoteGlyph — composes note head + CSS stem + optional flags
+// NoteGlyph — single glyph per duration (no composition)
 // ---------------------------------------------------------------------------
 
 interface NoteGlyphProps {
@@ -31,30 +31,22 @@ interface NoteGlyphProps {
   className?: string
 }
 
+/** Map duration → single SMuFL glyph character */
+const DURATION_GLYPH: Record<number, string> = {
+  1:  GLYPH.noteWhole,   // open oval
+  2:  GLYPH.noteHalf,    // open oval
+  4:  GLYPH.noteQuarter, // filled oval
+  8:  GLYPH.flag8th,     // stem + single flag
+  16: GLYPH.flag16th,    // stem + double flags
+  32: GLYPH.flag32nd,    // stem + triple flags
+}
+
 export function NoteGlyph({ duration, className }: NoteGlyphProps) {
-  // Whole and half: just the note head
-  if (duration === 1) {
-    return <SmuflGlyph glyph={GLYPH.noteWhole} size="md" className={className} />
-  }
-  if (duration === 2) {
-    return <SmuflGlyph glyph={GLYPH.noteHalf} size="md" className={className} />
-  }
-
-  // Quarter: just the filled note head
-  if (duration === 4) {
-    return <SmuflGlyph glyph={GLYPH.noteQuarter} size="md" className={className} />
-  }
-
-  // 8th/16th/32nd: filled note head + flag glyph side by side
-  const flagGlyph =
-    duration >= 32 ? GLYPH.flag32nd
-    : duration >= 16 ? GLYPH.flag16th
-    : GLYPH.flag8th
-
   return (
-    <span className={cn('inline-flex items-center gap-px', className)}>
-      <SmuflGlyph glyph={GLYPH.noteQuarter} size="md" />
-      <SmuflGlyph glyph={flagGlyph} size="sm" />
-    </span>
+    <SmuflGlyph
+      glyph={DURATION_GLYPH[duration] ?? GLYPH.noteQuarter}
+      size="md"
+      className={className}
+    />
   )
 }

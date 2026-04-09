@@ -14,7 +14,7 @@ export interface PipelineStepsProps {
 }
 
 export function PipelineSteps({ steps, activeIndex, status, className }: PipelineStepsProps) {
-  const resolvedActive = status === 'success' ? steps.length - 1 : status === 'error' ? activeIndex : activeIndex
+  const resolvedActive = status === 'success' ? steps.length - 1 : activeIndex
 
   return (
     <div className={cn('flex items-center gap-1', className)}>
@@ -25,7 +25,7 @@ export function PipelineSteps({ steps, activeIndex, status, className }: Pipelin
         const isError = index === resolvedActive && status === 'error'
 
         return (
-          <div key={step.label} className="flex items-center gap-1">
+          <div key={`${step.label}-${index}`} className="flex items-center gap-1">
             <div className="flex items-center gap-2">
               <div
                 className={cn(

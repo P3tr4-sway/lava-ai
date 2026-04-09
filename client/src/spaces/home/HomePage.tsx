@@ -1235,6 +1235,7 @@ export function HomePage() {
         open={Boolean(setupState)}
         onClose={() => setSetupState(null)}
         mode="import"
+        importSource={setupState?.source ?? null}
         initialDraft={setupState?.draft ?? null}
         initialRequestSummary={setupState?.requestSummary ?? ''}
         sourceLabel={setupState?.sourceLabel}

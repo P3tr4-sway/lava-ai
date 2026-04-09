@@ -14,7 +14,6 @@ import { ChevronRight, ChevronDown, Plus, Minus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Button } from '@/components/ui/Button'
 import { useTabEditorStore } from '@/stores/tabEditorStore'
-import { NoteSvg, DotSvg, RestSvg } from '@/components/editor/NoteSvg'
 import {
   SetDuration,
   SetRest,
@@ -263,13 +262,13 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
         {/* ── Beat ── */}
         <Section title="Beat">
           <Row label="Duration">
-            {DURATIONS.map(({ value }) => (
+            {DURATIONS.map(({ value, label }) => (
               <PillButton
                 key={value}
                 active={currentDuration.value === value}
                 onClick={() => applyDuration(value)}
               >
-                <NoteSvg duration={value} />
+                {label}
               </PillButton>
             ))}
           </Row>
@@ -279,12 +278,12 @@ export function PropertyPanel({ className }: PropertyPanelProps) {
               onClick={toggleDot}
               title={`Augmentation dot (currently ${currentDuration.dots})`}
             >
-              <DotSvg />
+              .
             </PillButton>
           </Row>
           <Row label="Rest">
             <PillButton active={beat.rest === true} onClick={toggleRest}>
-              <RestSvg />
+              rest
             </PillButton>
           </Row>
           <Row label="Dynamics">

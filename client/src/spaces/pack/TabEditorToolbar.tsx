@@ -66,19 +66,18 @@ import type {
 import { downloadAst } from '@/io/json'
 import type { AlphaTabBridge } from '@/render/alphaTabBridge'
 import { KeyboardShortcutsPanel, useKeyboardShortcutsPanel } from '@/components/editor/KeyboardShortcutsPanel'
-import { NoteSvg, DotSvg, RestSvg } from '@/components/editor/NoteSvg'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DURATION_OPTIONS: Array<{ value: Duration; shortcut: string }> = [
-  { value: 1, shortcut: 'Whole' },
-  { value: 2, shortcut: 'Half' },
-  { value: 4, shortcut: 'Quarter' },
-  { value: 8, shortcut: 'Eighth' },
-  { value: 16, shortcut: '16th' },
-  { value: 32, shortcut: '32nd' },
+const DURATION_OPTIONS: Array<{ value: Duration; label: string; shortcut: string }> = [
+  { value: 1, label: 'W', shortcut: 'Whole' },
+  { value: 2, label: 'H', shortcut: 'Half' },
+  { value: 4, label: 'Q', shortcut: 'Quarter' },
+  { value: 8, label: 'E', shortcut: 'Eighth' },
+  { value: 16, label: 'S', shortcut: '16th' },
+  { value: 32, label: 'T', shortcut: '32nd' },
 ]
 
 const DYNAMICS_OPTIONS: DynamicsValue[] = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff']
@@ -554,14 +553,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
           <div className="space-y-3">
             <PanelSection title="Duration">
               <div className="flex flex-wrap gap-1.5">
-                {DURATION_OPTIONS.map(({ value, shortcut }) => (
+                {DURATION_OPTIONS.map(({ value, label, shortcut }) => (
                   <ToolbarBtn
                     key={value}
                     active={currentDuration.value === value}
                     onClick={() => { applyDuration(value); setOpenPanel(null) }}
                     title={shortcut}
                   >
-                    <NoteSvg duration={value} />
+                    {label}
                   </ToolbarBtn>
                 ))}
                 <ToolbarBtn
@@ -569,14 +568,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   onClick={toggleDot}
                   title={`Dotted (${currentDuration.dots} dot${currentDuration.dots !== 1 ? 's' : ''})`}
                 >
-                  <DotSvg />
+                  .
                 </ToolbarBtn>
                 <ToolbarBtn
                   active={ids?.beat?.duration?.tuplet?.numerator === 3}
                   onClick={toggleTriplet}
                   title="Triplet"
                 >
-                  <span className="text-xs font-semibold">3</span>
+                  3
                 </ToolbarBtn>
               </div>
             </PanelSection>
@@ -590,7 +589,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                 }}
                 title="Toggle rest"
               >
-                <RestSvg />
+                rest
               </ToolbarBtn>
             </PanelSection>
           </div>
@@ -847,14 +846,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
             <div className="flex flex-col items-center gap-0.5">
               <GroupLabel>Duration</GroupLabel>
               <div className="flex gap-0.5">
-                {DURATION_OPTIONS.map(({ value, shortcut }) => (
+                {DURATION_OPTIONS.map(({ value, label, shortcut }) => (
                   <ToolbarBtn
                     key={value}
                     active={currentDuration.value === value}
                     onClick={() => applyDuration(value)}
                     title={shortcut}
                   >
-                    <NoteSvg duration={value} />
+                    {label}
                   </ToolbarBtn>
                 ))}
                 <ToolbarBtn
@@ -862,14 +861,14 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
                   onClick={toggleDot}
                   title="Dot"
                 >
-                  <DotSvg />
+                  .
                 </ToolbarBtn>
                 <ToolbarBtn
                   active={ids?.beat?.duration?.tuplet?.numerator === 3}
                   onClick={toggleTriplet}
                   title="Triplet"
                 >
-                  <span className="text-xs font-semibold">3</span>
+                  3
                 </ToolbarBtn>
               </div>
             </div>

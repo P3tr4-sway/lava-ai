@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HOME_NAV_RESET_EVENT } from '@/components/layout/navItems'
-import { CheckCircle2, Loader2, Paperclip, X } from 'lucide-react'
+import { CheckCircle2, FileAudio, FileMusic, FileText, Loader2, Music, Paperclip, Sparkles, Wand2, X } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
 import { NewPackDialog } from '@/components/projects/NewPackDialog'
 import { Dialog } from '@/components/ui/Dialog'
+import { PipelineSteps, type PipelineStep } from '@/components/ui/PipelineSteps'
 import { useToast } from '@/components/ui/Toast'
 import { projectService } from '@/services/projectService'
 import { useProjectStore } from '@/stores/projectStore'
@@ -114,7 +115,7 @@ type ImportSourceKind = 'audio' | 'youtube' | 'musicxml' | 'pdf-image'
 type ProcessingState = {
   source: ImportSourceKind
   title: string
-  stages: string[]
+  stages: PipelineStep[]
   stageIndex: number
   draft: NewPackDraft
   fileName?: string
@@ -138,7 +139,7 @@ type WaitingState = {
   draft: NewPackDraft
   source: ImportSourceKind
   stageIndex: number
-  stages: string[]
+  stages: PipelineStep[]
   sourceLabel: string
   requestSummary: string
   projectId?: string
@@ -172,18 +173,53 @@ type ImportQueueItem = {
   errorMessage?: string
 }
 
-const IMPORT_PROCESSING_STAGES: Record<ImportSourceKind, string[]> = {
-  audio: ['Upload audio', 'Detect tempo and pitch', 'Build draft score'],
-  youtube: ['Fetch audio', 'Detect melody', 'Build draft score'],
-  musicxml: ['Read score data'],
-  'pdf-image': ['Scan page', 'Read symbols', 'Build draft score'],
+const IMPORT_PIPELINE_STEPS: Record<ImportSourceKind, PipelineStep[]> = {
+  audio: [
+    { label: 'Upload', icon: FileAudio },
+    { label: 'Detect', icon: Music },
+    { label: 'Build score', icon: FileMusic },
+  ],
+  youtube: [
+    { label: 'Fetch', icon: FileAudio },
+    { label: 'Detect', icon: Music },
+    { label: 'Build score', icon: FileMusic },
+  ],
+  musicxml: [
+    { label: 'Import', icon: FileText },
+  ],
+  'pdf-image': [
+    { label: 'Scan', icon: FileText },
+    { label: 'Read', icon: Music },
+    { label: 'Build score', icon: FileMusic },
+  ],
 }
 
-const WAITING_STAGES: Record<ImportSourceKind, string[]> = {
-  audio: ['Read audio', 'Generate score', 'Prepare pack'],
-  youtube: ['Read audio', 'Generate score', 'Prepare pack'],
-  musicxml: ['Import score', 'Build play view', 'Prepare pack'],
-  'pdf-image': ['Generate score', 'Prepare pack', 'Finish pack'],
+const WAITING_PIPELINE_STEPS: Record<ImportSourceKind, PipelineStep[]> = {
+  audio: [
+    { label: 'Read audio', icon: FileAudio },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: Music },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
+  youtube: [
+    { label: 'Read audio', icon: FileAudio },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: Music },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
+  musicxml: [
+    { label: 'Import score', icon: FileText },
+    { label: 'Render MIDI', icon: Music },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: FileMusic },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
+  'pdf-image': [
+    { label: 'Scan score', icon: FileText },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: Music },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
 }
 
 function detectImportSource(file: File | null, message: string): ImportSourceKind | null {
@@ -435,7 +471,7 @@ export function HomePage() {
           : importSource === 'pdf-image'
             ? 'Scanning score'
             : 'Reading file',
-        stages: IMPORT_PROCESSING_STAGES[importSource],
+        stages: IMPORT_PIPELINE_STEPS[importSource],
         stageIndex: 0,
         draft,
         fileName: attachedFile?.name,
@@ -582,7 +618,7 @@ export function HomePage() {
 
     if (!activeItem) return
 
-    const stages = IMPORT_PROCESSING_STAGES[activeItem.source]
+    const stages = IMPORT_PIPELINE_STEPS[activeItem.source]
     const timer = window.setTimeout(async () => {
       if (activeItem.stageIndex < stages.length - 1) {
         setImportQueue((current) =>
@@ -663,7 +699,7 @@ export function HomePage() {
                     ? 'Project ready'
                     : waitingState.status === 'error'
                       ? 'Import failed'
-                      : waitingState.stages[waitingState.stageIndex]}
+                      : waitingState.stages[waitingState.stageIndex].label}
                 </h2>
                 <p className="mt-1 text-sm text-text-secondary">
                   {waitingState.status === 'success'
@@ -683,11 +719,18 @@ export function HomePage() {
               />
             </div>
 
+            <PipelineSteps
+              steps={waitingState.stages}
+              activeIndex={waitingState.stageIndex}
+              status={waitingState.status === 'error' ? 'error' : waitingState.status === 'success' ? 'success' : 'running'}
+              className="mt-4"
+            />
+
             <div className="mt-4 space-y-2">
-              {waitingState.stages.map((stage, index) => (
-                <div key={stage} className="flex items-center justify-between text-sm">
+              {waitingState.stages.map((step, index) => (
+                <div key={step.label} className="flex items-center justify-between text-sm">
                   <span className={cn(index <= waitingState.stageIndex ? 'text-text-primary' : 'text-text-muted')}>
-                    {stage}
+                    {step.label}
                   </span>
                   <span className="text-text-muted">
                     {index < waitingState.stageIndex
@@ -884,12 +927,12 @@ export function HomePage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {importQueue.map((item) => {
-                    const stages = IMPORT_PROCESSING_STAGES[item.source]
+                    const stages = IMPORT_PIPELINE_STEPS[item.source]
                     const statusLabel =
                       item.status === 'queued'
                         ? 'Queued'
                         : item.status === 'processing'
-                          ? stages[item.stageIndex]
+                          ? stages[item.stageIndex].label
                           : item.status === 'ready'
                             ? 'Ready'
                             : 'Error'
@@ -1149,6 +1192,12 @@ export function HomePage() {
               </p>
             </div>
 
+            <PipelineSteps
+              steps={processingState.stages}
+              activeIndex={processingState.stageIndex}
+              status="running"
+            />
+
             <div className="space-y-3">
               <div className="h-2 rounded-full bg-surface-2">
                 <div
@@ -1157,20 +1206,20 @@ export function HomePage() {
                 />
               </div>
               <p className="text-[15px] font-medium text-text-primary">
-                {processingState.stages[processingState.stageIndex]}
+                {processingState.stages[processingState.stageIndex].label}
               </p>
             </div>
 
             <div className="space-y-2">
-              {processingState.stages.map((stage, index) => (
-                <div key={stage} className="flex items-center justify-between gap-4 rounded-[16px] bg-surface-1 px-4 py-3">
+              {processingState.stages.map((step, index) => (
+                <div key={step.label} className="flex items-center justify-between gap-4 rounded-[16px] bg-surface-1 px-4 py-3">
                   <span
                     className={cn(
                       'text-[15px] leading-[1.35]',
                       index <= processingState.stageIndex ? 'font-medium text-text-primary' : 'text-text-muted',
                     )}
                   >
-                    {stage}
+                    {step.label}
                   </span>
                   <span className="text-[13px] text-text-muted">
                     {index < processingState.stageIndex ? 'Done' : index === processingState.stageIndex ? 'In progress' : 'Next'}

@@ -22,6 +22,7 @@ import {
   extractDraftFromMusicXmlFile,
   type ImportFileType,
 } from '@/io/file-import'
+import { convertMusicXmlToAlphaTex } from '@/io/musicxml-import'
 import type { ScoreDocument } from '@lava/shared'
 
 type ImportSourceKind = 'audio' | 'youtube' | 'musicxml' | 'pdf-image'
@@ -580,6 +581,7 @@ export function NewPackDialog({
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [uploadedFileType, setUploadedFileType] = useState<ImportFileType | null>(null)
   const [importedScoreDocument, setImportedScoreDocument] = useState<ScoreDocument | null>(null)
+  const [importedAlphaTex, setImportedAlphaTex] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [aiPrompt, setAiPrompt] = useState('')
@@ -621,6 +623,7 @@ export function NewPackDialog({
     setUploadedFile(null)
     setUploadedFileType(null)
     setImportedScoreDocument(null)
+    setImportedAlphaTex(null)
     setImporting(false)
     setImportError(null)
     setAiPrompt('')
@@ -694,14 +697,13 @@ export function NewPackDialog({
     if (fileType === 'gp') {
       setImporting(true)
       try {
-        const { draft: extracted } = await extractDraftFromGpFile(file)
+        const { draft: extracted, texString } = await extractDraftFromGpFile(file)
+        setImportedAlphaTex(texString)
         setDraft((prev) => ({
           ...prev,
           ...extracted,
           name: extracted.name || prev.name,
         }))
-        // GP files don't produce a ScoreDocument directly, but the score
-        // will be imported via importGpFile → tabEditorStore.setAst() on the editor side
       } catch (err) {
         setImportError((err as Error).message)
       } finally {
@@ -710,13 +712,19 @@ export function NewPackDialog({
     } else if (fileType === 'musicxml') {
       setImporting(true)
       try {
-        const { draft: extracted, scoreDocument } = await extractDraftFromMusicXmlFile(file)
+        const { draft: extracted, scoreDocument, xmlString } = await extractDraftFromMusicXmlFile(file)
         setImportedScoreDocument(scoreDocument)
         setDraft((prev) => ({
           ...prev,
           ...extracted,
           name: extracted.name || prev.name,
         }))
+        try {
+          const tex = await convertMusicXmlToAlphaTex(xmlString)
+          setImportedAlphaTex(tex)
+        } catch {
+          // alphaTex conversion failed; lead-sheet view will still work via scoreDocument
+        }
       } catch (err) {
         setImportError((err as Error).message)
       } finally {
@@ -733,6 +741,7 @@ export function NewPackDialog({
     setUploadedFile(null)
     setUploadedFileType(null)
     setImportedScoreDocument(null)
+    setImportedAlphaTex(null)
     setImportError(null)
   }, [])
 
@@ -773,11 +782,11 @@ export function NewPackDialog({
       }
 
       const payload = buildNewPackProjectPayload(finalDraft)
-      // Include imported score document in metadata if present
-      if (importedScoreDocument) {
+      if (importedScoreDocument || importedAlphaTex) {
         payload.metadata = {
           ...payload.metadata,
-          scoreDocument: importedScoreDocument,
+          ...(importedScoreDocument ? { scoreDocument: importedScoreDocument } : {}),
+          ...(importedAlphaTex ? { importedAlphaTex } : {}),
         }
       }
       const project = await projectService.create(payload)
@@ -791,7 +800,7 @@ export function NewPackDialog({
       setSubmitting(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, aiPrompt, importedScoreDocument, onSubmitDraft, onClose, navigate, upsertProject])
+  }, [draft, aiPrompt, importedScoreDocument, importedAlphaTex, onSubmitDraft, onClose, navigate, upsertProject])
 
   const handleCreate = useCallback(async () => {
     if (isImportMode) {
@@ -804,7 +813,15 @@ export function NewPackDialog({
           onClose()
           return
         }
-        const project = await projectService.create(buildNewPackProjectPayload(draft))
+        const payload = buildNewPackProjectPayload(draft)
+        if (importedScoreDocument || importedAlphaTex) {
+          payload.metadata = {
+            ...payload.metadata,
+            ...(importedScoreDocument ? { scoreDocument: importedScoreDocument } : {}),
+            ...(importedAlphaTex ? { importedAlphaTex } : {}),
+          }
+        }
+        const project = await projectService.create(payload)
         upsertProject(project)
         onClose()
         navigate(`/pack/${project.id}`)

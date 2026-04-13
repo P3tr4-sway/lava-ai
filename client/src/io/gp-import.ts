@@ -34,10 +34,11 @@ async function getAlphaTab() {
  * alphaTex via AlphaTexExporter.exportToString(), and finally parses that
  * string into our ScoreNode.
  *
- * Returns the parsed ScoreNode on success.
- * Throws a descriptive Error on failure (unsupported format, corrupt file, etc.).
+ * Returns the parsed ScoreNode and the raw alphaTex string from the exporter
+ * on success. Throws a descriptive Error on failure (unsupported format,
+ * corrupt file, etc.).
  */
-export async function importGpFile(file: File): Promise<ScoreNode> {
+export async function importGpFile(file: File): Promise<{ scoreNode: ScoreNode; texString: string }> {
   const supported = /\.(gp|gp4|gp5|gpx|gp7)$/i.test(file.name)
   if (!supported) {
     throw new Error(
@@ -85,5 +86,5 @@ export async function importGpFile(file: File): Promise<ScoreNode> {
     )
   }
 
-  return scoreNode
+  return { scoreNode, texString }
 }

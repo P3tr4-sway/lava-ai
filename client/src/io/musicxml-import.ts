@@ -14,10 +14,12 @@ import { parseMusicXmlToScoreDocument } from '@/lib/scoreDocument'
  * - `.musicxml` / `.xml`: read as plain text
  * - `.mxl`: decompress as ZIP, extract the first `.xml` entry
  *
- * Returns the parsed ScoreDocument.
+ * Returns the parsed ScoreDocument and the raw XML string.
  * Throws a descriptive Error on failure.
  */
-export async function importMusicXmlFile(file: File): Promise<ScoreDocument> {
+export async function importMusicXmlFile(
+  file: File,
+): Promise<{ scoreDocument: ScoreDocument; xmlString: string }> {
   const name = file.name.toLowerCase()
 
   let xmlString: string
@@ -35,10 +37,25 @@ export async function importMusicXmlFile(file: File): Promise<ScoreDocument> {
   }
 
   try {
-    return parseMusicXmlToScoreDocument(xmlString)
+    const scoreDocument = parseMusicXmlToScoreDocument(xmlString)
+    return { scoreDocument, xmlString }
   } catch (err) {
     throw new Error(
       `[lava] importMusicXmlFile: failed to parse "${file.name}" — ${(err as Error).message ?? String(err)}`,
+    )
+  }
+}
+
+export async function convertMusicXmlToAlphaTex(xmlString: string): Promise<string> {
+  const bytes = new TextEncoder().encode(xmlString)
+  try {
+    const { importer, exporter } = await import('@coderline/alphatab')
+    const score = importer.ScoreLoader.loadScoreFromBytes(bytes)
+    const alphaTexExporter = new exporter.AlphaTexExporter()
+    return alphaTexExporter.exportToString(score)
+  } catch (err) {
+    throw new Error(
+      `[lava] convertMusicXmlToAlphaTex: failed to convert MusicXML to alphaTex — ${(err as Error).message ?? String(err)}`,
     )
   }
 }

@@ -68,10 +68,11 @@ function matchTuningId(midi: number[]): NewPackTuningId {
 export interface GpImportResult {
   draft: Partial<NewPackDraft>
   scoreNode: ScoreNode
+  texString: string
 }
 
 export async function extractDraftFromGpFile(file: File): Promise<GpImportResult> {
-  const scoreNode = await importGpFile(file)
+  const { scoreNode, texString } = await importGpFile(file)
   const draft: Partial<NewPackDraft> = {}
 
   // Name from file
@@ -101,7 +102,7 @@ export async function extractDraftFromGpFile(file: File): Promise<GpImportResult
     draft.bars = staff.bars.length
   }
 
-  return { draft, scoreNode }
+  return { draft, scoreNode, texString }
 }
 
 // ---------------------------------------------------------------------------
@@ -111,10 +112,11 @@ export async function extractDraftFromGpFile(file: File): Promise<GpImportResult
 export interface MusicXmlImportResult {
   draft: Partial<NewPackDraft>
   scoreDocument: ScoreDocument
+  xmlString: string
 }
 
 export async function extractDraftFromMusicXmlFile(file: File): Promise<MusicXmlImportResult> {
-  const scoreDocument = await importMusicXmlFile(file)
+  const { scoreDocument, xmlString } = await importMusicXmlFile(file)
   const draft: Partial<NewPackDraft> = {}
 
   // Name
@@ -151,5 +153,5 @@ export async function extractDraftFromMusicXmlFile(file: File): Promise<MusicXml
     draft.capo = track.capo
   }
 
-  return { draft, scoreDocument }
+  return { draft, scoreDocument, xmlString }
 }

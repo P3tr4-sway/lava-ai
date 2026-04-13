@@ -86,12 +86,14 @@ export function EditorPage() {
   const playbackRate = useAudioStore((s) => s.playbackRate)
   const scoreDocument = useScoreDocumentStore((s) => s.document)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const firstRenderRawTexRef = useRef<string | null>(null)
   const [projectLoadState, setProjectLoadState] = useState<ProjectLoadState>('loading')
   const [projectLoadError, setProjectLoadError] = useState<string | null>(null)
   const [reloadCount, setReloadCount] = useState(0)
   const [showReadyBar, setShowReadyBar] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [switchingVersionId, setSwitchingVersionId] = useState<string | null>(null)
+  const [importedAlphaTex, setImportedAlphaTex] = useState<string | null>(null)
 
   const { totalBars, beatsPerBar } = useMemo(() => {
     return {
@@ -288,6 +290,7 @@ export function EditorPage() {
       useLeadSheetStore.getState().reset()
       useVersionStore.getState().reset()
       useEditorStore.getState().setSaveStatus('saved')
+      setImportedAlphaTex(null)
       setProjectLoadState('ready')
       setProjectLoadError(null)
       return
@@ -321,6 +324,9 @@ export function EditorPage() {
         } else {
           useVersionStore.getState().loadFromArrangements()
         }
+
+        const importedAlphaTexValue = typeof metadata.importedAlphaTex === 'string' ? metadata.importedAlphaTex : null
+        setImportedAlphaTex(importedAlphaTexValue)
 
         useProjectStore.getState().setActiveProject(project)
         useEditorStore.getState().setSaveStatus('saved')
@@ -530,15 +536,31 @@ export function EditorPage() {
   // the bridge was initialized (avoids the no-op window where bridgeRef is null).
   useEffect(() => {
     if (!alphaTabAst || !isBridgeReady) return
+    if (firstRenderRawTexRef.current) {
+      const rawTex = firstRenderRawTexRef.current
+      firstRenderRawTexRef.current = null
+      bridgeRef.current?.getApi()?.tex(rawTex)
+      return
+    }
     renderAst(alphaTabAst)
   }, [alphaTabAst, renderAst, isBridgeReady])
 
   // Initialize an empty AST once the project is loaded, so the alphaTab canvas
-  // has something to render. Placeholder for the full MusicXML→AST converter;
-  // for now we create N empty whole-rest bars matching the project's bar count.
+  // has something to render. If the project has importedAlphaTex stored in its
+  // metadata, parse that instead of creating blank rest bars.
   useEffect(() => {
     if (projectLoadState !== 'ready') return
     if (useTabEditorStore.getState().ast) return
+
+    if (importedAlphaTex) {
+      const { score, errors } = parseAlphaTex(importedAlphaTex)
+      if (errors.length > 0) {
+        console.warn('[EditorPage] importedAlphaTex parse produced errors:', errors)
+      }
+      firstRenderRawTexRef.current = importedAlphaTex
+      useTabEditorStore.getState().setAst(score)
+      return
+    }
 
     const barCount = Math.max(1, totalBars)
     const source = `.\n${Array.from({ length: barCount }, () => ':1 r').join(' | ')}`
@@ -547,7 +569,7 @@ export function EditorPage() {
       console.warn('[EditorPage] Initial alphaTex parse produced errors:', errors)
     }
     useTabEditorStore.getState().setAst(score)
-  }, [projectLoadState, totalBars])
+  }, [projectLoadState, totalBars, importedAlphaTex])
 
   const {
     play: playerPlay,
@@ -590,7 +612,7 @@ export function EditorPage() {
     const file = event.target.files?.[0]
     if (!file) return
     try {
-      const ast = await importGpFile(file)
+      const { scoreNode: ast } = await importGpFile(file)
       useTabEditorStore.getState().setAst(ast)
       toast(`Imported: ${file.name}`, 'success')
     } catch (err) {

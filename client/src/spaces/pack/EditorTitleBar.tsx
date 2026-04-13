@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, Share2 } from 'lucide-react'
+import { ArrowLeft, Minus, Plus, Save, Share2, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { useEditorStore } from '@/stores/editorStore'
 import { Button } from '@/components/ui/Button'
@@ -14,6 +14,9 @@ interface EditorTitleBarProps {
   onSelectVersion?: (id: string) => void | Promise<void>
   versionSwitching?: boolean
   loadingVersionId?: string | null
+  settingsContent?: ReactNode
+  zoom?: number
+  onZoomChange?: (zoom: number) => void
   className?: string
 }
 
@@ -25,13 +28,18 @@ export function EditorTitleBar({
   onSelectVersion,
   versionSwitching = false,
   loadingVersionId = null,
+  settingsContent,
+  zoom = 100,
+  onZoomChange,
   className,
 }: EditorTitleBarProps) {
   const navigate = useNavigate()
   const saveStatus = useEditorStore((s) => s.saveStatus)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(packName)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const settingsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()
@@ -40,6 +48,29 @@ export function EditorTitleBar({
   useEffect(() => {
     if (!editing) setDraft(packName)
   }, [packName, editing])
+
+  useEffect(() => {
+    if (!settingsOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!settingsRef.current?.contains(event.target as Node)) {
+        setSettingsOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSettingsOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [settingsOpen])
 
   function commitName() {
     const trimmed = draft.trim()
@@ -55,7 +86,7 @@ export function EditorTitleBar({
       )}
     >
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/')}
         className="flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-2 hover:text-text-primary"
         aria-label="Go back"
       >
@@ -105,6 +136,64 @@ export function EditorTitleBar({
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {onZoomChange ? (
+          <div className="flex items-center rounded-xl border border-border bg-surface-0">
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary"
+              onClick={() => onZoomChange(Math.max(50, zoom - 10))}
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              <Minus className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              className="min-w-[68px] px-2 text-sm font-medium text-text-primary"
+              onClick={() => onZoomChange(100)}
+              aria-label={`Zoom ${zoom}%`}
+              title="Reset zoom"
+            >
+              {zoom}%
+            </button>
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary"
+              onClick={() => onZoomChange(Math.min(200, zoom + 10))}
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </div>
+        ) : null}
+
+        {settingsContent ? (
+          <div ref={settingsRef} className="relative">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSettingsOpen((current) => !current)}
+              aria-expanded={settingsOpen}
+              aria-haspopup="dialog"
+            >
+              <SlidersHorizontal className="size-3.5" />
+              Score setup
+            </Button>
+
+            {settingsOpen ? (
+              <div
+                className="absolute right-0 top-[calc(100%+10px)] z-30 w-[320px] rounded-[20px] border border-border bg-surface-0 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+                role="dialog"
+                aria-label="Score setup"
+              >
+                {settingsContent}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <VersionPicker
           onSelectVersion={onSelectVersion}
           disabled={versionSwitching}

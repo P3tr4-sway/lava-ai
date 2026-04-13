@@ -11,12 +11,12 @@ export interface NavItem {
 
 export const SIDEBAR_NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Home', icon: Home },
-  { to: '/songs', label: 'My Songs', icon: Folder },
+  { to: '/songs', label: 'Projects', icon: Folder },
   { to: '/profile', label: 'Profile', icon: User },
 ]
 
 export const MOBILE_NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Home', icon: Home },
-  { to: '/songs', label: 'Songs', icon: Folder },
+  { to: '/songs', label: 'Projects', icon: Folder },
   { to: '/profile', label: 'Profile', icon: User },
 ]

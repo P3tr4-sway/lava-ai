@@ -1,0 +1,224 @@
+/**
+ * OverlayLayer — computes SVG rect positions for cursor and selection overlays.
+ *
+ * Pure TypeScript class, no React. Delegates bounds lookups to AlphaTabBridge
+ * so the overlay geometry always tracks the live rendered score.
+ */
+
+import type { HitPosition, AlphaTabBridge, BeatBoundsRect } from './alphaTabBridge'
+import type { BarSpan } from '../editor/selection/SelectionModel'
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+export interface OverlayRect {
+  x: number
+  y: number
+  width: number
+  height: number
+  kind: 'cursor' | 'selection' | 'hover'
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Width of the cursor bar in pixels */
+const CURSOR_WIDTH = 2
+
+/** Vertical padding added above/below the beat rect for cursor/hover */
+const VERTICAL_PADDING = 4
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a BeatBoundsRect into an OverlayRect of the given kind.
+ * Expands the rect vertically by VERTICAL_PADDING for visual breathing room.
+ */
+function beatRectToOverlay(
+  rect: BeatBoundsRect,
+  kind: OverlayRect['kind'],
+): OverlayRect {
+  return {
+    x: rect.x,
+    y: rect.y - VERTICAL_PADDING,
+    width: rect.w,
+    height: rect.h + VERTICAL_PADDING * 2,
+    kind,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OverlayLayer
+// ---------------------------------------------------------------------------
+
+export class OverlayLayer {
+  constructor(private readonly bridge: AlphaTabBridge) {}
+
+  /**
+   * Compute the cursor rect for a given HitPosition.
+   * Returns a thin vertical bar at the left edge of the beat's bounds.
+   */
+  getCursorRect(pos: HitPosition): OverlayRect | null {
+    const rect = this.bridge.getBeatRect(
+      pos.trackIndex,
+      pos.barIndex,
+      pos.voiceIndex,
+      pos.beatIndex,
+    )
+    if (!rect) return null
+
+    return beatRectToOverlay(rect, 'cursor')
+  }
+
+  /**
+   * Compute selection rects for a range of positions.
+   * Returns one rect per beat, filled semi-transparently.
+   *
+   * The range is inclusive: both `from` and `to` positions are included.
+   * When `from` and `to` are in the same bar and voice, only beats between
+   * their indices (inclusive) are included. Cross-bar ranges return one rect
+   * per beat that can be resolved from the bridge.
+   */
+  getSelectionRects(from: HitPosition, to: HitPosition): OverlayRect[] {
+    const rects: OverlayRect[] = []
+
+    // Normalise the range so fromPos always comes first
+    const [fromPos, toPos] = this.normaliseRange(from, to)
+
+    // If same track/bar/voice, iterate beats by index
+    if (
+      fromPos.trackIndex === toPos.trackIndex &&
+      fromPos.barIndex === toPos.barIndex &&
+      fromPos.voiceIndex === toPos.voiceIndex
+    ) {
+      const lo = Math.min(fromPos.beatIndex, toPos.beatIndex)
+      const hi = Math.max(fromPos.beatIndex, toPos.beatIndex)
+      for (let beatIdx = lo; beatIdx <= hi; beatIdx++) {
+        const rect = this.bridge.getBeatRect(
+          fromPos.trackIndex,
+          fromPos.barIndex,
+          fromPos.voiceIndex,
+          beatIdx,
+        )
+        if (rect) rects.push(beatRectToOverlay(rect, 'selection'))
+      }
+      return rects
+    }
+
+    // Cross-bar range: iterate bars
+    const barLo = Math.min(fromPos.barIndex, toPos.barIndex)
+    const barHi = Math.max(fromPos.barIndex, toPos.barIndex)
+
+    for (let barIdx = barLo; barIdx <= barHi; barIdx++) {
+      // Determine beat range within this bar
+      const isFirstBar = barIdx === fromPos.barIndex
+      const isLastBar = barIdx === toPos.barIndex
+
+      // We don't know the exact beat count per bar here, so we iterate from
+      // the known start/end beat and stop when getBeatRect returns null,
+      // indicating we've exhausted beats in this bar.
+      const startBeat = isFirstBar ? fromPos.beatIndex : 0
+      // For the last bar, iterate up to toPos.beatIndex; otherwise go as far
+      // as the bridge can resolve (will stop returning rects after last beat).
+      const endBeat = isLastBar ? toPos.beatIndex : Number.MAX_SAFE_INTEGER
+
+      for (let beatIdx = startBeat; beatIdx <= endBeat; beatIdx++) {
+        const rect = this.bridge.getBeatRect(
+          fromPos.trackIndex,
+          barIdx,
+          fromPos.voiceIndex,
+          beatIdx,
+        )
+        if (!rect) break // no more beats in this bar
+        rects.push(beatRectToOverlay(rect, 'selection'))
+      }
+    }
+
+    return rects
+  }
+
+  /**
+   * Compute the note cursor rect for a given HitPosition.
+   * When `stringLineY` is available, narrows the highlight to the clicked
+   * string line. Otherwise falls back to the full beat rect.
+   */
+  getNoteRect(pos: HitPosition, stringCount: number): OverlayRect | null {
+    const beat = this.bridge.getBeatRect(
+      pos.trackIndex,
+      pos.barIndex,
+      pos.voiceIndex,
+      pos.beatIndex,
+    )
+    if (!beat) return null
+
+    if (!pos.stringLineY) return beatRectToOverlay(beat, 'cursor')
+
+    // Per-string height ≈ beat.h / (stringCount - 1). Cap at readable minimum.
+    const perString = Math.max(beat.h / Math.max(1, stringCount - 1), 6)
+    return {
+      x: beat.x,
+      y: pos.stringLineY - perString / 2,
+      width: beat.w,
+      height: perString,
+      kind: 'cursor',
+    }
+  }
+
+  /**
+   * Compute selection rects for a bar range (inclusive).
+   * Returns one rect per bar, using the tab staff bounds.
+   */
+  getBarRects(from: BarSpan, to: BarSpan): OverlayRect[] {
+    const barLo = Math.min(from.barIndex, to.barIndex)
+    const barHi = Math.max(from.barIndex, to.barIndex)
+    const trackIndex = from.trackIndex
+    const rects: OverlayRect[] = []
+
+    for (let barIdx = barLo; barIdx <= barHi; barIdx++) {
+      const rect = this.bridge.getBarRect(trackIndex, barIdx)
+      if (rect) {
+        rects.push({ x: rect.x, y: rect.y, width: rect.w, height: rect.h, kind: 'selection' })
+      }
+    }
+
+    return rects
+  }
+
+  /**
+   * Compute hover highlight rect for a given HitPosition.
+   */
+  getHoverRect(pos: HitPosition): OverlayRect | null {
+    const rect = this.bridge.getBeatRect(
+      pos.trackIndex,
+      pos.barIndex,
+      pos.voiceIndex,
+      pos.beatIndex,
+    )
+    if (!rect) return null
+    return beatRectToOverlay(rect, 'hover')
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Normalise two positions so the first is always earlier in the score.
+   * Compares bar → voice → beat index in order.
+   */
+  private normaliseRange(
+    a: HitPosition,
+    b: HitPosition,
+  ): [HitPosition, HitPosition] {
+    if (a.barIndex < b.barIndex) return [a, b]
+    if (a.barIndex > b.barIndex) return [b, a]
+    if (a.voiceIndex < b.voiceIndex) return [a, b]
+    if (a.voiceIndex > b.voiceIndex) return [b, a]
+    if (a.beatIndex <= b.beatIndex) return [a, b]
+    return [b, a]
+  }
+}

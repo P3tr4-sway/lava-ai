@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import type { RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
+import { SharePage } from '@/spaces/share/SharePage'
 import { LoginPage } from '@/spaces/auth/LoginPage'
 import { SignupPage } from '@/spaces/auth/SignupPage'
 import { HomePage } from '@/spaces/home/HomePage'
@@ -10,8 +11,10 @@ import { ProfilePage } from '@/spaces/profile/ProfilePage'
 import { PricingPage } from '@/spaces/pricing/PricingPage'
 
 const routes: RouteObject[] = [
+  { path: '/s/:id', element: <SharePage /> },
   { path: '/login', element: <LoginPage /> },
   { path: '/signup', element: <SignupPage /> },
+  { path: '/pack/new', element: <EditorPage /> },
   { path: '/pack/:id', element: <EditorPage /> },
   {
     element: <AppShell />,

@@ -40,4 +40,19 @@ describe('newPack helpers', () => {
     expect(payload.metadata.sections).toHaveLength(1)
     expect(payload.metadata.scoreDocument.measures).toHaveLength(8)
   })
+
+  it('supports alternate guitar tunings added for score generation setup', () => {
+    const document = createConfiguredScoreDocument({
+      name: 'Open G Sketch',
+      bars: 8,
+      tempo: 88,
+      timeSignature: '4/4',
+      key: 'D',
+      layout: 'tab',
+      tuning: 'open-g',
+      capo: 0,
+    })
+
+    expect(document.tracks[0]?.tuning).toEqual([62, 59, 55, 50, 43, 38])
+  })
 })

@@ -22,8 +22,10 @@ export interface HoverState {
   hit: HitPosition
   /** Center X of the beat column in alphaTab coordinate space */
   beatCenterX: number
-  /** Raw mouse Y — already encodes the correct string line position */
+  /** Raw mouse Y */
   mouseY: number
+  /** Y coordinate of the resolved string line — use this to snap hover glyph */
+  stringLineY: number
 }
 
 // ---------------------------------------------------------------------------
@@ -35,16 +37,21 @@ export function useTabEditorPlacement(
   containerRef: React.RefObject<HTMLElement | null>,
   stringCount: number,
   onBeatClick: (hit: HitPosition) => void,
+  onBarDblClick?: (hit: HitPosition, shiftKey: boolean) => void,
 ): {
   handleMouseMove: (e: React.MouseEvent) => void
   handleMouseLeave: () => void
   handleClick: (e: React.MouseEvent) => void
+  handleDblClick: (e: React.MouseEvent) => void
   hoverState: HoverState | null
+  /** Synchronous ref — always up-to-date, no React re-render needed. */
+  hoverRef: React.RefObject<HoverState | null>
 } {
   const [hoverState, setHoverState] = useState<HoverState | null>(null)
 
-  // Keep latest hover hit in a ref so handleClick can read it synchronously.
-  const lastHitRef = useRef<HoverState | null>(null)
+  // Keep latest hover hit in a ref so handleClick and keydown handlers can
+  // read it synchronously without waiting for a React re-render.
+  const hoverRef = useRef<HoverState | null>(null)
 
   const resolve = useCallback(
     (e: React.MouseEvent): HoverState | null => {
@@ -75,6 +82,7 @@ export function useTabEditorPlacement(
         hit,
         beatCenterX: beatRect ? beatRect.x + beatRect.w / 2 : x,
         mouseY: y,
+        stringLineY: hit.stringLineY,
       }
     },
     [bridgeRef, containerRef, stringCount],
@@ -83,14 +91,14 @@ export function useTabEditorPlacement(
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       const state = resolve(e)
-      lastHitRef.current = state
+      hoverRef.current = state
       setHoverState(state)
     },
     [resolve],
   )
 
   const handleMouseLeave = useCallback(() => {
-    lastHitRef.current = null
+    hoverRef.current = null
     setHoverState(null)
   }, [])
 
@@ -98,12 +106,21 @@ export function useTabEditorPlacement(
     (e: React.MouseEvent) => {
       // Re-resolve on click to get the freshest position (in case the user
       // clicked without first moving, e.g. a programmatic click).
-      const state = resolve(e) ?? lastHitRef.current
+      const state = resolve(e) ?? hoverRef.current
       if (!state) return
       onBeatClick(state.hit)
     },
     [resolve, onBeatClick],
   )
 
-  return { handleMouseMove, handleMouseLeave, handleClick, hoverState }
+  const handleDblClick = useCallback(
+    (e: React.MouseEvent) => {
+      const state = resolve(e) ?? hoverRef.current
+      if (!state) return
+      onBarDblClick?.(state.hit, e.shiftKey)
+    },
+    [resolve, onBarDblClick],
+  )
+
+  return { handleMouseMove, handleMouseLeave, handleClick, handleDblClick, hoverState, hoverRef }
 }

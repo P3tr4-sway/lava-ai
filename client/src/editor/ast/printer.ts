@@ -248,8 +248,17 @@ function printBeat(beat: BeatNode, prevDuration: DurationNode): [string, Duratio
 // VoiceNode
 // ---------------------------------------------------------------------------
 
-function printVoice(voice: VoiceNode): string {
-  let prevDuration: DurationNode = { value: 4, dots: 0 }
+/**
+ * Print a voice's beats. `initialPrevDuration` must reflect AlphaTex's sticky
+ * duration at the start of this bar (i.e. the final duration from the previous
+ * bar) so we emit `:N` prefixes only when the duration actually changes.
+ * Returns the final duration so `printStaff` can thread it to the next bar.
+ */
+function printVoice(
+  voice: VoiceNode,
+  initialPrevDuration: DurationNode = { value: 4, dots: 0 },
+): [string, DurationNode] {
+  let prevDuration: DurationNode = initialPrevDuration
   const beatStrs: string[] = []
 
   for (const beat of voice.beats) {
@@ -258,7 +267,7 @@ function printVoice(voice: VoiceNode): string {
     prevDuration = { value: newDur.value, dots: 0 } // dots don't carry over
   }
 
-  return beatStrs.join(' ')
+  return [beatStrs.join(' '), prevDuration]
 }
 
 // ---------------------------------------------------------------------------
@@ -307,13 +316,16 @@ function printBarMeta(bar: BarNode): string {
   return parts.length > 0 ? parts.join(' ') + ' ' : ''
 }
 
-function printBar(bar: BarNode): string {
+function printBar(
+  bar: BarNode,
+  prevDuration: DurationNode = { value: 4, dots: 0 },
+): [string, DurationNode] {
   const meta = printBarMeta(bar)
 
   // Single voice (common case)
-  if (bar.voices.length === 0) return meta
+  if (bar.voices.length === 0) return [meta, prevDuration]
 
-  const voiceStr = printVoice(bar.voices[0])
+  const [voiceStr, endDuration] = printVoice(bar.voices[0], prevDuration)
   let result = meta + voiceStr
 
   // Repeat close (appended to bar content, before |)
@@ -322,15 +334,27 @@ function printBar(bar: BarNode): string {
     result += ` \\rc ${count}`
   }
 
-  return result
+  return [result, endDuration]
 }
 
 // ---------------------------------------------------------------------------
 // StaffNode
 // ---------------------------------------------------------------------------
 
+/**
+ * Print all bars, threading the AlphaTex sticky duration across bar separators
+ * so each bar emits `:N` only when the duration actually changes from the
+ * previous bar's final beat. Without this, an unedited bar after an edited one
+ * would inherit the wrong duration (e.g. an eighth-rest bar becoming half-length).
+ */
 function printStaff(staff: StaffNode): string {
-  const barStrs = staff.bars.map(bar => printBar(bar))
+  const barStrs: string[] = []
+  let prevDuration: DurationNode = { value: 4, dots: 0 }
+  for (const bar of staff.bars) {
+    const [barStr, endDuration] = printBar(bar, prevDuration)
+    barStrs.push(barStr)
+    prevDuration = endDuration
+  }
   return barStrs.join(' | ')
 }
 
@@ -341,10 +365,11 @@ function printStaff(staff: StaffNode): string {
 function printTrackMeta(track: TrackNode): string {
   const lines: string[] = []
 
-  // Tuning
+  // Tuning — must be wrapped in parentheses to avoid alphaTab parsing
+  // subsequent tokens (like rests `r`) as extra tuning values (AT301 warning).
   if (track.tuning.length > 0) {
     const noteNames = track.tuning.map(midiToNoteName).join(' ')
-    lines.push(`\\tuning ${noteNames}`)
+    lines.push(`\\tuning (${noteNames})`)
   }
 
   // Capo

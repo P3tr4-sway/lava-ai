@@ -12,17 +12,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
 import {
   ChevronDown,
-  Download,
   FileJson,
-  Keyboard,
   Music,
   Play,
   Printer,
-  Settings,
   SkipBack,
   Square,
   UploadCloud,
-  HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Button } from '@/components/ui/Button'
@@ -278,13 +274,14 @@ interface TabEditorToolbarProps {
   bridgeRef?: React.RefObject<AlphaTabBridge | null>
   onOpenFile?: () => void
   isInsertMode?: boolean
+  applyRestBeat?: () => void
 }
 
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMode }: TabEditorToolbarProps) {
+export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMode, applyRestBeat }: TabEditorToolbarProps) {
   const applyCommand = useTabEditorStore((s) => s.applyCommand)
   const currentDuration = useTabEditorStore((s) => s.currentDuration)
   const setDuration = useTabEditorStore((s) => s.setDuration)
@@ -295,7 +292,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [panelAnchor, setPanelAnchor] = useState<{ left: number } | null>(null)
-  const [trackDialogOpen, setTrackDialogOpen] = useState(false)
   const [tempoValue, setTempoValue] = useState(120)
 
   const shortcuts = useKeyboardShortcutsPanel()
@@ -350,8 +346,16 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
 
   // Duration picker
   const applyDuration = (value: Duration) => {
+    // Update the store's currentDuration first — applyRestBeat reads it from the store.
+    setDuration({ value, dots: currentDuration.dots })
     if (beatLoc && ids) {
-      // Bar capacity guard — only apply if new duration fits within the beat's room
+      // If the selected beat is a rest, delegate to applyRestBeat so the duration
+      // change and bar auto-fill happen atomically (same path as keyboard).
+      if (ids.beat.rest && applyRestBeat) {
+        applyRestBeat()
+        return
+      }
+      // Non-rest beat: bar capacity guard + SetDuration only.
       const voice = ids.bar.voices[ids.cursor.voiceIndex]
       if (voice && ast) {
         const timeSig = getEffectiveTimeSig(ast, ids.cursor.trackIndex, ids.barIndex)
@@ -359,14 +363,10 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
         const oldBeatUnits = durationToUnits(ids.beat.duration)
         const totalUsed = voice.beats.reduce((sum, b) => sum + durationToUnits(b.duration), 0)
         const room = capacity - (totalUsed - oldBeatUnits)
-        if (durationToUnits({ value, dots: currentDuration.dots }) > room) {
-          setDuration({ value, dots: currentDuration.dots })
-          return
-        }
+        if (durationToUnits({ value, dots: currentDuration.dots }) > room) return
       }
       applyCommand(new SetDuration(beatLoc, { value, dots: currentDuration.dots }, ids.beat.duration))
     }
-    setDuration({ value, dots: currentDuration.dots })
   }
 
   const toggleDot = () => {
@@ -529,15 +529,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     <>
       <KeyboardShortcutsPanel open={shortcuts.open} onClose={shortcuts.onClose} />
 
-      {/* Track panel dialog */}
-      {trackDialogOpen && ast && (
-        <TrackDialog
-          ast={ast}
-          onClose={() => setTrackDialogOpen(false)}
-          applyCommand={applyCommand}
-        />
-      )}
-
       <div
         ref={toolbarRef}
         id="tab-toolbar-panels"
@@ -583,8 +574,8 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
               <ToolbarBtn
                 active={ids?.beat?.rest === true}
                 onClick={() => {
-                  if (beatLoc && ids) {
-                    applyCommand(new SetRest(beatLoc, !ids.beat.rest, ids.beat.rest ?? false))
+                  if (ids) {
+                    applyRestBeat?.()
                   }
                 }}
                 title="Toggle rest"
@@ -820,7 +811,7 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
 
         {/* Main pill */}
         <div className="pointer-events-auto rounded-[18px] border border-border bg-surface-0 p-2 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-wrap items-center gap-0.5">
+          <div className="flex items-center gap-1">
             {/* Input mode indicator */}
             {isInsertMode && (
               <div className="flex h-8 items-center gap-1.5 rounded-lg bg-[rgba(255,138,0,0.15)] px-2.5">
@@ -829,48 +820,56 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
               </div>
             )}
 
-            {/* Playback */}
-            <ToolbarBtn onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))} title="Play / Pause">
+            {/* Playback — flat icon buttons, no border */}
+            <button type="button" title="Play / Pause" onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary">
               <Play className="size-4" />
-            </ToolbarBtn>
-            <ToolbarBtn onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-stop'))} title="Stop">
+            </button>
+            <button type="button" title="Stop" onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-stop'))} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary">
               <Square className="size-4" />
-            </ToolbarBtn>
-            <ToolbarBtn onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-rewind'))} title="Back to beginning">
+            </button>
+            <button type="button" title="Back to beginning" onClick={() => window.dispatchEvent(new CustomEvent('lava-tab-rewind'))} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-1 hover:text-text-primary">
               <SkipBack className="size-4" />
-            </ToolbarBtn>
+            </button>
 
             <GroupSep />
 
             {/* Duration group */}
-            <div className="flex flex-col items-center gap-0.5">
-              <GroupLabel>Duration</GroupLabel>
-              <div className="flex gap-0.5">
-                {DURATION_OPTIONS.map(({ value, label, shortcut }) => (
-                  <ToolbarBtn
-                    key={value}
-                    active={currentDuration.value === value}
-                    onClick={() => applyDuration(value)}
-                    title={shortcut}
-                  >
-                    {label}
-                  </ToolbarBtn>
-                ))}
+            <div className="flex gap-0.5">
+              {DURATION_OPTIONS.map(({ value, label, shortcut }) => (
                 <ToolbarBtn
-                  active={currentDuration.dots > 0}
-                  onClick={toggleDot}
-                  title="Dot"
+                  key={value}
+                  active={currentDuration.value === value}
+                  onClick={() => applyDuration(value)}
+                  title={shortcut}
                 >
-                  .
+                  {label}
                 </ToolbarBtn>
-                <ToolbarBtn
-                  active={ids?.beat?.duration?.tuplet?.numerator === 3}
-                  onClick={toggleTriplet}
-                  title="Triplet"
-                >
-                  3
-                </ToolbarBtn>
-              </div>
+              ))}
+              <ToolbarBtn
+                active={currentDuration.dots > 0}
+                onClick={toggleDot}
+                title="Dot"
+              >
+                .
+              </ToolbarBtn>
+              <ToolbarBtn
+                active={ids?.beat?.duration?.tuplet?.numerator === 3}
+                onClick={toggleTriplet}
+                title="Triplet"
+              >
+                3
+              </ToolbarBtn>
+              <ToolbarBtn
+                active={ids?.beat?.rest === true}
+                onClick={() => {
+                  if (ids) {
+                    applyRestBeat?.()
+                  }
+                }}
+                title="Rest (-)"
+              >
+                −
+              </ToolbarBtn>
             </div>
 
             <GroupSep />
@@ -904,51 +903,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
               Dynamics
               <ChevronDown className={cn('size-3 transition-transform', openPanel === 'dynamics' && 'rotate-180')} />
             </button>
-
-            <GroupSep />
-
-            {/* Bar ops */}
-            <button
-              type="button"
-              onClick={(e) => openPanelAt('bar', e.currentTarget)}
-              className={cn(
-                'inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors',
-                openPanel === 'bar'
-                  ? 'border-accent bg-surface-1 text-text-primary'
-                  : 'border-border text-text-secondary hover:border-border-hover hover:bg-surface-1 hover:text-text-primary',
-              )}
-            >
-              Bar
-              <ChevronDown className={cn('size-3 transition-transform', openPanel === 'bar' && 'rotate-180')} />
-            </button>
-
-            {/* Track panel */}
-            <ToolbarBtn onClick={() => setTrackDialogOpen(true)} title="Track settings">
-              <Settings className="size-4" />
-            </ToolbarBtn>
-
-            <GroupSep />
-
-            {/* Export */}
-            <button
-              type="button"
-              onClick={(e) => openPanelAt('export', e.currentTarget)}
-              className={cn(
-                'inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors',
-                openPanel === 'export'
-                  ? 'border-accent bg-surface-1 text-text-primary'
-                  : 'border-border text-text-secondary hover:border-border-hover hover:bg-surface-1 hover:text-text-primary',
-              )}
-            >
-              <Download className="size-3.5" />
-              Save
-              <ChevronDown className={cn('size-3 transition-transform', openPanel === 'export' && 'rotate-180')} />
-            </button>
-
-            {/* Keyboard shortcuts */}
-            <ToolbarBtn onClick={shortcuts.onOpen} title="Keyboard shortcuts (?)">
-              <HelpCircle className="size-4" />
-            </ToolbarBtn>
           </div>
         </div>
       </div>
@@ -962,24 +916,26 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
 
 interface TrackDialogProps {
   ast: ReturnType<typeof useTabEditorStore.getState>['ast']
+  activeTrackIndex: number
   onClose: () => void
   applyCommand: ReturnType<typeof useTabEditorStore.getState>['applyCommand']
 }
 
-function TrackDialog({ ast, onClose, applyCommand }: TrackDialogProps) {
-  if (!ast) return null
+function TrackDialog({ ast, activeTrackIndex, onClose, applyCommand }: TrackDialogProps) {
+  const track = ast?.tracks[activeTrackIndex] ?? ast?.tracks[0]
 
-  const track = ast.tracks[0]
-  if (!track) return null
+  const [newName, setNewName] = useState(track?.name ?? '')
+  const [capo, setCapo] = useState(track?.capo ?? 0)
+  const [instrument, setInstrument] = useState(track?.instrument ?? 0)
 
-  const [newName, setNewName] = useState(track.name)
-  const [capo, setCapo] = useState(track.capo)
-  const [instrument, setInstrument] = useState(track.instrument)
-
-  const matchedTuning = STANDARD_TUNINGS.find(
-    (t) => t.midi.length === track.tuning.length && t.midi.every((v, i) => v === track.tuning[i]),
-  )
+  const matchedTuning = track
+    ? STANDARD_TUNINGS.find(
+        (t) => t.midi.length === track.tuning.length && t.midi.every((v, i) => v === track.tuning[i]),
+      )
+    : undefined
   const [selectedTuning, setSelectedTuning] = useState(matchedTuning?.label ?? 'Standard E')
+
+  if (!ast || !track) return null
 
   const applyAll = () => {
     if (newName !== track.name) {

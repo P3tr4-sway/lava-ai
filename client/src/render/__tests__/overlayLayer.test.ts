@@ -1,13 +1,14 @@
 /**
  * OverlayLayer unit tests.
  *
- * AlphaTabBridge.getBeatRect() is mocked so these tests are pure TS with no
- * alphaTab dependency at runtime.
+ * AlphaTabBridge.getBeatRect() and getBarRect() are mocked so these tests are
+ * pure TS with no alphaTab dependency at runtime.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { OverlayLayer } from '../overlayLayer'
 import type { AlphaTabBridge, BeatBoundsRect, HitPosition } from '../alphaTabBridge'
+import type { BarSpan } from '../../editor/selection/SelectionModel'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,6 +21,7 @@ function makePos(overrides?: Partial<HitPosition>): HitPosition {
     voiceIndex: 0,
     beatIndex: 0,
     stringIndex: 1,
+    stringLineY: 0,
     ...overrides,
   }
 }
@@ -28,8 +30,11 @@ function makeRect(overrides?: Partial<BeatBoundsRect>): BeatBoundsRect {
   return { x: 10, y: 20, w: 40, h: 30, ...overrides }
 }
 
-function makeBridge(getBeatRect: (t: number, b: number, v: number, beat: number) => BeatBoundsRect | null): AlphaTabBridge {
-  return { getBeatRect } as unknown as AlphaTabBridge
+function makeBridge(
+  getBeatRect: (t: number, b: number, v: number, beat: number) => BeatBoundsRect | null,
+  getBarRect?: (t: number, b: number) => BeatBoundsRect | null,
+): AlphaTabBridge {
+  return { getBeatRect, getBarRect: getBarRect ?? (() => null) } as unknown as AlphaTabBridge
 }
 
 // ---------------------------------------------------------------------------
@@ -43,7 +48,7 @@ describe('OverlayLayer.getCursorRect', () => {
     expect(layer.getCursorRect(makePos())).toBeNull()
   })
 
-  it('returns a thin vertical bar at the left edge of the beat bounds', () => {
+  it('returns a full-column highlight for the beat bounds', () => {
     const beatRect = makeRect({ x: 50, y: 100, w: 60, h: 30 })
     const bridge = makeBridge(() => beatRect)
     const layer = new OverlayLayer(bridge)
@@ -54,8 +59,8 @@ describe('OverlayLayer.getCursorRect', () => {
     expect(result!.kind).toBe('cursor')
     // x aligns with left edge of beat
     expect(result!.x).toBe(beatRect.x)
-    // cursor is narrow (2px)
-    expect(result!.width).toBe(2)
+    // width spans the full beat column
+    expect(result!.width).toBe(beatRect.w)
     // height should be at least the beat height (expanded by vertical padding)
     expect(result!.height).toBeGreaterThanOrEqual(beatRect.h)
     // top should be at or above the beat rect top
@@ -179,5 +184,107 @@ describe('OverlayLayer.getHoverRect', () => {
     expect(result!.x).toBe(beatRect.x)
     expect(result!.width).toBe(beatRect.w)
     expect(result!.height).toBeGreaterThanOrEqual(beatRect.h)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getNoteRect
+// ---------------------------------------------------------------------------
+
+describe('OverlayLayer.getNoteRect', () => {
+  it('returns null when bridge has no beat rect', () => {
+    const bridge = makeBridge(() => null)
+    const layer = new OverlayLayer(bridge)
+    expect(layer.getNoteRect(makePos(), 6)).toBeNull()
+  })
+
+  it('falls back to full beat rect when stringLineY is 0', () => {
+    const beatRect = makeRect({ x: 10, y: 50, w: 40, h: 60 })
+    const bridge = makeBridge(() => beatRect)
+    const layer = new OverlayLayer(bridge)
+
+    const result = layer.getNoteRect(makePos({ stringLineY: 0 }), 6)
+
+    expect(result).not.toBeNull()
+    expect(result!.kind).toBe('cursor')
+    expect(result!.width).toBe(beatRect.w)
+    // Full beat height (+ padding) when no stringLineY
+    expect(result!.height).toBeGreaterThanOrEqual(beatRect.h)
+  })
+
+  it('narrows highlight to the clicked string when stringLineY is given', () => {
+    const beatRect = makeRect({ x: 10, y: 50, w: 40, h: 60 })
+    const bridge = makeBridge(() => beatRect)
+    const layer = new OverlayLayer(bridge)
+
+    // 6 strings, each ~12px apart. Top string line is at y=55.
+    const stringLineY = 55
+    const result = layer.getNoteRect(makePos({ stringLineY }), 6)
+
+    expect(result).not.toBeNull()
+    expect(result!.kind).toBe('cursor')
+    expect(result!.width).toBe(beatRect.w)
+    // Should be much shorter than the full beat height
+    expect(result!.height).toBeLessThan(beatRect.h)
+    // Should be centred on stringLineY
+    const center = result!.y + result!.height / 2
+    expect(center).toBeCloseTo(stringLineY, 0)
+  })
+
+  it('returns minimum height of 6px even for dense string spacing', () => {
+    // beat.h = 5 and 10 strings → per-string would be ~0.5 — should clamp to 6
+    const beatRect = makeRect({ x: 0, y: 0, w: 30, h: 5 })
+    const bridge = makeBridge(() => beatRect)
+    const layer = new OverlayLayer(bridge)
+
+    const result = layer.getNoteRect(makePos({ stringLineY: 3 }), 10)
+
+    expect(result).not.toBeNull()
+    expect(result!.height).toBeGreaterThanOrEqual(6)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getBarRects
+// ---------------------------------------------------------------------------
+
+describe('OverlayLayer.getBarRects', () => {
+  it('returns empty array when bridge returns null for all bars', () => {
+    const bridge = makeBridge(() => null, () => null)
+    const layer = new OverlayLayer(bridge)
+    const from: BarSpan = { trackIndex: 0, barIndex: 0 }
+    const to: BarSpan = { trackIndex: 0, barIndex: 2 }
+    expect(layer.getBarRects(from, to)).toHaveLength(0)
+  })
+
+  it('returns one rect per bar (inclusive)', () => {
+    const getBarRect = vi.fn((_t: number, barIdx: number) =>
+      makeRect({ x: barIdx * 200, y: 10, w: 180, h: 80 }),
+    )
+    const bridge = makeBridge(() => null, getBarRect)
+    const layer = new OverlayLayer(bridge)
+
+    const from: BarSpan = { trackIndex: 0, barIndex: 2 }
+    const to: BarSpan = { trackIndex: 0, barIndex: 4 }
+
+    const rects = layer.getBarRects(from, to)
+
+    expect(rects).toHaveLength(3) // bars 2, 3, 4
+    rects.forEach((r) => expect(r.kind).toBe('selection'))
+    expect(getBarRect).toHaveBeenCalledWith(0, 2)
+    expect(getBarRect).toHaveBeenCalledWith(0, 3)
+    expect(getBarRect).toHaveBeenCalledWith(0, 4)
+  })
+
+  it('normalises reversed from/to (to before from)', () => {
+    const getBarRect = vi.fn(() => makeRect())
+    const bridge = makeBridge(() => null, getBarRect)
+    const layer = new OverlayLayer(bridge)
+
+    const from: BarSpan = { trackIndex: 0, barIndex: 5 }
+    const to: BarSpan = { trackIndex: 0, barIndex: 3 }
+
+    const rects = layer.getBarRects(from, to)
+    expect(rects).toHaveLength(3) // bars 3, 4, 5
   })
 })

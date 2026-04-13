@@ -80,15 +80,12 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Derive a 1-indexed string number from a y-coordinate within a staff bounds.
+ * Derive a 1-indexed string number from a y-coordinate within a tab staff bounds.
  *
- * The tab staff divides its height evenly among `stringCount` strings.
- * String 1 is the lowest (thickest) string, displayed at the bottom of the
- * tab staff — but alphaTab renders string 1 at the TOP line of the tab staff
- * (highest position), so string order is inverted relative to visual top→bottom.
+ * In alphaTab's tab rendering: string 1 = thinnest (high e) = TOP line.
+ * String 6 (or stringCount) = thickest (low E) = BOTTOM line.
  *
- * We follow the same convention as TabCanvas.tsx:
- *   string 1 = top line of tab staff (lowest pitch string displayed first)
+ * ratio=0 (top) → string 1, ratio=1 (bottom) → stringCount.
  */
 function deriveStringIndex(
   staffBounds: AlphaBoundsLike,
@@ -97,7 +94,6 @@ function deriveStringIndex(
 ): number {
   if (stringCount <= 1) return 1
   const ratio = clamp((y - staffBounds.y) / Math.max(staffBounds.h, 1), 0, 1)
-  // Top of staff = string index 1 (lowest string in alphaTab tab notation)
   return clamp(Math.round(ratio * (stringCount - 1)) + 1, 1, stringCount)
 }
 
@@ -226,6 +222,7 @@ export function hitTest(
   const masterBarBounds = lookup.findMasterBarByIndex(barIndex)
   let stringIndex = 1
 
+  let stringLineY = y
   if (masterBarBounds && masterBarBounds.bars.length > 0) {
     // Use the last bar (tab staff) matching TabCanvas convention
     const tabBarBounds =
@@ -233,6 +230,10 @@ export function hitTest(
     if (tabBarBounds) {
       const staffBounds = preferredBounds(tabBarBounds)
       stringIndex = deriveStringIndex(staffBounds, y, stringCount)
+      // Compute exact Y of the resolved string line (matches deriveStringIndex)
+      // string 1 → top (ratio=0), string N → bottom (ratio=1)
+      const lineRatio = stringCount > 1 ? (stringIndex - 1) / (stringCount - 1) : 0
+      stringLineY = staffBounds.y + lineRatio * staffBounds.h
     }
   }
 
@@ -242,5 +243,6 @@ export function hitTest(
     voiceIndex: beat.voice.index,
     beatIndex: beat.index,
     stringIndex,
+    stringLineY,
   }
 }

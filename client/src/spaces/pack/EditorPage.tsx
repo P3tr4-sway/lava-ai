@@ -485,39 +485,53 @@ export function EditorPage() {
   // Stable ref so beat-click can call the hook's handler at any time
   const alphaTabInputRef = useRef<ReturnType<typeof useTabEditorInput> | null>(null)
 
-  const alphaTabInput = useTabEditorInput({
-    onUndo: () => useTabEditorStore.getState().undo(),
-    onRedo: () => useTabEditorStore.getState().redo(),
-    onPlay: () => {
-      window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))
-    },
+  const { bridgeRef, renderAst, isBridgeReady, setContainer: setAlphaTabContainer, containerRef: alphaTabContainerRef } = useAlphaTabBridge({
+    // beatMouseDown from alphaTab doesn't carry mouse Y — it can't resolve the
+    // string index and always defaults to 1.  Click handling is done entirely
+    // by useTabEditorPlacement's handleClick below, so we ignore this event.
+    onBeatClick: () => {},
+    // onReady must NOT call renderAst — doing so inside the renderFinished
+    // callback creates a synchronous re-entrant api.tex() → renderFinished loop
+    // (useWorkers:false makes tex() synchronous).  Instead, isBridgeReady is
+    // added to the rendering useEffect deps below so it re-fires when the
+    // bridge becomes available.
+    onReady: () => {},
   })
 
-  // Keep alphaTabInputRef current after every render
-  alphaTabInputRef.current = alphaTabInput
-
-  const { bridgeRef, renderAst, setContainer: setAlphaTabContainer, containerRef: alphaTabContainerRef } = useAlphaTabBridge({
-    onBeatClick: (hit) => {
-      alphaTabInputRef.current?.handleBeatClick(hit)
-    },
-    onReady: () => {
-      const ast = useTabEditorStore.getState().ast
-      if (ast) renderAst(ast)
-    },
-  })
-
-  const { handleMouseMove: handleScoreMouseMove, handleMouseLeave: handleScoreMouseLeave, hoverState } = useTabEditorPlacement(
+  // useTabEditorPlacement must come before useTabEditorInput so that hoverRef
+  // can be passed as hoverStateRef — enabling hover-mode digit entry.
+  const {
+    handleMouseMove: handleScoreMouseMove,
+    handleMouseLeave: handleScoreMouseLeave,
+    handleClick: handleScoreClick,
+    hoverState,
+    hoverRef: hoverStateRef,
+  } = useTabEditorPlacement(
     bridgeRef as React.RefObject<AlphaTabBridge | null>,
     alphaTabContainerRef as React.RefObject<HTMLElement | null>,
     stringCount,
     (hit) => { alphaTabInputRef.current?.handleBeatClick(hit) },
   )
 
-  // Re-render alphaTex AST whenever it changes
+  const alphaTabInput = useTabEditorInput({
+    onUndo: () => useTabEditorStore.getState().undo(),
+    onRedo: () => useTabEditorStore.getState().redo(),
+    onPlay: () => {
+      window.dispatchEvent(new CustomEvent('lava-tab-play-pause'))
+    },
+    hoverStateRef,
+  })
+
+  // Keep alphaTabInputRef current after every render
+  alphaTabInputRef.current = alphaTabInput
+
+  // Re-render alphaTex AST whenever it changes OR the bridge becomes ready.
+  // isBridgeReady ensures a render fires even when alphaTabAst was set before
+  // the bridge was initialized (avoids the no-op window where bridgeRef is null).
   useEffect(() => {
-    if (!alphaTabAst) return
+    if (!alphaTabAst || !isBridgeReady) return
     renderAst(alphaTabAst)
-  }, [alphaTabAst, renderAst])
+  }, [alphaTabAst, renderAst, isBridgeReady])
 
   // Initialize an empty AST once the project is loaded, so the alphaTab canvas
   // has something to render. Placeholder for the full MusicXML→AST converter;
@@ -870,6 +884,7 @@ export function EditorPage() {
                 className="relative flex-1 overflow-auto"
                 onMouseMove={handleScoreMouseMove}
                 onMouseLeave={handleScoreMouseLeave}
+                onClick={handleScoreClick}
               >
                 {/* Play / Pause button */}
                 <div className="absolute left-3 top-3 z-10 flex gap-2">
@@ -930,6 +945,7 @@ export function EditorPage() {
               className="z-20"
               bridgeRef={bridgeRef as React.RefObject<import('@/render/alphaTabBridge').AlphaTabBridge | null>}
               onOpenFile={handleOpenGpFile}
+              applyRestBeat={alphaTabInput.applyRestBeat}
             />
 
             {isRendering || isVersionSwitching ? (

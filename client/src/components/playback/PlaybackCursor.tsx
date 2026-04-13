@@ -42,7 +42,7 @@ export function PlaybackCursor({ bridge, width, height }: PlaybackCursorProps) {
       rects={[{ ...rect, kind: 'cursor' }]}
       width={width}
       height={height}
-      cursorColor="var(--warning)"
+      isInsertMode={true}
     />
   )
 }

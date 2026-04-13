@@ -6,7 +6,7 @@
  */
 
 import type { Command, CommandContext, CommandResult, Json } from './Command'
-import type { SlideType, BendPoint, VibratoType, HarmonicType, AccentType, StrokeType } from '../ast/types'
+import type { SlideType, BendPoint, VibratoType, HarmonicType, AccentType, StrokeType, DynamicsValue } from '../ast/types'
 import { updateBeat, updateVoice } from './helpers'
 
 // ---------------------------------------------------------------------------
@@ -521,6 +521,36 @@ export class SetStroke implements Command {
 
   invert(_ctx: CommandContext): Command {
     return new SetStroke(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetDynamics (beat-level)
+// ---------------------------------------------------------------------------
+
+export class SetDynamics implements Command {
+  readonly type = 'SetDynamics'
+  readonly label = 'Set dynamics'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: DynamicsValue | undefined,
+    private readonly oldValue: DynamicsValue | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'dynamics', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetDynamics(this.loc, this.oldValue, this.value)
   }
 
   serialize(): Json {

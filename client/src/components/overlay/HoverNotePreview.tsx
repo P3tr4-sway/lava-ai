@@ -47,6 +47,8 @@ interface HoverNotePreviewProps {
   dots: number
   isRest: boolean
   isTabMode: boolean
+  /** Pending fret digit from XState machine context — shown inside the tab circle */
+  pendingFret?: number | null
   /** SVG viewport size — must match OverlayCanvas */
   width: number
   height: number
@@ -62,12 +64,13 @@ export function HoverNotePreview({
   dots,
   isRest,
   isTabMode,
+  pendingFret,
   width,
   height,
 }: HoverNotePreviewProps) {
   if (!hoverState) return null
 
-  const { beatCenterX, mouseY } = hoverState
+  const { beatCenterX, stringLineY } = hoverState
 
   return (
     <svg
@@ -78,8 +81,8 @@ export function HoverNotePreview({
       aria-hidden="true"
     >
       {isTabMode ? (
-        /* Tab mode: circle with fret 0 at the snapped string line */
-        <g opacity={0.55} transform={`translate(${beatCenterX}, ${mouseY})`}>
+        /* Tab mode: circle snapped to the exact string line, showing pending fret */
+        <g opacity={0.55} transform={`translate(${beatCenterX}, ${stringLineY})`}>
           <circle r={10} fill="var(--surface-0)" stroke="var(--text-primary)" strokeWidth={1.5} />
           <text
             textAnchor="middle"
@@ -89,14 +92,14 @@ export function HoverNotePreview({
             fontFamily="'JetBrains Mono', 'Fira Code', monospace"
             fill="var(--text-primary)"
           >
-            0
+            {pendingFret != null ? String(pendingFret) : '—'}
           </text>
         </g>
       ) : (
-        /* Staff mode: Bravura glyph at beat column center */
+        /* Staff mode: Bravura glyph at beat column center, snapped to staff line */
         <text
           x={beatCenterX}
-          y={mouseY}
+          y={stringLineY}
           textAnchor="middle"
           dominantBaseline="central"
           fontFamily="Bravura, serif"

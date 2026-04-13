@@ -53,7 +53,7 @@ const CATEGORIES: ShortcutCategory[] = [
       { keys: ['T'], description: '32nd note' },
       { keys: ['.'], description: 'Toggle augmentation dot' },
       { keys: ['3'], description: 'Toggle triplet' },
-      { keys: ['R'], description: 'Toggle rest' },
+      { keys: ['-'], description: 'Insert rest at cursor' },
     ],
   },
   {

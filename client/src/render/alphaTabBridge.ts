@@ -26,6 +26,8 @@ export interface HitPosition {
   beatIndex: number
   /** 1-indexed, 1 = lowest (thickest) string */
   stringIndex: number
+  /** Y coordinate of the resolved string line in alphaTab coordinate space */
+  stringLineY: number
 }
 
 export interface BeatBoundsRect {
@@ -192,14 +194,19 @@ export class AlphaTabBridge {
         // callers that need string resolution should use hitTest() with the
         // mouse y-coordinate against the boundsLookup.
         stringIndex: 1,
+        stringLineY: 0,
       }
       this.onBeatMouseDown(pos)
     })
 
-    // Signal ready after the first successful render
+    // Signal ready after the first successful render.
+    // IMPORTANT: unsubscribe BEFORE calling onReady — if onReady calls
+    // renderAst() → api.tex(), that synchronously fires renderFinished again
+    // (useWorkers:false), which would re-enter this callback before offReady()
+    // could run, causing a call-stack overflow.
     const offReady = this.api.renderFinished.on(() => {
+      offReady()            // remove first, then notify
       this.onReady?.()
-      offReady()
     })
   }
 
@@ -213,6 +220,23 @@ export class AlphaTabBridge {
     }
     const texString = print(ast)
     this.api.tex(texString)
+  }
+
+  /**
+   * Show only the specified tracks in the rendered output.
+   * Call AFTER renderAst() — the score must be loaded first.
+   * Uses alphaTab's api.renderTracks() for visibility control.
+   */
+  renderTracks(trackIndices: number[]): void {
+    if (!this.api) return
+    const score = (this.api as unknown as { score?: { tracks: unknown[] } }).score
+    if (!score) return
+    const tracksToShow = trackIndices
+      .map((i) => score.tracks[i])
+      .filter(Boolean)
+    if (tracksToShow.length > 0) {
+      ;(this.api as unknown as { renderTracks: (t: unknown[]) => void }).renderTracks(tracksToShow)
+    }
   }
 
   /**
@@ -317,6 +341,28 @@ export class AlphaTabBridge {
       barBounds.lineAlignedBounds ?? barBounds.realBounds ?? barBounds.visualBounds
     if (!fallback) return null
     return { x: fallback.x, y: fallback.y, w: fallback.w, h: fallback.h }
+  }
+
+  /**
+   * Returns the screen rect for an entire bar (the tab staff bounds).
+   * Uses `lineAlignedBounds` for the last (tab) staff in the bar.
+   */
+  getBarRect(trackIndex: number, barIndex: number): BeatBoundsRect | null {
+    if (!this.api) return null
+    const lookup = this.api.boundsLookup as AlphaBoundsLookup | null
+    if (!lookup) return null
+
+    const masterBarBounds = lookup.findMasterBarByIndex(barIndex)
+    if (!masterBarBounds) return null
+
+    // Prefer the last bar entry (tab staff), matching getBeatRect convention
+    const barBounds: AlphaBarBounds | undefined =
+      masterBarBounds.bars[masterBarBounds.bars.length - 1]
+    if (!barBounds) return null
+
+    const bounds =
+      barBounds.lineAlignedBounds ?? barBounds.realBounds ?? barBounds.visualBounds
+    return { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
   }
 
   /**

@@ -609,6 +609,10 @@ export class Parser {
 
   private parseTuning(track: TrackNode): void {
     // \tuning piano | \tuning none | \tuning E2 A2 D3 G3 B3 E4
+    //   | \tuning (E2 A2 D3 G3 B3 E4)   ← parenthesized form (alphaTab v1.8.1+)
+    const hasParen = this.check(TT.LParen)
+    if (hasParen) this.advance()
+
     const first = this.peek()
     if (first.type === TT.Ident) {
       const val = first.value.toLowerCase()
@@ -617,6 +621,7 @@ export class Parser {
         if (val === 'piano') {
           track.tuning = [] // piano = no tablature
         }
+        if (hasParen && this.check(TT.RParen)) this.advance()
         return
       }
     }
@@ -637,6 +642,7 @@ export class Parser {
       }
     }
 
+    if (hasParen && this.check(TT.RParen)) this.advance()
     if (pitches.length > 0) track.tuning = pitches
   }
 

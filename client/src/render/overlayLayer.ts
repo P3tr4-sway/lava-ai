@@ -6,6 +6,7 @@
  */
 
 import type { HitPosition, AlphaTabBridge, BeatBoundsRect } from './alphaTabBridge'
+import type { BarSpan } from '../editor/selection/SelectionModel'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -70,13 +71,7 @@ export class OverlayLayer {
     )
     if (!rect) return null
 
-    return {
-      x: rect.x,
-      y: rect.y - VERTICAL_PADDING,
-      width: CURSOR_WIDTH,
-      height: rect.h + VERTICAL_PADDING * 2,
-      kind: 'cursor',
-    }
+    return beatRectToOverlay(rect, 'cursor')
   }
 
   /**
@@ -140,6 +135,53 @@ export class OverlayLayer {
         )
         if (!rect) break // no more beats in this bar
         rects.push(beatRectToOverlay(rect, 'selection'))
+      }
+    }
+
+    return rects
+  }
+
+  /**
+   * Compute the note cursor rect for a given HitPosition.
+   * When `stringLineY` is available, narrows the highlight to the clicked
+   * string line. Otherwise falls back to the full beat rect.
+   */
+  getNoteRect(pos: HitPosition, stringCount: number): OverlayRect | null {
+    const beat = this.bridge.getBeatRect(
+      pos.trackIndex,
+      pos.barIndex,
+      pos.voiceIndex,
+      pos.beatIndex,
+    )
+    if (!beat) return null
+
+    if (!pos.stringLineY) return beatRectToOverlay(beat, 'cursor')
+
+    // Per-string height ≈ beat.h / (stringCount - 1). Cap at readable minimum.
+    const perString = Math.max(beat.h / Math.max(1, stringCount - 1), 6)
+    return {
+      x: beat.x,
+      y: pos.stringLineY - perString / 2,
+      width: beat.w,
+      height: perString,
+      kind: 'cursor',
+    }
+  }
+
+  /**
+   * Compute selection rects for a bar range (inclusive).
+   * Returns one rect per bar, using the tab staff bounds.
+   */
+  getBarRects(from: BarSpan, to: BarSpan): OverlayRect[] {
+    const barLo = Math.min(from.barIndex, to.barIndex)
+    const barHi = Math.max(from.barIndex, to.barIndex)
+    const trackIndex = from.trackIndex
+    const rects: OverlayRect[] = []
+
+    for (let barIdx = barLo; barIdx <= barHi; barIdx++) {
+      const rect = this.bridge.getBarRect(trackIndex, barIdx)
+      if (rect) {
+        rects.push({ x: rect.x, y: rect.y, width: rect.w, height: rect.h, kind: 'selection' })
       }
     }
 

@@ -12,3 +12,4 @@ server/data/*.db-wal
 server/data/*.db-shm
 server/data/*.db-journal
 .vercel
+.worktrees/

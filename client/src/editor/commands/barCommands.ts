@@ -1,11 +1,12 @@
 /**
- * Bar-level commands: InsertBar, DeleteBar, SetTimeSignature,
+ * Bar-level commands: InsertBar, DeleteBar, ClearBar, SetTimeSignature,
  * SetKeySignature, SetBarTempo, SetRepeat.
  */
 
 import type { Command, CommandContext, CommandResult, Json } from './Command'
-import type { BarNode, RepeatMarker } from '../ast/types'
-import { insertAt, removeAt, updateTrack } from './helpers'
+import type { BarNode, VoiceNode, RepeatMarker } from '../ast/types'
+import { insertAt, removeAt, updateBar, updateTrack } from './helpers'
+import { makeBarBeats, getEffectiveTimeSig, findBarPosition } from '../ast/barFill'
 
 // ---------------------------------------------------------------------------
 // InsertBar
@@ -116,6 +117,96 @@ export class DeleteBar implements Command {
       trackId: this.trackId,
       staffIndex: this.staffIndex,
       barId: this.barId,
+    }
+  }
+
+  affectedBarIds(): string[] {
+    return [this.barId]
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ClearBar — replaces all beats in a bar with rests (keeps bar structure)
+// ---------------------------------------------------------------------------
+
+export class ClearBar implements Command {
+  readonly type = 'ClearBar'
+  readonly label = 'Clear bar'
+
+  private _originalVoices: VoiceNode[] | undefined
+
+  constructor(
+    private readonly trackId: string,
+    private readonly barId: string,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const track = ctx.score.tracks.find((t) => t.id === this.trackId)
+    if (!track) return { score: ctx.score, affectedBarIds: [] }
+    const bar = track.staves.flatMap((s) => s.bars).find((b) => b.id === this.barId)
+    if (!bar) return { score: ctx.score, affectedBarIds: [] }
+
+    this._originalVoices = bar.voices
+
+    // Use the effective time signature so ClearBar always produces the
+    // correct number of beats (e.g. 6 eighth rests for 6/8, not 1 quarter).
+    const pos = findBarPosition(ctx.score, this.barId)
+    const timeSig = pos
+      ? getEffectiveTimeSig(ctx.score, pos.trackIndex, pos.barIndex)
+      : { numerator: 4, denominator: 4 }
+
+    const score = updateBar(ctx.score, this.trackId, this.barId, (b) => ({
+      ...b,
+      voices: b.voices.map((v) => ({
+        ...v,
+        beats: makeBarBeats(timeSig, ctx.generateId),
+      })),
+    }))
+    return { score, affectedBarIds: [this.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new RestoreBarVoices(this.trackId, this.barId, this._originalVoices ?? [])
+  }
+
+  serialize(): Json {
+    return { type: this.type, trackId: this.trackId, barId: this.barId }
+  }
+
+  affectedBarIds(): string[] {
+    return [this.barId]
+  }
+}
+
+// Private — used only as ClearBar.invert()
+class RestoreBarVoices implements Command {
+  readonly type = 'RestoreBarVoices'
+  readonly label = 'Restore bar'
+
+  constructor(
+    private readonly trackId: string,
+    private readonly barId: string,
+    private readonly voices: VoiceNode[],
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBar(ctx.score, this.trackId, this.barId, (b) => ({
+      ...b,
+      voices: this.voices,
+    }))
+    return { score, affectedBarIds: [this.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new ClearBar(this.trackId, this.barId)
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      trackId: this.trackId,
+      barId: this.barId,
+      voices: this.voices as unknown as Json,
     }
   }
 

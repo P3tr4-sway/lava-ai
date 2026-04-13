@@ -18,6 +18,13 @@ export interface Cursor {
   beatIndex: number
   /** 1-indexed (1 = lowest / thickest string) */
   stringIndex: number
+  /** Y coordinate of the resolved string line in alphaTab coordinate space */
+  stringLineY?: number
+}
+
+export interface BarSpan {
+  trackIndex: number
+  barIndex: number
 }
 
 const DEFAULT_CURSOR: Cursor = {
@@ -35,6 +42,7 @@ const DEFAULT_CURSOR: Cursor = {
 export type Selection =
   | { kind: 'caret'; cursor: Cursor }
   | { kind: 'range'; anchor: Cursor; focus: Cursor }
+  | { kind: 'bar'; from: BarSpan; to: BarSpan }
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -106,7 +114,11 @@ export class SelectionModel {
     if (this._selection.kind === 'caret') {
       return this._selection.cursor
     }
-    return this._selection.focus
+    if (this._selection.kind === 'range') {
+      return this._selection.focus
+    }
+    // 'bar' kind — return a synthetic cursor at the `from` bar
+    return { ...DEFAULT_CURSOR, trackIndex: this._selection.from.trackIndex, barIndex: this._selection.from.barIndex }
   }
 
   // ---------------------------------------------------------------------------
@@ -215,12 +227,12 @@ export class SelectionModel {
     const anchor =
       this._selection.kind === 'range'
         ? this._selection.anchor
-        : this._selection.cursor
+        : this.cursor
 
     const currentFocus =
       this._selection.kind === 'range'
         ? this._selection.focus
-        : this._selection.cursor
+        : this.cursor
 
     const tempModel = new SelectionModel(currentFocus)
     const newFocus = tempModel.moveRight(score)
@@ -246,6 +258,7 @@ export class SelectionModel {
   /**
    * Set cursor from a hit-test result (e.g. from AlphaTabBridge).
    * Collapses any existing range selection.
+   * Preserves `stringLineY` so per-string highlight works.
    */
   setFromHitPosition(hit: {
     trackIndex: number
@@ -253,6 +266,7 @@ export class SelectionModel {
     voiceIndex: number
     beatIndex: number
     stringIndex: number
+    stringLineY?: number
   }): void {
     this._selection = {
       kind: 'caret',
@@ -262,7 +276,16 @@ export class SelectionModel {
         voiceIndex: hit.voiceIndex,
         beatIndex: hit.beatIndex,
         stringIndex: hit.stringIndex,
+        stringLineY: hit.stringLineY,
       },
     }
+  }
+
+  /**
+   * Set a bar-range selection.
+   * `from` and `to` may be in any order — the overlay normalises them.
+   */
+  setBarRange(from: BarSpan, to: BarSpan): void {
+    this._selection = { kind: 'bar', from, to }
   }
 }

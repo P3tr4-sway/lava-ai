@@ -6,8 +6,8 @@ interface OverlayCanvasProps {
   width: number
   height: number
   className?: string
-  /** CSS color value for cursor rects. Defaults to 'var(--accent)'. */
-  cursorColor?: string
+  /** When true, cursor rects use orange (input mode). Default: blue (selection mode). */
+  isInsertMode?: boolean
 }
 
 /**
@@ -21,7 +21,7 @@ export function OverlayCanvas({
   width,
   height,
   className,
-  cursorColor = 'var(--accent)',
+  isInsertMode = false,
 }: OverlayCanvasProps) {
   return (
     <svg
@@ -38,15 +38,16 @@ export function OverlayCanvas({
           y={rect.y}
           width={rect.width}
           height={rect.height}
-          className={rect.kind === 'cursor' ? 'lava-cursor-blink' : undefined}
           fill={
             rect.kind === 'cursor'
-              ? cursorColor
+              ? isInsertMode
+                ? 'rgba(255,138,0,0.28)'
+                : 'rgba(99,179,237,0.22)'
               : rect.kind === 'selection'
                 ? 'color-mix(in srgb, var(--accent) 30%, transparent)'
                 : 'color-mix(in srgb, var(--accent) 15%, transparent)'
           }
-          opacity={rect.kind === 'cursor' ? 1 : 0.5}
+          opacity={1}
         />
       ))}
     </svg>

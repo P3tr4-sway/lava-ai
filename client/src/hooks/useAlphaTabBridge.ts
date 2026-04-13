@@ -37,6 +37,10 @@ export function useAlphaTabBridge({
   const [container, setContainerState] = useState<HTMLElement | null>(null)
   const containerRef = useRef<HTMLElement | null>(null)
 
+  // Exposed so callers can include it in rendering effect deps to handle the
+  // race where the AST is set before the bridge is initialized.
+  const [isBridgeReady, setIsBridgeReady] = useState(false)
+
   const setContainer = useCallback((node: HTMLElement | null) => {
     containerRef.current = node
     setContainerState(node)
@@ -72,10 +76,16 @@ export function useAlphaTabBridge({
 
     bridge.init(container)
     bridgeRef.current = bridge
+    // Set ready immediately after init so the rendering effect can call renderAst.
+    // onReady fires only after the first renderFinished — if we waited for it, the
+    // rendering effect (gated on isBridgeReady) would never fire api.tex() and
+    // onReady would never fire: circular deadlock.
+    setIsBridgeReady(true)
 
     return () => {
       bridge.destroy()
       bridgeRef.current = null
+      setIsBridgeReady(false)
     }
   }, [container])
 
@@ -86,5 +96,9 @@ export function useAlphaTabBridge({
     bridgeRef.current?.renderAst(ast)
   }, [])
 
-  return { bridgeRef, renderAst, setContainer, containerRef }
+  const renderActiveTrack = useCallback((trackIndex: number) => {
+    bridgeRef.current?.renderTracks([trackIndex])
+  }, [])
+
+  return { bridgeRef, renderAst, renderActiveTrack, setContainer, containerRef, isBridgeReady }
 }

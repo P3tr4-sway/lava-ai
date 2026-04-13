@@ -1,5 +1,6 @@
 /**
  * Barrel export for all editor commands.
+ * @module commands
  */
 
 export type { Command, CommandContext, CommandResult, Json } from './Command'
@@ -20,6 +21,7 @@ export {
 export {
   InsertBar,
   DeleteBar,
+  ClearBar,
   SetTimeSignature,
   SetKeySignature,
   SetBarTempo,
@@ -49,6 +51,7 @@ export {
   SetLetRing,
   SetAccent,
   SetStroke,
+  SetDynamics,
 } from './techniqueCommands'
 
 export {

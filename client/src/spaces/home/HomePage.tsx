@@ -119,6 +119,7 @@ type ProcessingState = {
   stageIndex: number
   draft: NewPackDraft
   fileName?: string
+  file?: File | null
   sourceLabel: string
   requestSummary: string
 }
@@ -131,6 +132,7 @@ type SetupState = {
   requestSummary: string
   queueItemId?: string
   previewVersion: number
+  previewAudioUrl?: string | null
 }
 
 type WaitingState = {
@@ -475,6 +477,7 @@ export function HomePage() {
         stageIndex: 0,
         draft,
         fileName: attachedFile?.name,
+        file: attachedFile,
         sourceLabel: resolvedSourceLabel,
         requestSummary,
       })
@@ -516,6 +519,10 @@ export function HomePage() {
         return
       }
 
+      const audioUrl = processingState.file && (
+        processingState.source === 'audio'
+      ) ? URL.createObjectURL(processingState.file) : null
+
       const nextSetup: SetupState = {
         draft: processingState.draft,
         source: processingState.source,
@@ -523,6 +530,7 @@ export function HomePage() {
         detectedFields: buildDetectedFields(processingState.draft),
         requestSummary: processingState.requestSummary,
         previewVersion: 1,
+        previewAudioUrl: audioUrl,
       }
 
       if (processingState.source === 'pdf-image') {
@@ -1045,26 +1053,7 @@ export function HomePage() {
 
           </div>
 
-          <section className="flex flex-col gap-7 pt-4" aria-labelledby="home-workflow-heading">
-            <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
-              <p className="figma-home-type__mono text-[12px] font-medium uppercase tracking-[0.22em] text-text-muted">
-                Workflow
-              </p>
-              <h2
-                id="home-workflow-heading"
-                className="figma-home-type__section-title flex flex-wrap items-end justify-center gap-x-1.5 gap-y-1 text-center leading-none tracking-[-0.04em] text-text-primary sm:gap-x-2.5"
-              >
-                <span className="block self-end pr-3 leading-none text-[28px] font-semibold sm:pr-5 sm:text-[34px]">Import</span>
-                <span className="block self-end leading-none text-[40px] font-bold sm:text-[56px]">Reshape</span>
-                <span className="block self-end pl-3 leading-none text-[28px] font-semibold sm:pl-5 sm:text-[34px]">Edit</span>
-              </h2>
-              <p className="figma-home-type__body max-w-none whitespace-nowrap text-sm leading-7 text-text-secondary sm:text-[15px]">
-                Bring in music, then generate the score you need for any practice, teaching, or creator scenario.
-              </p>
-            </div>
-          </section>
-
-          <div className="flex flex-col gap-8 pt-2">
+<div className="flex flex-col gap-8 pt-2">
             <div className="flex justify-center">
               <h2 className="figma-home-type__section-title text-center text-[30px] font-semibold tracking-[-0.04em] text-text-primary sm:text-[36px]">
                 How creators use Lava
@@ -1233,7 +1222,10 @@ export function HomePage() {
 
       <NewPackDialog
         open={Boolean(setupState)}
-        onClose={() => setSetupState(null)}
+        onClose={() => {
+          if (setupState?.previewAudioUrl) URL.revokeObjectURL(setupState.previewAudioUrl)
+          setSetupState(null)
+        }}
         mode="import"
         importSource={setupState?.source ?? null}
         initialDraft={setupState?.draft ?? null}
@@ -1241,6 +1233,7 @@ export function HomePage() {
         sourceLabel={setupState?.sourceLabel}
         detectedFields={setupState?.detectedFields}
         previewVersionLabel={setupState?.previewVersion ? `Preview ${setupState.previewVersion}` : undefined}
+        previewAudioUrl={setupState?.previewAudioUrl ?? null}
         submitLabel="Build score"
         onRegeneratePreview={async () => {
           if (!setupState) return

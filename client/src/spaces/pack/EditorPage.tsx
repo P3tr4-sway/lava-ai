@@ -866,17 +866,6 @@ export function EditorPage() {
             onCompare={handleCompare}
           />
 
-          <div className="flex flex-wrap items-center gap-5 px-6 py-3 text-[13px]">
-            <span className="rounded-full bg-white px-3 py-1 text-[13px] font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-              {primaryTrack?.name || 'Guitar'}
-            </span>
-            <span className="font-medium text-text-secondary">
-              {totalBars} bars
-            </span>
-            <span className="font-medium text-text-secondary">
-              {viewMode === 'tab' ? 'Tab' : viewMode === 'split' ? 'Split' : 'Staff'}
-            </span>
-          </div>
 
           <div className="relative flex min-h-0 flex-1">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-black/6 bg-[#efede8]">
@@ -886,23 +875,6 @@ export function EditorPage() {
                 onMouseLeave={handleScoreMouseLeave}
                 onClick={handleScoreClick}
               >
-                {/* Play / Pause button */}
-                <div className="absolute left-3 top-3 z-10 flex gap-2">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() => {
-                      if (alphaTabPlaybackState === 'playing') {
-                        playerPause()
-                      } else {
-                        playerPlay()
-                      }
-                    }}
-                    aria-label={alphaTabPlaybackState === 'playing' ? 'Pause' : 'Play'}
-                  >
-                    {alphaTabPlaybackState === 'playing' ? '⏸' : '▶'}
-                  </Button>
-                </div>
                 <div
                   ref={setAlphaTabContainer}
                   className={cn(

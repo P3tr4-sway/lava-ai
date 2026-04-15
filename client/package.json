@@ -15,14 +15,16 @@
     "@lava/shared": "workspace:*",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "immer": "^11.1.4",
     "lucide-react": "^0.439.0",
-    "opensheetmusicdisplay": "^1.9.7",
+    "nanoid": "^5.1.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.1",
     "tailwind-merge": "^2.5.2",
     "tone": "^15.1.22",
     "wavesurfer.js": "^7.12.4",
+    "xstate": "^5.30.0",
     "zustand": "^4.5.5"
   },
   "devDependencies": {

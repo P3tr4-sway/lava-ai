@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HOME_NAV_RESET_EVENT } from '@/components/layout/navItems'
-import { CheckCircle2, Loader2, Paperclip, X } from 'lucide-react'
+import { CheckCircle2, FileAudio, FileMusic, FileText, Loader2, Music, Paperclip, Sparkles, Wand2, X } from 'lucide-react'
 import { ChatInput, type ChatInputRef } from '@/components/agent/ChatInput'
 import { NewPackDialog } from '@/components/projects/NewPackDialog'
 import { Dialog } from '@/components/ui/Dialog'
+import { PipelineSteps, type PipelineStep } from '@/components/ui/PipelineSteps'
 import { useToast } from '@/components/ui/Toast'
 import { projectService } from '@/services/projectService'
 import { useProjectStore } from '@/stores/projectStore'
@@ -114,10 +115,11 @@ type ImportSourceKind = 'audio' | 'youtube' | 'musicxml' | 'pdf-image'
 type ProcessingState = {
   source: ImportSourceKind
   title: string
-  stages: string[]
+  stages: PipelineStep[]
   stageIndex: number
   draft: NewPackDraft
   fileName?: string
+  file?: File | null
   sourceLabel: string
   requestSummary: string
 }
@@ -129,6 +131,8 @@ type SetupState = {
   detectedFields: Array<{ label: string; value: string }>
   requestSummary: string
   queueItemId?: string
+  previewVersion: number
+  previewAudioUrl?: string | null
 }
 
 type WaitingState = {
@@ -137,7 +141,7 @@ type WaitingState = {
   draft: NewPackDraft
   source: ImportSourceKind
   stageIndex: number
-  stages: string[]
+  stages: PipelineStep[]
   sourceLabel: string
   requestSummary: string
   projectId?: string
@@ -171,18 +175,53 @@ type ImportQueueItem = {
   errorMessage?: string
 }
 
-const IMPORT_PROCESSING_STAGES: Record<ImportSourceKind, string[]> = {
-  audio: ['Upload audio', 'Detect tempo and pitch', 'Build draft score'],
-  youtube: ['Fetch audio', 'Detect melody', 'Build draft score'],
-  musicxml: ['Read score data'],
-  'pdf-image': ['Scan page', 'Read symbols', 'Build draft score'],
+const IMPORT_PIPELINE_STEPS: Record<ImportSourceKind, PipelineStep[]> = {
+  audio: [
+    { label: 'Upload', icon: FileAudio },
+    { label: 'Detect', icon: Music },
+    { label: 'Build score', icon: FileMusic },
+  ],
+  youtube: [
+    { label: 'Fetch', icon: FileAudio },
+    { label: 'Detect', icon: Music },
+    { label: 'Build score', icon: FileMusic },
+  ],
+  musicxml: [
+    { label: 'Import', icon: FileText },
+  ],
+  'pdf-image': [
+    { label: 'Scan', icon: FileText },
+    { label: 'Read', icon: Music },
+    { label: 'Build score', icon: FileMusic },
+  ],
 }
 
-const WAITING_STAGES: Record<ImportSourceKind, string[]> = {
-  audio: ['Read audio', 'Generate score', 'Prepare pack'],
-  youtube: ['Read audio', 'Generate score', 'Prepare pack'],
-  musicxml: ['Import score', 'Build play view', 'Prepare pack'],
-  'pdf-image': ['Generate score', 'Prepare pack', 'Finish pack'],
+const WAITING_PIPELINE_STEPS: Record<ImportSourceKind, PipelineStep[]> = {
+  audio: [
+    { label: 'Read audio', icon: FileAudio },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: Music },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
+  youtube: [
+    { label: 'Read audio', icon: FileAudio },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: Music },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
+  musicxml: [
+    { label: 'Import score', icon: FileText },
+    { label: 'Render MIDI', icon: Music },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: FileMusic },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
+  'pdf-image': [
+    { label: 'Scan score', icon: FileText },
+    { label: 'AI stylize', icon: Sparkles },
+    { label: 'Transcribe', icon: Music },
+    { label: 'AI arrange', icon: Wand2 },
+  ],
 }
 
 function detectImportSource(file: File | null, message: string): ImportSourceKind | null {
@@ -286,6 +325,22 @@ function summarizeRequest(message: string) {
 function shouldMockFail(file: File | null, message: string) {
   const sourceText = `${file?.name ?? ''} ${message}`.toLowerCase()
   return sourceText.includes('noisy') || sourceText.includes('fail')
+}
+
+function regenerateImportDraft(draft: NewPackDraft, previewVersion: number): NewPackDraft {
+  const keyCycle = ['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Am', 'Em'] as const
+  const meterCycle = ['4/4', '3/4', '6/8', '12/8'] as const
+  const currentKeyIndex = Math.max(0, keyCycle.indexOf(draft.key as (typeof keyCycle)[number]))
+  const currentMeterIndex = Math.max(0, meterCycle.indexOf(draft.timeSignature as (typeof meterCycle)[number]))
+  const tempoOffsets = [0, -6, 4, 8, -10]
+  const nextTempo = Math.max(40, Math.min(240, draft.tempo + tempoOffsets[previewVersion % tempoOffsets.length]))
+
+  return {
+    ...draft,
+    key: keyCycle[(currentKeyIndex + 1) % keyCycle.length],
+    timeSignature: meterCycle[(currentMeterIndex + (previewVersion % 2 === 0 ? 0 : 1)) % meterCycle.length],
+    tempo: nextTempo,
+  }
 }
 
 type SubmitPhase = 'idle' | 'analyzing' | 'arranging' | 'building'
@@ -406,6 +461,7 @@ export function HomePage() {
           sourceLabel: resolvedSourceLabel,
           detectedFields: buildDetectedFields(draft),
           requestSummary,
+          previewVersion: 1,
         })
         return
       }
@@ -417,10 +473,11 @@ export function HomePage() {
           : importSource === 'pdf-image'
             ? 'Scanning score'
             : 'Reading file',
-        stages: IMPORT_PROCESSING_STAGES[importSource],
+        stages: IMPORT_PIPELINE_STEPS[importSource],
         stageIndex: 0,
         draft,
         fileName: attachedFile?.name,
+        file: attachedFile,
         sourceLabel: resolvedSourceLabel,
         requestSummary,
       })
@@ -462,12 +519,18 @@ export function HomePage() {
         return
       }
 
+      const audioUrl = processingState.file && (
+        processingState.source === 'audio'
+      ) ? URL.createObjectURL(processingState.file) : null
+
       const nextSetup: SetupState = {
         draft: processingState.draft,
         source: processingState.source,
         sourceLabel: processingState.sourceLabel,
         detectedFields: buildDetectedFields(processingState.draft),
         requestSummary: processingState.requestSummary,
+        previewVersion: 1,
+        previewAudioUrl: audioUrl,
       }
 
       if (processingState.source === 'pdf-image') {
@@ -477,6 +540,7 @@ export function HomePage() {
           sourceLabel: processingState.sourceLabel,
           detectedFields: buildDetectedFields(processingState.draft),
           requestSummary: processingState.requestSummary,
+          previewVersion: 1,
         })
       } else {
         setSetupState(nextSetup)
@@ -562,7 +626,7 @@ export function HomePage() {
 
     if (!activeItem) return
 
-    const stages = IMPORT_PROCESSING_STAGES[activeItem.source]
+    const stages = IMPORT_PIPELINE_STEPS[activeItem.source]
     const timer = window.setTimeout(async () => {
       if (activeItem.stageIndex < stages.length - 1) {
         setImportQueue((current) =>
@@ -643,7 +707,7 @@ export function HomePage() {
                     ? 'Project ready'
                     : waitingState.status === 'error'
                       ? 'Import failed'
-                      : waitingState.stages[waitingState.stageIndex]}
+                      : waitingState.stages[waitingState.stageIndex].label}
                 </h2>
                 <p className="mt-1 text-sm text-text-secondary">
                   {waitingState.status === 'success'
@@ -663,11 +727,18 @@ export function HomePage() {
               />
             </div>
 
+            <PipelineSteps
+              steps={waitingState.stages}
+              activeIndex={waitingState.stageIndex}
+              status={waitingState.status === 'error' ? 'error' : waitingState.status === 'success' ? 'success' : 'running'}
+              className="mt-4"
+            />
+
             <div className="mt-4 space-y-2">
-              {waitingState.stages.map((stage, index) => (
-                <div key={stage} className="flex items-center justify-between text-sm">
+              {waitingState.stages.map((step, index) => (
+                <div key={step.label} className="flex items-center justify-between text-sm">
                   <span className={cn(index <= waitingState.stageIndex ? 'text-text-primary' : 'text-text-muted')}>
-                    {stage}
+                    {step.label}
                   </span>
                   <span className="text-text-muted">
                     {index < waitingState.stageIndex
@@ -864,12 +935,12 @@ export function HomePage() {
                 </div>
                 <div className="flex flex-col gap-2">
                   {importQueue.map((item) => {
-                    const stages = IMPORT_PROCESSING_STAGES[item.source]
+                    const stages = IMPORT_PIPELINE_STEPS[item.source]
                     const statusLabel =
                       item.status === 'queued'
                         ? 'Queued'
                         : item.status === 'processing'
-                          ? stages[item.stageIndex]
+                          ? stages[item.stageIndex].label
                           : item.status === 'ready'
                             ? 'Ready'
                             : 'Error'
@@ -895,6 +966,7 @@ export function HomePage() {
                                   detectedFields: buildDetectedFields(item.draft),
                                   requestSummary: item.requestSummary,
                                   queueItemId: item.id,
+                                  previewVersion: 1,
                                 })
                               }}
                               className="rounded-full bg-text-primary px-4 py-2 text-sm font-medium text-surface-0 transition-opacity hover:opacity-90"
@@ -981,26 +1053,7 @@ export function HomePage() {
 
           </div>
 
-          <section className="flex flex-col gap-7 pt-4" aria-labelledby="home-workflow-heading">
-            <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
-              <p className="figma-home-type__mono text-[12px] font-medium uppercase tracking-[0.22em] text-text-muted">
-                Workflow
-              </p>
-              <h2
-                id="home-workflow-heading"
-                className="figma-home-type__section-title flex flex-wrap items-end justify-center gap-x-1.5 gap-y-1 text-center leading-none tracking-[-0.04em] text-text-primary sm:gap-x-2.5"
-              >
-                <span className="block self-end pr-3 leading-none text-[28px] font-semibold sm:pr-5 sm:text-[34px]">Import</span>
-                <span className="block self-end leading-none text-[40px] font-bold sm:text-[56px]">Reshape</span>
-                <span className="block self-end pl-3 leading-none text-[28px] font-semibold sm:pl-5 sm:text-[34px]">Edit</span>
-              </h2>
-              <p className="figma-home-type__body max-w-none whitespace-nowrap text-sm leading-7 text-text-secondary sm:text-[15px]">
-                Bring in music, then generate the score you need for any practice, teaching, or creator scenario.
-              </p>
-            </div>
-          </section>
-
-          <div className="flex flex-col gap-8 pt-2">
+<div className="flex flex-col gap-8 pt-2">
             <div className="flex justify-center">
               <h2 className="figma-home-type__section-title text-center text-[30px] font-semibold tracking-[-0.04em] text-text-primary sm:text-[36px]">
                 How creators use Lava
@@ -1009,14 +1062,9 @@ export function HomePage() {
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {EXPLORE_USE_CASES.map((item) => (
-                <button
+                <div
                   key={item.title}
-                  type="button"
-                  onClick={() => handleQuickActionClick(item.prompt)}
-                  className={cn(
-                    'flex min-h-[320px] flex-col overflow-hidden rounded-[32px] border border-border bg-surface-0 text-center transition-colors',
-                    'hover:bg-surface-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
-                  )}
+                  className="flex min-h-[320px] flex-col overflow-hidden rounded-[32px] border border-border bg-surface-0 text-center"
                 >
                   <div className="h-40 w-full bg-surface-1">
                     <img
@@ -1033,7 +1081,7 @@ export function HomePage() {
                       </p>
                     </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -1133,6 +1181,12 @@ export function HomePage() {
               </p>
             </div>
 
+            <PipelineSteps
+              steps={processingState.stages}
+              activeIndex={processingState.stageIndex}
+              status="running"
+            />
+
             <div className="space-y-3">
               <div className="h-2 rounded-full bg-surface-2">
                 <div
@@ -1141,20 +1195,20 @@ export function HomePage() {
                 />
               </div>
               <p className="text-[15px] font-medium text-text-primary">
-                {processingState.stages[processingState.stageIndex]}
+                {processingState.stages[processingState.stageIndex].label}
               </p>
             </div>
 
             <div className="space-y-2">
-              {processingState.stages.map((stage, index) => (
-                <div key={stage} className="flex items-center justify-between gap-4 rounded-[16px] bg-surface-1 px-4 py-3">
+              {processingState.stages.map((step, index) => (
+                <div key={step.label} className="flex items-center justify-between gap-4 rounded-[16px] bg-surface-1 px-4 py-3">
                   <span
                     className={cn(
                       'text-[15px] leading-[1.35]',
                       index <= processingState.stageIndex ? 'font-medium text-text-primary' : 'text-text-muted',
                     )}
                   >
-                    {stage}
+                    {step.label}
                   </span>
                   <span className="text-[13px] text-text-muted">
                     {index < processingState.stageIndex ? 'Done' : index === processingState.stageIndex ? 'In progress' : 'Next'}
@@ -1168,13 +1222,34 @@ export function HomePage() {
 
       <NewPackDialog
         open={Boolean(setupState)}
-        onClose={() => setSetupState(null)}
+        onClose={() => {
+          if (setupState?.previewAudioUrl) URL.revokeObjectURL(setupState.previewAudioUrl)
+          setSetupState(null)
+        }}
         mode="import"
+        importSource={setupState?.source ?? null}
         initialDraft={setupState?.draft ?? null}
         initialRequestSummary={setupState?.requestSummary ?? ''}
         sourceLabel={setupState?.sourceLabel}
         detectedFields={setupState?.detectedFields}
-        submitLabel="Create project"
+        previewVersionLabel={setupState?.previewVersion ? `Preview ${setupState.previewVersion}` : undefined}
+        previewAudioUrl={setupState?.previewAudioUrl ?? null}
+        submitLabel="Build score"
+        onRegeneratePreview={async () => {
+          if (!setupState) return
+          await new Promise((resolve) => window.setTimeout(resolve, 900))
+          setSetupState((current) => {
+            if (!current) return current
+            const previewVersion = current.previewVersion + 1
+            const draft = regenerateImportDraft(current.draft, previewVersion)
+            return {
+              ...current,
+              draft,
+              detectedFields: buildDetectedFields(draft),
+              previewVersion,
+            }
+          })
+        }}
         onSubmitDraft={(draft, requestSummary) => {
           if (!setupState) return
           void (async () => {

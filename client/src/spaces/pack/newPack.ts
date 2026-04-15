@@ -2,7 +2,7 @@ import { buildPlayableArrangements, type ScoreDocument } from '@lava/shared'
 import { exportScoreDocumentToMusicXml, createEmptyScoreDocument } from '@/lib/scoreDocument'
 
 export type NewPackLayout = 'tab' | 'staff' | 'split'
-export type NewPackTuningId = 'standard' | 'drop-d' | 'dadgad'
+export type NewPackTuningId = 'standard' | 'drop-d' | 'eb' | 'open-g' | 'dadgad'
 
 export interface NewPackPreset {
   id: string
@@ -24,6 +24,7 @@ export interface NewPackDraft {
   layout: NewPackLayout
   tuning: NewPackTuningId
   capo: number
+  aiPrompt?: string
 }
 
 interface LeadSheetSectionSeed {
@@ -66,8 +67,10 @@ export const NEW_PACK_PRESETS: NewPackPreset[] = [
 ]
 
 export const NEW_PACK_TUNINGS: Array<{ id: NewPackTuningId; label: string; midi: number[] }> = [
-  { id: 'standard', label: 'Standard EADGBE', midi: [64, 59, 55, 50, 45, 40] },
+  { id: 'standard', label: 'Standard E', midi: [64, 59, 55, 50, 45, 40] },
   { id: 'drop-d', label: 'Drop D', midi: [64, 59, 55, 50, 45, 38] },
+  { id: 'eb', label: 'Eb (half-step down)', midi: [63, 58, 54, 49, 44, 39] },
+  { id: 'open-g', label: 'Open G', midi: [62, 59, 55, 50, 43, 38] },
   { id: 'dadgad', label: 'DADGAD', midi: [62, 57, 55, 50, 45, 38] },
 ]
 
@@ -196,6 +199,7 @@ export function buildNewPackProjectPayload(draft: NewPackDraft) {
       sections,
       arrangements,
       selectedArrangementId: defaultArrangementId,
+      ...(draft.aiPrompt ? { aiPrompt: draft.aiPrompt } : {}),
     },
   }
 }

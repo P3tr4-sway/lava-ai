@@ -110,6 +110,8 @@ interface EditorStore {
   setChatPanelWidth: (width: number) => void
   chatPanelCollapsed: boolean
   toggleChatPanel: () => void
+  instrumentPanelCollapsed: boolean
+  toggleInstrumentPanel: () => void
   dawPanelExpanded: boolean
   toggleDawPanel: () => void
 
@@ -282,6 +284,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ chatPanelWidth: Math.max(320, Math.min(typeof window !== 'undefined' ? window.innerWidth * 0.5 : 800, width)) }),
   chatPanelCollapsed: false,
   toggleChatPanel: () => set((state) => ({ chatPanelCollapsed: !state.chatPanelCollapsed })),
+  instrumentPanelCollapsed: false,
+  toggleInstrumentPanel: () => set((state) => ({ instrumentPanelCollapsed: !state.instrumentPanelCollapsed })),
   dawPanelExpanded: false,
   toggleDawPanel: () => set((state) => ({ dawPanelExpanded: !state.dawPanelExpanded })),
 

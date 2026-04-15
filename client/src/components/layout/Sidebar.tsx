@@ -34,8 +34,6 @@ export function Sidebar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const upsertProject = useProjectStore((s) => s.upsertProject)
-  const [newPackOpen, setNewPackOpen] = useState(false)
-
   // AI style multi-dialog flow
   const [showProcessing, setShowProcessing] = useState(false)
   const [processingStageIndex, setProcessingStageIndex] = useState(0)
@@ -89,7 +87,7 @@ export function Sidebar() {
 
       <div className="mb-3 flex justify-center px-0">
         <button
-          onClick={() => setNewPackOpen(true)}
+          onClick={() => navigate('/pack/new')}
           title="New Pack"
           className="flex size-11 items-center justify-center gap-2 rounded-2xl bg-accent text-surface-0 transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
         >
@@ -120,14 +118,7 @@ export function Sidebar() {
       </div>
       </nav>
 
-      {/* Step 1: Create a guitar project dialog */}
-      <NewPackDialog
-        open={newPackOpen}
-        onClose={() => setNewPackOpen(false)}
-        onAiStyleSubmit={handleAiStyleSubmit}
-      />
-
-      {/* Step 2: Processing dialog (Stylize → Transcribe → Build score) */}
+      {/* Step 1: Processing dialog (Stylize → Transcribe → Build score) */}
       <Dialog
         open={showProcessing}
         onClose={cancelAiStyleFlow}

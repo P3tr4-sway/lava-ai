@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import type { Version } from '@lava/shared'
-import { Loader2 } from 'lucide-react'
+import type { Version, ScoreDocument } from '@lava/shared'
+import { Loader2, Upload } from 'lucide-react'
 import { Button, useToast } from '@/components/ui'
 import { cn } from '@/components/ui/utils'
 import { useLeadSheetStore } from '@/stores/leadSheetStore'
@@ -33,10 +33,12 @@ import { EditorChatPanel } from './EditorChatPanel'
 import { PreviewBar } from './PreviewBar'
 import { PackReadyBar } from './PackReadyBar'
 import { ExportPdfDialog } from './ExportPdfDialog'
-import { NEW_PACK_TUNINGS } from './newPack'
+import { NEW_PACK_TUNINGS, buildNewPackProjectPayload, type NewPackDraft } from './newPack'
+import { classifyImportFile, extractDraftFromGpFile, extractDraftFromMusicXmlFile } from '@/io/file-import'
 import { useTabAutoSave } from '@/hooks/useTabAutoSave'
 import { importGpFile } from '@/io/gp-import'
 import { TabEditorToolbar } from './TabEditorToolbar'
+import { EditorInstrumentPanel, type GenerationConfig } from './EditorInstrumentPanel'
 
 type ProjectLoadState = 'loading' | 'ready' | 'error'
 
@@ -92,6 +94,8 @@ export function EditorPage() {
   const [showReadyBar, setShowReadyBar] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [switchingVersionId, setSwitchingVersionId] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [visibleTrackIndices, setVisibleTrackIndices] = useState<number[]>([0])
 
   const { totalBars, beatsPerBar } = useMemo(() => {
     return {
@@ -481,6 +485,7 @@ export function EditorPage() {
   const alphaTabSelection = useTabEditorStore((s) => s.selection)
   const currentDuration = useTabEditorStore((s) => s.currentDuration)
   const stringCount = useMemo(() => scoreDocument.tracks[0]?.tuning?.length ?? 6, [scoreDocument.tracks])
+  const astTracks = useMemo(() => alphaTabAst?.tracks ?? [], [alphaTabAst])
 
   // Stable ref so beat-click can call the hook's handler at any time
   const alphaTabInputRef = useRef<ReturnType<typeof useTabEditorInput> | null>(null)
@@ -532,6 +537,34 @@ export function EditorPage() {
     if (!alphaTabAst || !isBridgeReady) return
     renderAst(alphaTabAst)
   }, [alphaTabAst, renderAst, isBridgeReady])
+
+  // Reset visible tracks when navigating to a different project
+  useEffect(() => { setVisibleTrackIndices([0]) }, [id])
+
+  // Reset visible tracks when a new file is imported (track count changes)
+  const trackCount = astTracks.length
+  useEffect(() => { setVisibleTrackIndices([0]) }, [trackCount])
+
+  // Sync track visibility to AlphaTab after each render cycle
+  useEffect(() => {
+    if (!isBridgeReady || visibleTrackIndices.length === 0) return
+    bridgeRef.current?.renderTracks(visibleTrackIndices)
+  }, [visibleTrackIndices, isBridgeReady, bridgeRef])
+
+  const handleToggleTrack = useCallback((index: number) => {
+    setVisibleTrackIndices((prev) => {
+      if (prev.includes(index)) {
+        if (prev.length === 1) return prev // never deselect the last visible track
+        return prev.filter((i) => i !== index)
+      }
+      return [...prev, index].sort((a, b) => a - b)
+    })
+  }, [])
+
+  const handleShowAllTracks = useCallback(() => {
+    const count = alphaTabAst?.tracks.length ?? 1
+    setVisibleTrackIndices(Array.from({ length: count }, (_, i) => i))
+  }, [alphaTabAst])
 
   // Initialize an empty AST once the project is loaded, so the alphaTab canvas
   // has something to render. Placeholder for the full MusicXML→AST converter;
@@ -600,6 +633,65 @@ export function EditorPage() {
       event.target.value = ''
     }
   }, [toast])
+
+  // Generation panel handler
+  const handleGenerate = useCallback(async (config: GenerationConfig) => {
+    setIsGenerating(true)
+    try {
+      const { file, mode, stylePrompt, instrument, notationMode, difficulty, creativity } = config
+      let partialDraft: Partial<NewPackDraft> = { name: 'Untitled Score' }
+      let scoreDocumentOverride: ScoreDocument | null = null
+
+      if (file) {
+        const fileType = classifyImportFile(file)
+        const baseName = file.name.replace(/\.[^.]+$/, '')
+        partialDraft.name = baseName
+        if (fileType === 'gp') {
+          const result = await extractDraftFromGpFile(file)
+          partialDraft = { ...partialDraft, ...result.draft }
+          if (mode === 'transcribe') useTabEditorStore.getState().setAst(result.scoreNode)
+        } else if (fileType === 'musicxml') {
+          const result = await extractDraftFromMusicXmlFile(file)
+          partialDraft = { ...partialDraft, ...result.draft }
+          if (mode === 'transcribe') scoreDocumentOverride = result.scoreDocument
+        }
+      }
+
+      const fullDraft: NewPackDraft = {
+        name: partialDraft.name ?? 'Untitled Score',
+        bars: partialDraft.bars ?? 16,
+        tempo: partialDraft.tempo ?? 96,
+        timeSignature: partialDraft.timeSignature ?? '4/4',
+        key: partialDraft.key ?? 'C',
+        layout: 'tab',
+        tuning: partialDraft.tuning ?? 'standard',
+        capo: partialDraft.capo ?? 0,
+        ...(stylePrompt.trim() && mode === 'rearrange' ? { aiPrompt: stylePrompt.trim() } : {}),
+      }
+
+      const payload = buildNewPackProjectPayload(fullDraft)
+      const extraMeta: Record<string, unknown> = {}
+      if (scoreDocumentOverride) extraMeta.scoreDocument = scoreDocumentOverride
+      if (stylePrompt.trim()) {
+        extraMeta.generationPrompt = stylePrompt.trim()
+        extraMeta.generationInstrument = instrument
+        extraMeta.generationNotationMode = notationMode
+        extraMeta.generationDifficulty = difficulty
+        extraMeta.generationCreativity = creativity
+      }
+
+      const project = await projectService.create({
+        ...payload,
+        metadata: { ...payload.metadata, ...extraMeta },
+      })
+      useProjectStore.getState().upsertProject(project)
+      navigate(`/pack/${project.id}`)
+    } catch (err) {
+      console.error('Failed to generate score', err)
+      toast(`Generation failed: ${(err as Error).message}`, 'error')
+      setIsGenerating(false)
+    }
+  }, [navigate, toast])
 
   // Recompute overlay rects whenever selection changes and the bridge is ready
   useEffect(() => {
@@ -868,6 +960,16 @@ export function EditorPage() {
 
 
           <div className="relative flex min-h-0 flex-1">
+            {!isMobile && (
+              <EditorInstrumentPanel
+                tracks={astTracks}
+                visibleTrackIndices={visibleTrackIndices}
+                onToggleTrack={handleToggleTrack}
+                onShowAll={handleShowAllTracks}
+                onGenerate={handleGenerate}
+                isGenerating={isGenerating}
+              />
+            )}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-black/6 bg-[#efede8]">
               <div
                 className="relative flex-1 overflow-auto"

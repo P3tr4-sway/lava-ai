@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, ChevronDown, Loader2, Pause, Play, Sparkles, X } from 'lucide-react'
+import { AlertCircle, ChevronDown, Loader2, Pause, Play, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 import WaveSurfer from 'wavesurfer.js'
 import { cn } from '@/components/ui/utils'
 import { projectService } from '@/services/projectService'
@@ -16,6 +16,8 @@ import {
 import { FileUploadZone } from './FileUploadZone'
 import { FileUploadChip } from './FileUploadChip'
 import { AiPromptInput } from './AiPromptInput'
+import { ScorePreviewPane } from './ScorePreviewPane'
+import { AudioUploadPlayer } from './AudioUploadPlayer'
 import {
   classifyImportFile,
   extractDraftFromGpFile,
@@ -191,6 +193,27 @@ const PRESET_OPTIONS: PresetOption[] = [
     },
   },
 ]
+
+const NOTATION_SINGLE_OPTIONS = [
+  { value: 'staff', label: 'Staff' },
+  { value: 'tab', label: 'TAB' },
+  { value: 'lead-sheet', label: 'Lead Sheet' },
+  { value: 'chords-chart', label: 'Chords Chart' },
+] as const
+
+const NOTATION_MULTI_OPTIONS = [
+  { value: 'band', label: 'Band' },
+] as const
+
+type NotationTypeValue = typeof NOTATION_SINGLE_OPTIONS[number]['value'] | typeof NOTATION_MULTI_OPTIONS[number]['value']
+
+const NOTATION_TO_LAYOUT: Record<NotationTypeValue, NewPackLayout> = {
+  'staff': 'staff',
+  'tab': 'tab',
+  'lead-sheet': 'split',
+  'chords-chart': 'staff',
+  'band': 'staff',
+}
 
 const DEFAULT_PRESET_ID = PRESET_OPTIONS[0].id
 const DEFAULT_DRAFT: NewPackDraft = {
@@ -541,6 +564,97 @@ function AiProcessingOverlay({
 }
 
 // ---------------------------------------------------------------------------
+// Slider row (for Figma sidebar)
+// ---------------------------------------------------------------------------
+
+const SLIDER_SNAP_POINTS = [25, 50, 75, 100] as const
+
+function SliderRow({
+  label,
+  value,
+  onChange,
+  accentColor,
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  accentColor: string
+}) {
+  // value is always one of [25, 50, 75, 100]
+  // map to 0–100% position within the track
+  const pct = ((value - 25) / 75) * 100
+
+  return (
+    <div className="border-t border-black/[0.08] py-4">
+      <p className="mb-3 text-[17px] tracking-[0.3px] text-[#111]">{label}</p>
+      <div className="relative pb-5">
+        {/* Slider track + thumb */}
+        <div className="relative flex h-6 items-center">
+          {/* Background track */}
+          <div className="absolute inset-x-0 h-1.5 rounded-full bg-black/10" />
+          {/* Colored fill */}
+          <div
+            className="absolute left-0 h-1.5 rounded-full transition-all duration-150"
+            style={{ width: `${pct}%`, backgroundColor: accentColor }}
+          />
+          {/* Tick dots on the track */}
+          {SLIDER_SNAP_POINTS.map((pt) => {
+            const ptPct = ((pt - 25) / 75) * 100
+            const filled = pt <= value
+            return (
+              <div
+                key={pt}
+                className="pointer-events-none absolute -translate-x-1/2"
+                style={{ left: `${ptPct}%` }}
+              >
+                <div
+                  className="h-[7px] w-[7px] rounded-full transition-all duration-150"
+                  style={{ backgroundColor: filled ? accentColor : 'rgba(0,0,0,0.15)' }}
+                />
+              </div>
+            )
+          })}
+          {/* Native range input (invisible, handles all interaction + snap) */}
+          <input
+            type="range"
+            min={25}
+            max={100}
+            step={25}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+          {/* Thumb */}
+          <div
+            className="pointer-events-none absolute h-6 w-[34px] -translate-x-1/2 rounded-full bg-white shadow-[0px_1px_4px_rgba(0,0,0,0.12),0px_4px_10px_rgba(0,0,0,0.12)] transition-all duration-150"
+            style={{ left: `${pct}%` }}
+          />
+        </div>
+        {/* Tick labels below */}
+        <div className="absolute bottom-0 inset-x-0">
+          {SLIDER_SNAP_POINTS.map((pt) => {
+            const ptPct = ((pt - 25) / 75) * 100
+            const active = pt === value
+            return (
+              <span
+                key={pt}
+                className="absolute -translate-x-1/2 text-[11px] font-medium transition-colors duration-150"
+                style={{
+                  left: `${ptPct}%`,
+                  color: active ? accentColor : 'rgba(0,0,0,0.3)',
+                }}
+              >
+                {pt}
+              </span>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main dialog
 // ---------------------------------------------------------------------------
 
@@ -580,11 +694,22 @@ export function NewPackDialog({
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [uploadedFileType, setUploadedFileType] = useState<ImportFileType | null>(null)
   const [importedScoreDocument, setImportedScoreDocument] = useState<ScoreDocument | null>(null)
+  const [uploadedGpBytes, setUploadedGpBytes] = useState<Uint8Array | null>(null)
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiProcessing, setAiProcessing] = useState(false)
   const [aiStageIndex, setAiStageIndex] = useState(0)
+
+  // Figma sidebar state
+  const [scoreMode, setScoreMode] = useState<'transcribe' | 'rearrange'>('rearrange')
+  // Multi-select within Single; mutually exclusive with Multi group
+  const [selectedSingleNotations, setSelectedSingleNotations] = useState<Set<NotationTypeValue>>(new Set<NotationTypeValue>(['tab']))
+  const [selectedMultiNotation, setSelectedMultiNotation] = useState<NotationTypeValue | null>(null)
+  const [difficultyVal, setDifficultyVal] = useState(25)
+  const [stylizationVal, setStylizationVal] = useState(75)
+  const [originalityVal, setOriginalityVal] = useState(50)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const sourceTitle = isImportMode
     ? 'Generate guitar score'
@@ -621,11 +746,18 @@ export function NewPackDialog({
     setUploadedFile(null)
     setUploadedFileType(null)
     setImportedScoreDocument(null)
+    setUploadedGpBytes(null)
     setImporting(false)
     setImportError(null)
     setAiPrompt('')
     setAiProcessing(false)
     setAiStageIndex(0)
+    setScoreMode('rearrange')
+    setSelectedSingleNotations(new Set<NotationTypeValue>(['tab']))
+    setSelectedMultiNotation(null)
+    setDifficultyVal(25)
+    setStylizationVal(75)
+    setOriginalityVal(50)
   }, [initialDraft, initialRequestSummary, open])
 
   // Use a ref callback + native listener because React's synthetic onScroll
@@ -700,8 +832,9 @@ export function NewPackDialog({
           ...extracted,
           name: extracted.name || prev.name,
         }))
-        // GP files don't produce a ScoreDocument directly, but the score
-        // will be imported via importGpFile → tabEditorStore.setAst() on the editor side
+        // Store raw bytes so the ScorePreviewPane can render via AlphaTab
+        const buffer = await file.arrayBuffer()
+        setUploadedGpBytes(new Uint8Array(buffer))
       } catch (err) {
         setImportError((err as Error).message)
       } finally {
@@ -733,6 +866,7 @@ export function NewPackDialog({
     setUploadedFile(null)
     setUploadedFileType(null)
     setImportedScoreDocument(null)
+    setUploadedGpBytes(null)
     setImportError(null)
   }, [])
 
@@ -863,6 +997,257 @@ export function NewPackDialog({
 
   if (!open) return null
 
+  // Only Staff and TAB support multi-select; Lead Sheet and Chords Chart are single-select
+  const MULTI_SELECT_SINGLES = new Set<NotationTypeValue>(['staff', 'tab'])
+
+  const handleNotationSelect = (value: NotationTypeValue, type: 'single' | 'multi') => {
+    if (type === 'single') {
+      setSelectedSingleNotations((prev) => {
+        if (MULTI_SELECT_SINGLES.has(value)) {
+          // Staff / TAB: toggle within {staff, tab}, discard any exclusive selection
+          const next = new Set([...prev].filter((v) => MULTI_SELECT_SINGLES.has(v)))
+          if (next.has(value)) next.delete(value)
+          else next.add(value)
+          return next
+        } else {
+          // Lead Sheet / Chords Chart: single-select, toggleable — replace or deselect
+          return prev.has(value) ? new Set<NotationTypeValue>() : new Set<NotationTypeValue>([value])
+        }
+      })
+      setSelectedMultiNotation(null)
+    } else {
+      // Multi: toggle, always clear Single group
+      setSelectedMultiNotation((prev) => (prev === value ? null : value))
+      setSelectedSingleNotations(new Set<NotationTypeValue>())
+    }
+    updateDraft('layout', NOTATION_TO_LAYOUT[value])
+  }
+
+  // ─── DEFAULT MODE: two-pane layout ─────────────────────────────────────────
+  // previewPaneMode: 'score' | 'audio' | 'empty'
+  const previewPaneMode =
+    (uploadedFileType === 'gp' || uploadedFileType === 'musicxml') ? 'score' as const
+    : uploadedFileType === 'audio' ? 'audio' as const
+    : 'empty' as const
+
+  if (!isImportMode) {
+    return createPortal(
+      <div className="fixed inset-0 z-[2147483647]">
+        <div className="fixed inset-0 bg-black/20" onClick={!aiProcessing ? onClose : undefined} />
+
+        {/* LEFT PREVIEW PANE — fills gap between left nav (≈80px) and right sidebar */}
+        <div className="fixed bottom-0 left-[80px] right-[max(25vw,320px)] top-0 overflow-hidden">
+          {previewPaneMode === 'score' && (
+            <ScorePreviewPane
+              gpBytes={uploadedGpBytes}
+              scoreDocument={importedScoreDocument}
+              fileType={uploadedFileType === 'gp' ? 'gp' : uploadedFileType === 'musicxml' ? 'musicxml' : null}
+              loading={importing}
+            />
+          )}
+        </div>
+
+        {/* RIGHT SIDEBAR */}
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-score-sidebar-title"
+          className="fixed bottom-0 right-0 top-0 flex w-1/4 min-w-[320px] flex-col overflow-hidden bg-[#eaeaea] animate-slide-in-right"
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 pb-3 pt-8">
+            <h2 id="new-score-sidebar-title" className="text-[28px] font-bold tracking-[0.4px] text-[#111]">
+              New Score
+            </h2>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/10 text-[#555] transition-colors hover:bg-black/15"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {aiProcessing ? (
+              <AiProcessingOverlay stageIndex={aiStageIndex} stages={AI_PROCESSING_STAGES} />
+            ) : (
+              <>
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".gp,.gp3,.gp4,.gp5,.gpx,.gp7,.musicxml,.xml,.mxl,.mp3,.wav,.m4a,.aiff,.pdf,.png,.jpg,.jpeg"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFileSelect(file)
+                    e.target.value = ''
+                  }}
+                />
+
+                {/* Upload card */}
+                <div className="px-6 pb-5 pt-2">
+                  {uploadedFile && uploadedFileType ? (
+                    uploadedFileType === 'audio' ? (
+                      <AudioUploadPlayer file={uploadedFile} onRemove={handleRemoveFile} />
+                    ) : (
+                      <FileUploadChip
+                        fileName={uploadedFile.name}
+                        fileCategory={uploadedFileType}
+                        status={fileChipStatus}
+                        statusMessage={fileChipMessage}
+                        onRemove={handleRemoveFile}
+                      />
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={importing}
+                      className="flex h-[100px] w-full items-center justify-center gap-3 rounded-[20px] border border-white/80 bg-white/60 shadow-[0px_8px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all hover:bg-white/75 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Plus size={24} strokeWidth={1.5} className="text-[#444]" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Segmented control */}
+                <div className="px-6 pb-5">
+                  <div className="flex h-[34px] gap-1 rounded-full bg-black/10 p-[2px]">
+                    {(['transcribe', 'rearrange'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setScoreMode(m)}
+                        className={cn(
+                          'flex-1 rounded-full text-[13px] transition-all',
+                          scoreMode === m
+                            ? 'bg-white font-semibold text-[#111] shadow-sm'
+                            : 'font-medium text-[#555]',
+                        )}
+                      >
+                        {m === 'transcribe' ? 'Transcribe' : 'Rearrange'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Notation Type */}
+                <div className="border-t border-black/[0.08] px-6 py-5">
+                  <p className="mb-4 text-[17px] tracking-[0.3px] text-[#111]">Notation Type</p>
+
+                  <p className="mb-2 text-[13px] text-[#666]">Single</p>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {NOTATION_SINGLE_OPTIONS.map((o) => {
+                      const active = selectedSingleNotations.has(o.value)
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => handleNotationSelect(o.value, 'single')}
+                          className={cn(
+                            'rounded-full border px-[18px] py-[7px] text-[15px] font-medium transition-all',
+                            active
+                              ? 'border-transparent bg-[#111] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.18)]'
+                              : 'border-white/80 bg-white/60 text-[#1a1a1a] shadow-sm backdrop-blur-sm hover:bg-white/80',
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <p className="mb-2 text-[13px] text-[#666]">Multi</p>
+                  <div className="flex flex-wrap gap-2">
+                    {NOTATION_MULTI_OPTIONS.map((o) => {
+                      const active = selectedMultiNotation === o.value
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => handleNotationSelect(o.value, 'multi')}
+                          className={cn(
+                            'rounded-full border px-[18px] py-[7px] text-[15px] font-medium transition-all',
+                            active
+                              ? 'border-transparent bg-[#111] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.18)]'
+                              : 'border-white/80 bg-white/60 text-[#1a1a1a] shadow-sm backdrop-blur-sm hover:bg-white/80',
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {scoreMode === 'rearrange' && (
+                  <>
+                    {/* Describe a style — glass input card */}
+                    <div className="border-t border-black/[0.08] px-6 py-4">
+                      <div className="relative min-h-[120px] rounded-[20px] border border-white/50 bg-white/30 shadow-[0px_4px_20px_rgba(0,0,0,0.06)] backdrop-blur-sm">
+                        <textarea
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                          placeholder="Describe a style..."
+                          rows={3}
+                          className="w-full resize-none bg-transparent px-5 pt-5 pb-12 text-[15px] leading-relaxed text-[#111] outline-none placeholder:text-[#bfbfbf]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreate}
+                          disabled={submitting || importing}
+                          aria-label="Generate with style"
+                          className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/60 text-[#555] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <RefreshCw size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Sliders */}
+                    <div className="px-6 pb-2">
+                      <SliderRow label="Difficulty" value={difficultyVal} onChange={setDifficultyVal} accentColor="#ff383c" />
+                      <SliderRow label="Stylization" value={stylizationVal} onChange={setStylizationVal} accentColor="#ffcc00" />
+                      <SliderRow label="Originality" value={originalityVal} onChange={setOriginalityVal} accentColor="#0088ff" />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Footer */}
+          {!aiProcessing && (
+            <div className="px-6 pb-8 pt-4">
+              {error && (
+                <p role="alert" className="mb-3 text-[12px] text-[#b24d37]" aria-live="polite">{error}</p>
+              )}
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={submitting || importing}
+                className={cn(
+                  'w-full rounded-full py-[14px] text-[17px] font-medium transition-all',
+                  submitting || importing
+                    ? 'cursor-not-allowed bg-black/10 text-black/30'
+                    : 'bg-[#111] text-white hover:bg-[#222]',
+                )}
+              >
+                {submitting ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>,
+      document.body,
+    )
+  }
+
+  // ─── IMPORT MODE: centered modal ─────────────────────────────────────────────
   const dialog = (
     <div className="fixed inset-0 z-[2147483647] overflow-y-auto">
       <div className="fixed inset-0 bg-[rgba(0,0,0,0.42)]" onClick={onClose} />

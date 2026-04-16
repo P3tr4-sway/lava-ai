@@ -732,8 +732,13 @@ export class Parser {
             continue
           }
         }
-        // Not a bar meta tag — could be something else; skip
-        this.advance()
+        // Unknown \tag — skip the entire directive, including its arguments.
+        // AlphaTex has many directives we don't model (\beaming, \accidentals,
+        // \ottava, …); their arg lists often contain '(' which would otherwise
+        // be mis-parsed as a chord beat by parseBeat.  Consume the backslash
+        // and everything up to the next newline, pipe, or backslash.
+        this.advance() // backslash
+        this.skipUnknownDirective()
         continue
       }
 
@@ -1472,6 +1477,39 @@ export class Parser {
 
   private skipToEndOfLine(): void {
     while (!this.check(TT.EOF) && !this.check(TT.NewLine)) this.advance()
+  }
+
+  /**
+   * Skip an unknown `\tag` directive and its arguments.
+   *
+   * Stops at the next significant bar-level token: newline, pipe, or another
+   * backslash.  Balances any `(…)` or `{…}` groups encountered so that a `(`
+   * inside the directive's args (e.g. `\beaming (8 2 2 2)`) is NOT left behind
+   * to be mis-parsed as a chord beat.  The backslash itself is assumed already
+   * consumed by the caller.
+   */
+  private skipUnknownDirective(): void {
+    while (!this.check(TT.EOF) && !this.check(TT.NewLine) && !this.check(TT.Pipe) && !this.check(TT.Backslash)) {
+      if (this.check(TT.LParen)) {
+        let depth = 0
+        do {
+          if (this.check(TT.LParen)) depth++
+          else if (this.check(TT.RParen)) depth--
+          this.advance()
+        } while (depth > 0 && !this.check(TT.EOF))
+        continue
+      }
+      if (this.check(TT.LBrace)) {
+        let depth = 0
+        do {
+          if (this.check(TT.LBrace)) depth++
+          else if (this.check(TT.RBrace)) depth--
+          this.advance()
+        } while (depth > 0 && !this.check(TT.EOF))
+        continue
+      }
+      this.advance()
+    }
   }
 
   private skipToEndOfProp(): void {

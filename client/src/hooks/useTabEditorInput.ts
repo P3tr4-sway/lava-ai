@@ -504,12 +504,17 @@ export function useTabEditorInput({
 
     const loc = { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: ids.beatId }
 
-    import('../editor/commands').then(({ SetRest, SetDuration, InsertBeat, CompositeCommand }) => {
+    import('../editor/commands').then(({ DeleteNote, SetRest, SetDuration, InsertBeat, CompositeCommand }) => {
       const cmds: Command[] = []
 
       if (!beat.rest) {
+        // Clear existing notes first so the beat data is consistent
+        // (rest=true + non-empty notes would be an invalid state).
+        for (const note of beat.notes) {
+          cmds.push(new DeleteNote(loc, note.id))
+        }
         cmds.push(new SetRest(loc, true, false))
-        console.debug('[applyRestBeat] pushing SetRest')
+        console.debug('[applyRestBeat] pushing DeleteNote×', beat.notes.length, '+ SetRest')
       }
 
       const durationChanged =
@@ -643,17 +648,27 @@ export function useTabEditorInput({
     const ids = resolveNoteIds(ast, cursor)
     if (!ids) return
 
-    import('../editor/commands').then(({ DeleteNote }) => {
-      const cmd = new DeleteNote(
-        { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: ids.beatId },
-        ids.noteId,
+    // Peek at the beat to know if this is the last note.
+    const beat = ast.tracks[cursor.trackIndex]
+      ?.staves[0]?.bars[cursor.barIndex]
+      ?.voices[cursor.voiceIndex]?.beats[cursor.beatIndex]
+    if (!beat) return
+    const isLastNote = beat.notes.length === 1
+
+    const loc = { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: ids.beatId }
+
+    import('../editor/commands').then(({ DeleteNote, SetRest, CompositeCommand }) => {
+      const cmds: Command[] = [new DeleteNote(loc, ids.noteId)]
+      if (isLastNote) {
+        // Last note removed — convert beat to rest so the bar stays full.
+        cmds.push(new SetRest(loc, true, false))
+      }
+      useTabEditorStore.getState().applyCommand(
+        cmds.length === 1 ? cmds[0] : new CompositeCommand(cmds, 'Delete note'),
       )
-      useTabEditorStore.getState().applyCommand(cmd)
-      useTabEditorStore.getState().setSelection(null)
-      useTabEditorStore.getState().setInsertMode(false)
-      send({ type: 'ESCAPE' })
+      // Stay in insert mode so the user can immediately enter the next note.
     })
-  }, [send])
+  }, [])
 
   const applyDeleteBeat = useCallback(() => {
     const ast = useTabEditorStore.getState().ast
@@ -662,17 +677,30 @@ export function useTabEditorInput({
     const ids = resolveIds(ast, cursor)
     if (!ids) return
 
-    import('../editor/commands').then(({ DeleteBeat }) => {
-      const cmd = new DeleteBeat(
-        { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId },
-        ids.beatId,
+    const beat = ast.tracks[cursor.trackIndex]
+      ?.staves[0]?.bars[cursor.barIndex]
+      ?.voices[cursor.voiceIndex]?.beats[cursor.beatIndex]
+    if (!beat) return
+
+    // Sibelius rule: Delete converts a note-beat to a rest of the same duration
+    // rather than removing the beat (which would leave the bar underfilled).
+    // If the beat is already a rest, this is a no-op.
+    if (beat.rest) return
+
+    const loc = { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: ids.beatId }
+
+    import('../editor/commands').then(({ DeleteNote, SetRest, CompositeCommand }) => {
+      const cmds: Command[] = []
+      for (const note of beat.notes) {
+        cmds.push(new DeleteNote(loc, note.id))
+      }
+      cmds.push(new SetRest(loc, true, false))
+      useTabEditorStore.getState().applyCommand(
+        cmds.length === 1 ? cmds[0] : new CompositeCommand(cmds, 'Clear beat'),
       )
-      useTabEditorStore.getState().applyCommand(cmd)
-      useTabEditorStore.getState().setSelection(null)
-      useTabEditorStore.getState().setInsertMode(false)
-      send({ type: 'ESCAPE' })
+      // Stay in insert mode — cursor remains on the now-resting beat.
     })
-  }, [send])
+  }, [])
 
   // -------------------------------------------------------------------------
   // handleClearBars — wipe all note content from the selected bar(s)
@@ -803,6 +831,17 @@ export function useTabEditorInput({
           handleClearBars()
           return
         }
+      }
+
+      // --- Enter: enter insert mode at cursor (keyboard-only workflow) ---
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        if (isIdle) {
+          useTabEditorStore.getState().setInsertMode(true)
+          send({ type: 'ENTER_INSERT' })
+        }
+        // When already inserting, Enter is a no-op (Escape exits).
+        return
       }
 
       // --- Inserting-only shortcuts ---

@@ -725,7 +725,11 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
 
             <PanelSection title="Time signature">
               <select
-                defaultValue="4/4"
+                value={(() => {
+                  if (!ast || !ids) return '4/4'
+                  const ts = getEffectiveTimeSig(ast, ids.cursor.trackIndex, ids.barIndex)
+                  return `${ts.numerator}/${ts.denominator}`
+                })()}
                 onChange={(e) => {
                   if (!ids) return
                   const [num, den] = e.target.value.split('/').map(Number)

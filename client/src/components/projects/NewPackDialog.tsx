@@ -24,7 +24,9 @@ import {
   extractDraftFromMusicXmlFile,
   type ImportFileType,
 } from '@/io/file-import'
+import { useTabEditorStore } from '@/stores/tabEditorStore'
 import type { ScoreDocument } from '@lava/shared'
+import type { ScoreNode } from '@/editor/ast/types'
 
 type ImportSourceKind = 'audio' | 'youtube' | 'musicxml' | 'pdf-image'
 
@@ -206,6 +208,19 @@ const NOTATION_MULTI_OPTIONS = [
 ] as const
 
 type NotationTypeValue = typeof NOTATION_SINGLE_OPTIONS[number]['value'] | typeof NOTATION_MULTI_OPTIONS[number]['value']
+
+const RANDOM_STYLE_PROMPTS = [
+  'Fingerstyle acoustic ballad with soft dynamics',
+  'Blues-rock with heavy bends and vibrato',
+  'Classical nylon string, expressive rubato',
+  'Jazz chord melody in the style of Joe Pass',
+  'Country fingerpicking with open tuning',
+  'Flamenco-inspired with rasgueado strumming',
+  'Folk ballad, capo 3, simple open chords',
+  'Metal rhythm, drop D, palm muting',
+  'Bossa nova, gentle syncopation',
+  'Celtic fingerstyle with modal tuning',
+]
 
 const NOTATION_TO_LAYOUT: Record<NotationTypeValue, NewPackLayout> = {
   'staff': 'staff',
@@ -710,6 +725,7 @@ export function NewPackDialog({
   const [stylizationVal, setStylizationVal] = useState(75)
   const [originalityVal, setOriginalityVal] = useState(50)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const gpScoreNodeRef = useRef<ScoreNode | null>(null)
 
   const sourceTitle = isImportMode
     ? 'Generate guitar score'
@@ -747,6 +763,7 @@ export function NewPackDialog({
     setUploadedFileType(null)
     setImportedScoreDocument(null)
     setUploadedGpBytes(null)
+    gpScoreNodeRef.current = null
     setImporting(false)
     setImportError(null)
     setAiPrompt('')
@@ -826,7 +843,8 @@ export function NewPackDialog({
     if (fileType === 'gp') {
       setImporting(true)
       try {
-        const { draft: extracted } = await extractDraftFromGpFile(file)
+        const { draft: extracted, scoreNode } = await extractDraftFromGpFile(file)
+        gpScoreNodeRef.current = scoreNode
         setDraft((prev) => ({
           ...prev,
           ...extracted,
@@ -868,7 +886,16 @@ export function NewPackDialog({
     setImportedScoreDocument(null)
     setUploadedGpBytes(null)
     setImportError(null)
+    gpScoreNodeRef.current = null
   }, [])
+
+  // Auto-switch to 'rearrange' when a score file is uploaded (transcribe not applicable)
+  useEffect(() => {
+    const isScoreFile = uploadedFileType === 'gp' || uploadedFileType === 'musicxml'
+    if (isScoreFile && scoreMode === 'transcribe') {
+      setScoreMode('rearrange')
+    }
+  }, [uploadedFileType, scoreMode])
 
   // --- Mock AI processing timer ---
   useEffect(() => {
@@ -889,6 +916,13 @@ export function NewPackDialog({
     return () => window.clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiProcessing, aiStageIndex])
+
+  const handleRandomStyle = useCallback(() => {
+    const current = aiPrompt.trim()
+    const pool = RANDOM_STYLE_PROMPTS.filter((p) => p !== current)
+    const pick = pool[Math.floor(Math.random() * pool.length)]
+    setAiPrompt(pick)
+  }, [aiPrompt])
 
   // --- Create handler ---
   const performCreate = useCallback(async () => {
@@ -916,6 +950,9 @@ export function NewPackDialog({
       }
       const project = await projectService.create(payload)
       upsertProject(project)
+      if (gpScoreNodeRef.current) {
+        useTabEditorStore.getState().setAst(gpScoreNodeRef.current, project.id)
+      }
       onClose()
       navigate(`/pack/${project.id}`)
     } catch (createError) {
@@ -1024,6 +1061,8 @@ export function NewPackDialog({
   }
 
   // ─── DEFAULT MODE: two-pane layout ─────────────────────────────────────────
+  const isScoreFile = uploadedFileType === 'gp' || uploadedFileType === 'musicxml'
+
   // previewPaneMode: 'score' | 'audio' | 'empty'
   const previewPaneMode =
     (uploadedFileType === 'gp' || uploadedFileType === 'musicxml') ? 'score' as const
@@ -1117,21 +1156,28 @@ export function NewPackDialog({
                 {/* Segmented control */}
                 <div className="px-6 pb-5">
                   <div className="flex h-[34px] gap-1 rounded-full bg-black/10 p-[2px]">
-                    {(['transcribe', 'rearrange'] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setScoreMode(m)}
-                        className={cn(
-                          'flex-1 rounded-full text-[13px] transition-all',
-                          scoreMode === m
-                            ? 'bg-white font-semibold text-[#111] shadow-sm'
-                            : 'font-medium text-[#555]',
-                        )}
-                      >
-                        {m === 'transcribe' ? 'Transcribe' : 'Rearrange'}
-                      </button>
-                    ))}
+                    {(['transcribe', 'rearrange'] as const).map((m) => {
+                      const disabled = m === 'transcribe' && isScoreFile
+                      const active = scoreMode === m
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => !disabled && setScoreMode(m)}
+                          disabled={disabled}
+                          className={cn(
+                            'flex-1 rounded-full text-[13px] transition-all',
+                            active
+                              ? 'bg-white font-semibold text-[#111] shadow-sm'
+                              : disabled
+                                ? 'cursor-not-allowed font-medium text-[#555]/40'
+                                : 'font-medium text-[#555]',
+                          )}
+                        >
+                          {m === 'transcribe' ? 'Transcribe' : 'Rearrange'}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -1198,10 +1244,9 @@ export function NewPackDialog({
                         />
                         <button
                           type="button"
-                          onClick={handleCreate}
-                          disabled={submitting || importing}
-                          aria-label="Generate with style"
-                          className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/60 text-[#555] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-40"
+                          onClick={handleRandomStyle}
+                          aria-label="Random style suggestion"
+                          className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/60 text-[#555] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all hover:bg-white/80"
                         >
                           <RefreshCw size={15} />
                         </button>

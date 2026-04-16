@@ -8,6 +8,13 @@ import type { BeatNode, DurationNode } from '../ast/types'
 import { insertAt, updateVoice } from './helpers'
 import { InsertBeat } from './beatCommands'
 import { CompositeCommand } from '../history/History'
+import {
+  durationToUnits,
+  barCapacityUnits,
+  getEffectiveTimeSig,
+  findBarPosition,
+  splitIntoRests,
+} from '../ast/barFill'
 
 // ---------------------------------------------------------------------------
 // BulkTranspose
@@ -44,7 +51,7 @@ export class BulkTranspose implements Command {
             ...beat,
             notes: beat.notes.map((note) => ({
               ...note,
-              fret: Math.max(0, note.fret + this.delta),
+              fret: Math.max(0, Math.min(24, note.fret + this.delta)),
             })),
           }
         }),
@@ -314,11 +321,19 @@ export class CopySelection implements Command {
 // PasteSelection
 // ---------------------------------------------------------------------------
 
+/** Captured beat displaced by a paste operation (needed for undo). */
+interface DisplacedBeat {
+  beat: BeatNode
+  index: number
+}
+
 export class PasteSelection implements Command {
   readonly type = 'PasteSelection'
   readonly label = 'Paste'
 
+  // Populated during execute() — referenced by invert()
   private _insertedRefs: BeatRef[] = []
+  private _displacedBeats: DisplacedBeat[] = []
 
   constructor(
     private readonly targetLoc: { trackId: string; barId: string; voiceId: string },
@@ -330,25 +345,100 @@ export class PasteSelection implements Command {
   execute(ctx: CommandContext): CommandResult {
     const { trackId, barId, voiceId } = this.targetLoc
     this._insertedRefs = []
+    this._displacedBeats = []
 
-    let score = ctx.score
-    for (let i = 0; i < this.beats.length; i++) {
-      const beat = { ...this.beats[i], id: this.newIds[i] }
-      const insertIdx = this.insertIndex + i
-      score = updateVoice(score, trackId, barId, voiceId, (voice) => ({
-        ...voice,
-        beats: insertAt(voice.beats, insertIdx, beat),
+    const currentBeats = getVoiceBeats(ctx.score, trackId, barId, voiceId)
+    if (!currentBeats) return { score: ctx.score, affectedBarIds: [] }
+
+    // Bar capacity from the insertIndex onward
+    const pos = findBarPosition(ctx.score, barId)
+    const timeSig = pos
+      ? getEffectiveTimeSig(ctx.score, pos.trackIndex, pos.barIndex)
+      : { numerator: 4, denominator: 4 }
+    const cap = barCapacityUnits(timeSig)
+    const unitsBeforeInsert = currentBeats
+      .slice(0, this.insertIndex)
+      .reduce((s, b) => s + durationToUnits(b.duration), 0)
+    const available = cap - unitsBeforeInsert
+
+    // Truncate paste content to fit within available capacity
+    const pasteBeats: BeatNode[] = []
+    let pasteUnits = 0
+    for (const b of this.beats) {
+      const u = durationToUnits(b.duration)
+      if (pasteUnits + u > available) break
+      pasteBeats.push(b)
+      pasteUnits += u
+    }
+    if (pasteBeats.length === 0) return { score: ctx.score, affectedBarIds: [] }
+
+    // Collect beats to displace: consume from insertIndex until consumed >= pasteUnits
+    let consumed = 0
+    const toDisplaceIds = new Set<string>()
+    for (let i = this.insertIndex; i < currentBeats.length && consumed < pasteUnits; i++) {
+      const u = durationToUnits(currentBeats[i].duration)
+      consumed += u
+      toDisplaceIds.add(currentBeats[i].id)
+      this._displacedBeats.push({ beat: currentBeats[i], index: i })
+    }
+
+    // Remove displaced beats
+    let score = updateVoice(ctx.score, trackId, barId, voiceId, (v) => ({
+      ...v,
+      beats: v.beats.filter((b) => !toDisplaceIds.has(b.id)),
+    }))
+
+    // Insert pasted beats at insertIndex
+    for (let i = 0; i < pasteBeats.length; i++) {
+      const beat = { ...pasteBeats[i], id: this.newIds[i] }
+      score = updateVoice(score, trackId, barId, voiceId, (v) => ({
+        ...v,
+        beats: insertAt(v.beats, this.insertIndex + i, beat),
       }))
-      this._insertedRefs.push({ trackId, barId, voiceId, beatId: this.newIds[i] })
+      this._insertedRefs.push({ trackId, barId, voiceId, beatId: beat.id })
+    }
+
+    // If we consumed more than we pasted, fill the gap with canonical rests
+    if (consumed > pasteUnits) {
+      const trailingDurs = splitIntoRests(0, consumed - pasteUnits)
+      for (let ti = 0; ti < trailingDurs.length; ti++) {
+        const id = ctx.generateId()
+        score = updateVoice(score, trackId, barId, voiceId, (v) => ({
+          ...v,
+          beats: insertAt(v.beats, this.insertIndex + pasteBeats.length + ti, {
+            id,
+            duration: { value: trailingDurs[ti], dots: 0 as const },
+            notes: [],
+            rest: true as const,
+          }),
+        }))
+        this._insertedRefs.push({ trackId, barId, voiceId, beatId: id })
+      }
     }
 
     return { score, affectedBarIds: [barId] }
   }
 
   invert(_ctx: CommandContext): Command {
-    return new DeleteSelection(
-      this._insertedRefs.length > 0 ? this._insertedRefs : [],
+    // 1. Delete everything that was inserted (pasted beats + trailing rests)
+    const deleteInserted = new DeleteSelection([...this._insertedRefs])
+
+    // 2. Re-insert displaced beats in ascending-index order
+    const sorted = [...this._displacedBeats].sort((a, b) => a.index - b.index)
+    const reinsert: Command[] = sorted.map(({ beat, index }) =>
+      new InsertBeat(
+        {
+          trackId: this.targetLoc.trackId,
+          barId: this.targetLoc.barId,
+          voiceId: this.targetLoc.voiceId,
+        },
+        beat,
+        index,
+      ),
     )
+
+    if (reinsert.length === 0) return deleteInserted
+    return new CompositeCommand([deleteInserted, ...reinsert], 'Undo paste')
   }
 
   serialize(): Json {

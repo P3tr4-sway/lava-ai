@@ -6,6 +6,13 @@
 import type { Command, CommandContext, CommandResult, Json } from './Command'
 import type { BeatNode, DurationNode, Duration } from '../ast/types'
 import { insertAt, removeAt, updateVoice } from './helpers'
+import {
+  durationToUnits,
+  voiceUsedUnits,
+  barCapacityUnits,
+  getEffectiveTimeSig,
+  findBarPosition,
+} from '../ast/barFill'
 
 // ---------------------------------------------------------------------------
 // Shared payload
@@ -33,6 +40,22 @@ export class InsertBeat implements Command {
 
   execute(ctx: CommandContext): CommandResult {
     const { trackId, barId, voiceId } = this.loc
+
+    // Capacity guard: refuse to insert a beat that would overflow the bar.
+    // commitFret already manages capacity for note entry; this guard protects
+    // all other callers (bulk operations, paste, etc.).
+    const pos = findBarPosition(ctx.score, barId)
+    if (pos) {
+      const timeSig = getEffectiveTimeSig(ctx.score, pos.trackIndex, pos.barIndex)
+      const cap = barCapacityUnits(timeSig)
+      const track = ctx.score.tracks.find((t) => t.id === trackId)
+      const bar = track?.staves[0]?.bars.find((b) => b.id === barId)
+      const voice = bar?.voices.find((v) => v.id === voiceId)
+      if (voice && voiceUsedUnits(voice) + durationToUnits(this.beat.duration) > cap) {
+        return { score: ctx.score, affectedBarIds: [] }
+      }
+    }
+
     const score = updateVoice(ctx.score, trackId, barId, voiceId, (voice) => ({
       ...voice,
       beats: insertAt(voice.beats, this.index, this.beat),

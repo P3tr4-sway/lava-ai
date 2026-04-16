@@ -77,7 +77,7 @@ function printMeta(meta: MetaNode): string {
 // NoteNode
 // ---------------------------------------------------------------------------
 
-function printNoteEffects(note: NoteNode): string {
+function printNoteEffects(note: NoteNode, options?: { omitDeadShorthand?: boolean }): string {
   const parts: string[] = []
 
   if (note.hammerOrPull) parts.push('h')
@@ -116,7 +116,7 @@ function printNoteEffects(note: NoteNode): string {
   }
 
   if (note.ghost) parts.push('g')
-  if (note.dead) parts.push('x')
+  if (note.dead && !options?.omitDeadShorthand) parts.push('x')
   if (note.palmMute) parts.push('pm')
   if (note.letRing) parts.push('lr')
   if (note.staccato) parts.push('st')
@@ -143,6 +143,12 @@ function printNoteEffects(note: NoteNode): string {
   return parts.length > 0 ? ` {${parts.join(' ')}}` : ''
 }
 
+function printNote(note: NoteNode): string {
+  const usesDeadNoteShorthand = note.dead === true && note.fret === 0
+  const head = usesDeadNoteShorthand ? `x.${note.string}` : `${note.fret}.${note.string}`
+  return `${head}${printNoteEffects(note, { omitDeadShorthand: usesDeadNoteShorthand })}`
+}
+
 // ---------------------------------------------------------------------------
 // BeatNode
 // ---------------------------------------------------------------------------
@@ -153,12 +159,11 @@ function printBeatContent(beat: BeatNode): string {
   if (beat.notes.length === 0) return 'r'
 
   if (beat.notes.length === 1) {
-    const n = beat.notes[0]
-    return `${n.fret}.${n.string}${printNoteEffects(n)}`
+    return printNote(beat.notes[0])
   }
 
   // Chord
-  const noteStrs = beat.notes.map(n => `${n.fret}.${n.string}${printNoteEffects(n)}`).join(' ')
+  const noteStrs = beat.notes.map((note) => printNote(note)).join(' ')
   return `(${noteStrs})`
 }
 

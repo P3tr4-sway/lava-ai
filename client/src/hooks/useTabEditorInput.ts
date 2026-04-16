@@ -201,6 +201,9 @@ export function useTabEditorInput({
   const commitFret = useCallback((fret: number, exitAfterCommit?: boolean) => {
     const { ast, currentDuration } = useTabEditorStore.getState()
     if (!ast) return
+    // Hard constraint: fret must be within [0, 24] (guitar_notation_rules §hard-constraints)
+    // eslint-disable-next-line no-param-reassign
+    fret = Math.max(0, Math.min(24, fret))
     const cursor = selectionRef.current.cursor
     const ids = resolveIds(ast, cursor)
     if (!ids) return
@@ -221,14 +224,38 @@ export function useTabEditorInput({
     const oldBarTotal = voice.beats.reduce((sum: number, b) => sum + durationToUnits(b.duration), 0)
     const timeSig = getEffectiveTimeSig(ast, cursor.trackIndex, cursor.barIndex)
     const capacity = barCapacityUnits(timeSig)
-    // Room available for this beat's slot; only allow duration change if it fits
-    const room = capacity - (oldBarTotal - oldBeatUnits)
-    const canChangeDuration = newBeatUnits <= room
-    const effectiveNewBeatUnits = canChangeDuration ? newBeatUnits : oldBeatUnits
-    const remaining = capacity - (oldBarTotal - oldBeatUnits + effectiveNewBeatUnits)
 
-    import('../editor/commands').then(({ SetFret, InsertNote, InsertBeat, SetRest, SetDuration, CompositeCommand }) => {
+    // Sibelius rule: when placing a note on a rest, absorb subsequent rests to
+    // make room for the requested duration.  Absorption only applies when the
+    // target beat is a rest and the new duration exceeds the immediate slot.
+    let slotUnits = capacity - (oldBarTotal - oldBeatUnits)  // immediate room
+    const absorbedBeatIds: string[] = []
+    if (beat.rest && newBeatUnits > slotUnits) {
+      for (let i = cursor.beatIndex + 1; i < voice.beats.length; i++) {
+        const nb = voice.beats[i]
+        if (!nb.rest) break
+        slotUnits += durationToUnits(nb.duration)
+        absorbedBeatIds.push(nb.id)
+        if (slotUnits >= newBeatUnits) break
+      }
+    }
+
+    const canChangeDuration = newBeatUnits <= slotUnits
+    const effectiveNewBeatUnits = canChangeDuration ? newBeatUnits : oldBeatUnits
+    const remaining = slotUnits - effectiveNewBeatUnits
+
+    import('../editor/commands').then(({ SetFret, InsertNote, InsertBeat, DeleteBeat, SetRest, SetDuration, CompositeCommand }) => {
       const cmds: Command[] = []
+
+      // Step 0: delete absorbed rest beats in reverse order so indices remain
+      // stable for earlier beats.  These are the rests that were consumed to make
+      // room for a note longer than its immediate slot (Sibelius absorption rule).
+      for (let i = absorbedBeatIds.length - 1; i >= 0; i--) {
+        cmds.push(new DeleteBeat(
+          { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId },
+          absorbedBeatIds[i],
+        ))
+      }
 
       // Step 1: clear rest
       if (beat.rest) {
@@ -611,6 +638,12 @@ export function useTabEditorInput({
     const ids = resolveNoteIds(ast, cursor)
     if (!ids) return
 
+    const track = ast.tracks[cursor.trackIndex]
+    const bar = track?.staves[0]?.bars[cursor.barIndex]
+    const voice = bar?.voices[cursor.voiceIndex]
+    const beat = voice?.beats[cursor.beatIndex]
+    const note = beat?.notes.find((n) => n.string === cursor.stringIndex)
+
     const noteLoc = {
       trackId: ids.trackId,
       barId: ids.barId,
@@ -623,16 +656,80 @@ export function useTabEditorInput({
       let cmd
       switch (name) {
         case 'hammerOn':
-          cmd = new cmds.SetHammerOn(noteLoc, true, undefined)
+          cmd = new cmds.SetHammerOn(noteLoc, !note?.hammerOrPull || undefined, note?.hammerOrPull)
           break
         case 'pullOff':
-          cmd = new cmds.SetPullOff(noteLoc, true, undefined)
+          cmd = new cmds.SetPullOff(noteLoc, !note?.hammerOrPull || undefined, note?.hammerOrPull)
           break
         case 'slide':
-          cmd = new cmds.SetSlide(noteLoc, 'legato', undefined)
+          cmd = new cmds.SetSlide(noteLoc, note?.slide === 'legato' ? undefined : 'legato', note?.slide)
           break
-        case 'vibrato':
-          cmd = new cmds.SetVibrato(noteLoc, 'slight', undefined)
+        case 'vibrato': {
+          // Cycle: none → slight → wide → none
+          const next = note?.vibrato === undefined ? 'slight' : note.vibrato === 'slight' ? 'wide' : undefined
+          cmd = new cmds.SetVibrato(noteLoc, next, note?.vibrato)
+          break
+        }
+        case 'bend':
+          // Cycle: none → half-step → whole-step → bend+release → none
+          if (!note?.bend) {
+            cmd = new cmds.SetBend(noteLoc, [{ position: 0, value: 0 }, { position: 6, value: 100 }, { position: 12, value: 100 }], undefined)
+          } else {
+            cmd = new cmds.SetBend(noteLoc, undefined, note.bend)
+          }
+          break
+        case 'tie':
+          cmd = new cmds.SetTie(noteLoc, !note?.tie || undefined, note?.tie)
+          break
+        case 'staccato':
+          cmd = new cmds.SetStaccato(noteLoc, !note?.staccato || undefined, note?.staccato)
+          break
+        default:
+          return
+      }
+      useTabEditorStore.getState().applyCommand(cmd)
+    })
+  }, [])
+
+  const applyBeatTechnique = useCallback((name: string) => {
+    const ast = useTabEditorStore.getState().ast
+    if (!ast) return
+    const cursor = selectionRef.current.cursor
+    const ids = resolveIds(ast, cursor)
+    if (!ids) return
+
+    const track = ast.tracks[cursor.trackIndex]
+    const bar = track?.staves[0]?.bars[cursor.barIndex]
+    const voice = bar?.voices[cursor.voiceIndex]
+    const beat = voice?.beats[cursor.beatIndex]
+    if (!beat) return
+
+    const beatLoc = { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: ids.beatId }
+
+    import('../editor/commands').then((cmds) => {
+      let cmd
+      switch (name) {
+        case 'crescendo':
+          cmd = new cmds.SetCrescendo(beatLoc, !beat.crescendo || undefined, beat.crescendo)
+          break
+        case 'decrescendo':
+          cmd = new cmds.SetDecrescendo(beatLoc, !beat.decrescendo || undefined, beat.decrescendo)
+          break
+        case 'arpeggioUp': {
+          const cur = beat.arpeggioUp ? 'up' : beat.arpeggioDown ? 'down' : undefined
+          cmd = new cmds.SetArpeggio(beatLoc, cur === 'up' ? undefined : 'up', cur)
+          break
+        }
+        case 'arpeggioDown': {
+          const cur = beat.arpeggioUp ? 'up' : beat.arpeggioDown ? 'down' : undefined
+          cmd = new cmds.SetArpeggio(beatLoc, cur === 'down' ? undefined : 'down', cur)
+          break
+        }
+        case 'fermata':
+          cmd = new cmds.SetFermata(beatLoc, beat.fermata ? undefined : { type: 'medium', length: 1 }, beat.fermata)
+          break
+        case 'tremoloPicking':
+          cmd = new cmds.SetTremoloPicking(beatLoc, beat.tremoloPickingDuration === 16 ? undefined : 16, beat.tremoloPickingDuration)
           break
         default:
           return
@@ -872,20 +969,42 @@ export function useTabEditorInput({
         return
       }
 
-      // Techniques
+      // Techniques — note-level (no modifier)
       const techMap: Record<string, string> = {
         h: 'hammerOn',
         p: 'pullOff',
         s: 'slide',
         b: 'bend',
         v: 'vibrato',
+        i: 'tie',
+        c: 'staccato',
       }
-      const tech = techMap[e.key.toLowerCase()]
+      const tech = !e.shiftKey && techMap[e.key.toLowerCase()]
       if (tech) {
         e.preventDefault()
         send({ type: 'TECHNIQUE', name: tech })
         applyTechnique(tech)
         return
+      }
+
+      // Beat-level technique shortcuts (Shift+key)
+      if (e.shiftKey && !isMeta) {
+        const beatTechMap: Record<string, string> = {
+          '<': 'crescendo',
+          ',': 'crescendo',    // comma = < on some keyboards
+          '>': 'decrescendo',
+          '.': 'decrescendo',  // period = > on some keyboards (conflicts with dot, but only in shift context)
+          'a': 'arpeggioUp',
+          'd': 'arpeggioDown',
+          'f': 'fermata',
+          't': 'tremoloPicking',
+        }
+        const beatTech = beatTechMap[e.key.toLowerCase()] ?? beatTechMap[e.key]
+        if (beatTech) {
+          e.preventDefault()
+          applyBeatTechnique(beatTech)
+          return
+        }
       }
 
       // Delete / backspace
@@ -914,6 +1033,7 @@ export function useTabEditorInput({
       applyRestBeat,
       applyToggleDot,
       applyTechnique,
+      applyBeatTechnique,
       applyDeleteNote,
       applyDeleteBeat,
     ],

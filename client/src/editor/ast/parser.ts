@@ -423,7 +423,14 @@ export class Parser {
     let name = 'Track'
     let shortName: string | undefined
 
-    if (this.check(TT.String)) {
+    if (this.check(TT.LParen)) {
+      this.advance()
+      const fullName = this.match(TT.String)
+      const short = this.match(TT.String)
+      if (fullName) name = fullName.value
+      if (short) shortName = short.value
+      this.match(TT.RParen)
+    } else if (this.check(TT.String)) {
       name = this.advance().value
       if (this.check(TT.String)) shortName = this.advance().value
     }
@@ -450,6 +457,7 @@ export class Parser {
       this.advance()
       while (!this.check(TT.RBrace) && !this.check(TT.EOF)) {
         this.skipNewlines()
+        if (this.check(TT.RBrace) || this.check(TT.EOF)) break
         const prop = this.match(TT.Ident)
         if (!prop) { this.advance(); continue }
         this.parseTrackProperty(track, prop.value)
@@ -524,6 +532,7 @@ export class Parser {
       this.advance()
       while (!this.check(TT.RBrace) && !this.check(TT.EOF)) {
         this.skipNewlines()
+        if (this.check(TT.RBrace) || this.check(TT.EOF)) break
         const prop = this.match(TT.Ident)
         if (!prop) { this.advance(); continue }
         switch (prop.value.toLowerCase()) {
@@ -560,7 +569,7 @@ export class Parser {
     // Determine if we have explicit \voice tags
     this.skipNewlines()
     if (this.check(TT.Backslash) && this.isTagAhead('voice')) {
-      const voiceBarsList: BeatNode[][] = []
+      const voiceBarsList: BeatNode[][][] = []
 
       while (this.check(TT.Backslash) && this.isTagAhead('voice') && !this.check(TT.EOF)) {
         this.advance() // backslash
@@ -952,8 +961,8 @@ export class Parser {
       return beat
     }
 
-    // Single note: <fret>.<string>
-    if (this.check(TT.NumberInt)) {
+    // Single note: <fret>.<string> or dead-note shorthand x.<string>
+    if (this.check(TT.NumberInt) || this.isDeadNoteShorthandStart()) {
       const note = this.parseSingleNote(beat)
       if (note) beat.notes.push(note)
     }
@@ -962,7 +971,7 @@ export class Parser {
     else if (this.check(TT.LParen)) {
       this.advance()
       while (!this.check(TT.RParen) && !this.check(TT.EOF)) {
-        if (this.check(TT.NumberInt)) {
+        if (this.check(TT.NumberInt) || this.isDeadNoteShorthandStart()) {
           const note = this.parseSingleNote(beat)
           if (note) beat.notes.push(note)
         } else {
@@ -972,14 +981,22 @@ export class Parser {
       this.match(TT.RParen)
     }
 
-    // Beat-level duration suffix: .4 after the note(s)
-    if (this.check(TT.Dot)) {
-      const durSuffix = this.tryParseDurationSuffix()
-      if (durSuffix !== null) beat.duration.value = durSuffix
-    }
+    // AlphaTab may emit note effects before a duration suffix
+    // (`9.3{t}.2{d}`), or duration before beat effects (`9.3.4{dy mf}`).
+    // We accept both orders and keep consuming until neither form remains.
+    while (this.check(TT.Dot) || this.check(TT.LBrace)) {
+      if (this.check(TT.Dot)) {
+        const durSuffix = this.tryParseDurationSuffix()
+        if (durSuffix !== null) {
+          beat.duration.value = durSuffix
+          continue
+        }
+      }
 
-    // Beat effects in { }
-    this.parseBeatEffects(beat)
+      if (this.check(TT.LBrace)) {
+        this.parseBeatEffects(beat)
+      }
+    }
 
     // Beat repeat: * N
     this.parseBeatRepeat(beat)
@@ -987,7 +1004,15 @@ export class Parser {
     return beat
   }
 
+  private isDeadNoteShorthandStart(): boolean {
+    return this.check(TT.Ident) && this.peek().value === 'x'
+  }
+
   private parseSingleNote(beat: BeatNode): NoteNode | null {
+    if (this.isDeadNoteShorthandStart()) {
+      return this.parseDeadNoteShorthand(beat)
+    }
+
     // fret . string
     const fretTok = this.match(TT.NumberInt)
     if (!fretTok) return null
@@ -1023,6 +1048,34 @@ export class Parser {
     return note
   }
 
+  private parseDeadNoteShorthand(beat: BeatNode): NoteNode | null {
+    this.advance() // x
+
+    if (!this.check(TT.Dot)) {
+      this.error("Expected '.' after dead-note shorthand 'x'")
+      return null
+    }
+    this.advance()
+
+    const stringTok = this.match(TT.NumberInt)
+    if (!stringTok) {
+      this.error("Expected string number after dead-note shorthand 'x.'")
+      return null
+    }
+
+    if (this.check(TT.Dot)) {
+      const durSuffix = this.tryParseDurationSuffix()
+      if (durSuffix !== null) beat.duration.value = durSuffix
+    }
+
+    return {
+      id: nanoid(),
+      fret: 0,
+      string: parseInt(stringTok.value, 10),
+      dead: true,
+    }
+  }
+
   private tryParseDurationSuffix(): Duration | null {
     if (!this.check(TT.Dot)) return null
     const dotPos = this.pos
@@ -1043,6 +1096,7 @@ export class Parser {
 
     while (!this.check(TT.RBrace) && !this.check(TT.EOF)) {
       this.skipNewlines()
+      if (this.check(TT.RBrace) || this.check(TT.EOF)) break
       const kw = this.match(TT.Ident)
       if (!kw) { this.advance(); continue }
 
@@ -1137,6 +1191,7 @@ export class Parser {
 
     while (!this.check(TT.RBrace) && !this.check(TT.EOF)) {
       this.skipNewlines()
+      if (this.check(TT.RBrace) || this.check(TT.EOF)) break
       const kw = this.match(TT.Ident)
       if (!kw) { this.advance(); continue }
 
@@ -1164,7 +1219,14 @@ export class Parser {
             }
           } else {
             const n = this.match(TT.NumberInt)
-            if (n) beat.duration.tuplet = { numerator: parseInt(n.value, 10), denominator: 2 }
+            if (n) {
+              const num = parseInt(n.value, 10)
+              // Default denominator = largest power of 2 strictly less than num.
+              // e.g. tu 3 → 2, tu 5 → 4, tu 7 → 4, tu 9 → 8
+              let den = 1
+              while (den * 2 < num) den *= 2
+              beat.duration.tuplet = { numerator: num, denominator: den }
+            }
           }
           break
         }
@@ -1417,27 +1479,26 @@ export class Parser {
   // Voice beats (for explicit \voice parsing)
   // ---------------------------------------------------------------------------
 
-  private parseVoiceBeats(): BeatNode[] {
+  // Returns beats grouped by bar: result[barIndex] = beats for that bar
+  private parseVoiceBeats(): BeatNode[][] {
     const bars = this.parseBars()
-    const beats: BeatNode[] = []
-    for (const bar of bars) {
+    return bars.map(bar => {
+      const beats: BeatNode[] = []
       for (const voice of bar.voices) {
         beats.push(...voice.beats)
       }
-    }
-    return beats
+      return beats
+    })
   }
 
-  private mergeVoicesToBars(voiceBarsList: BeatNode[][]): BarNode[] {
-    // Simple merge: assume all voices have the same bar count
-    // For multi-voice, we create VoiceNodes inside each BarNode
-    // This is a simplified approach
+  // voiceBarsList[voiceIndex][barIndex] = beats for that voice in that bar
+  private mergeVoicesToBars(voiceBarsList: BeatNode[][][]): BarNode[] {
     const maxBars = Math.max(...voiceBarsList.map(v => v.length))
     const bars: BarNode[] = []
     for (let i = 0; i < maxBars; i++) {
-      const voices: VoiceNode[] = voiceBarsList.map(vb => ({
+      const voices: VoiceNode[] = voiceBarsList.map(vbByBar => ({
         id: nanoid(),
-        beats: vb[i] !== undefined ? [vb[i]] : [],
+        beats: vbByBar[i] ?? [],
       }))
       bars.push({ id: nanoid(), voices })
     }

@@ -52,7 +52,19 @@ export {
   SetAccent,
   SetStroke,
   SetDynamics,
+  SetStaccato,
+  SetSlur,
+  SetTrill,
+  SetOrnament,
+  SetCrescendo,
+  SetDecrescendo,
+  SetArpeggio,
+  SetBrush,
+  SetFade,
+  SetTremoloPicking,
+  SetFermata,
 } from './techniqueCommands'
+export type { FadeType, FermataValue } from './techniqueCommands'
 
 export {
   BulkTranspose,

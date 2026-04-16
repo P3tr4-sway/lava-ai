@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, ChevronDown, Loader2, Pause, Play, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
+import { AlertCircle, ChevronDown, Dices, Loader2, Music, Pause, Play, Plus, Sparkles, X } from 'lucide-react'
 import WaveSurfer from 'wavesurfer.js'
 import { cn } from '@/components/ui/utils'
 import { projectService } from '@/services/projectService'
@@ -25,7 +25,7 @@ import {
   type ImportFileType,
 } from '@/io/file-import'
 import { useTabEditorStore } from '@/stores/tabEditorStore'
-import type { ScoreDocument } from '@lava/shared'
+import type { ScoreDocument, ScoreMeasureMeta, ScoreTrack } from '@lava/shared'
 import type { ScoreNode } from '@/editor/ast/types'
 
 type ImportSourceKind = 'audio' | 'youtube' | 'musicxml' | 'pdf-image'
@@ -47,6 +47,10 @@ interface NewPackDialogProps {
   previewError?: string | null
   previewAudioUrl?: string | null
   onRegeneratePreview?: () => Promise<void> | void
+  /** Pre-fill the uploaded file (e.g. from homepage chatbox) */
+  initialFile?: File | null
+  /** Pre-fill the AI style prompt (e.g. from homepage chatbox) */
+  initialAiPrompt?: string
 }
 
 interface PresetOption {
@@ -670,6 +674,70 @@ function SliderRow({
 }
 
 // ---------------------------------------------------------------------------
+// Generated score preview — blank 32-bar ScoreDocument rendered via AlphaTab
+// ---------------------------------------------------------------------------
+
+function buildBlankScoreDocument(draft: NewPackDraft): ScoreDocument {
+  const [num, den] = draft.timeSignature.split('/').map(Number)
+  const isMinor = /m$/.test(draft.key)
+  const mode = isMinor ? 'minor' as const : 'major' as const
+  const keyName = isMinor ? draft.key.slice(0, -1) : draft.key
+
+  const measures: ScoreMeasureMeta[] = Array.from({ length: 32 }, (_, i) => ({
+    id: `m${i}`,
+    index: i,
+    ...(i === 0 ? {
+      timeSignature: { numerator: num, denominator: den },
+      keySignature: { key: keyName, mode },
+      tempo: draft.tempo,
+    } : {}),
+    harmony: [],
+    annotations: [],
+  }))
+
+  const track: ScoreTrack = {
+    id: 't1',
+    name: 'Guitar',
+    instrument: 'acoustic-guitar-nylon',
+    clef: 'treble',
+    tuning: [64, 59, 55, 50, 45, 40], // E4 B3 G3 D3 A2 E2
+    capo: draft.capo ?? 0,
+    notes: [],
+  }
+
+  return {
+    id: 'preview-blank',
+    title: draft.name || 'Untitled',
+    tempo: draft.tempo,
+    meter: { numerator: num, denominator: den },
+    keySignature: { key: keyName, mode },
+    divisions: 4,
+    layoutMode: 'systems',
+    measures,
+    tracks: [track],
+  }
+}
+
+function GeneratedScorePreview({ draft }: { draft: NewPackDraft }) {
+  const [scoreDocument] = useState(() => buildBlankScoreDocument(draft))
+
+  return (
+    <div className="relative h-full">
+      <span className="absolute right-5 top-5 z-10 inline-flex items-center gap-1.5 rounded-full bg-[#22c55e]/10 px-3 py-[5px] text-[11px] font-semibold text-[#16a34a] shadow-sm backdrop-blur-sm">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+        Preview ready
+      </span>
+      <ScorePreviewPane
+        gpBytes={null}
+        scoreDocument={scoreDocument}
+        fileType="musicxml"
+        loading={false}
+      />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main dialog
 // ---------------------------------------------------------------------------
 
@@ -688,6 +756,8 @@ export function NewPackDialog({
   previewStatus = 'ready',
   previewError = null,
   previewAudioUrl = null,
+  initialFile = null,
+  initialAiPrompt = '',
 }: NewPackDialogProps) {
   const navigate = useNavigate()
   const upsertProject = useProjectStore((state) => state.upsertProject)
@@ -715,9 +785,11 @@ export function NewPackDialog({
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiProcessing, setAiProcessing] = useState(false)
   const [aiStageIndex, setAiStageIndex] = useState(0)
+  // 'setup' = normal input state; 'preview' = generation done, showing score
+  const [createStage, setCreateStage] = useState<'setup' | 'preview'>('setup')
 
   // Figma sidebar state
-  const [scoreMode, setScoreMode] = useState<'transcribe' | 'rearrange'>('rearrange')
+  const [scoreMode, setScoreMode] = useState<'transcribe' | 'rearrange' | 'blank'>('rearrange')
   // Multi-select within Single; mutually exclusive with Multi group
   const [selectedSingleNotations, setSelectedSingleNotations] = useState<Set<NotationTypeValue>>(new Set<NotationTypeValue>(['tab']))
   const [selectedMultiNotation, setSelectedMultiNotation] = useState<NotationTypeValue | null>(null)
@@ -766,15 +838,21 @@ export function NewPackDialog({
     gpScoreNodeRef.current = null
     setImporting(false)
     setImportError(null)
-    setAiPrompt('')
+    setAiPrompt(initialAiPrompt)
     setAiProcessing(false)
     setAiStageIndex(0)
+    setCreateStage('setup')
     setScoreMode('rearrange')
     setSelectedSingleNotations(new Set<NotationTypeValue>(['tab']))
     setSelectedMultiNotation(null)
     setDifficultyVal(25)
     setStylizationVal(75)
     setOriginalityVal(50)
+    // Pre-fill file from homepage if provided
+    if (initialFile) {
+      void handleFileSelect(initialFile)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDraft, initialRequestSummary, open])
 
   // Use a ref callback + native listener because React's synthetic onScroll
@@ -902,10 +980,10 @@ export function NewPackDialog({
     if (!aiProcessing) return
 
     if (aiStageIndex >= AI_PROCESSING_STAGES.length) {
-      // All stages done — perform the actual create
+      // All stages done — show generated score preview
       setAiProcessing(false)
       setAiStageIndex(0)
-      performCreate()
+      setCreateStage('preview')
       return
     }
 
@@ -988,22 +1066,28 @@ export function NewPackDialog({
       return
     }
 
-    // Default mode: if AI prompt is present
-    if (aiPrompt.trim()) {
-      if (onAiStyleSubmit) {
-        onAiStyleSubmit(draft, aiPrompt.trim())
-        onClose()
-        return
-      }
-      setAiProcessing(true)
-      setAiStageIndex(0)
+    // Blank mode: create directly without preview stage
+    if (scoreMode === 'blank') {
+      await performCreate()
       return
     }
 
-    // No AI prompt — create immediately
-    await performCreate()
+    // Rearrange / transcribe: if external style handler, delegate
+    if (onAiStyleSubmit && aiPrompt.trim()) {
+      onAiStyleSubmit(draft, aiPrompt.trim())
+      onClose()
+      return
+    }
+
+    // Otherwise run generation animation then show preview
+    setAiProcessing(true)
+    setAiStageIndex(0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isImportMode, draft, aiPrompt, onAiStyleSubmit, onSubmitDraft, onClose, navigate, upsertProject, performCreate])
+  }, [isImportMode, scoreMode, draft, aiPrompt, onAiStyleSubmit, onSubmitDraft, onClose, navigate, upsertProject, performCreate])
+
+  const handleConfirm = useCallback(async () => {
+    await performCreate()
+  }, [performCreate])
 
   const selectedPlayingStyle = PLAYING_STYLE_OPTIONS.find((option) => option.id === playingStyleId) ?? PLAYING_STYLE_OPTIONS[0]
   const selectedDisplay = DISPLAY_OPTIONS.find((option) => option.value === draft.layout) ?? DISPLAY_OPTIONS[0]
@@ -1076,14 +1160,39 @@ export function NewPackDialog({
 
         {/* LEFT PREVIEW PANE — fills gap between left nav (≈80px) and right sidebar */}
         <div className="fixed bottom-0 left-[80px] right-[max(25vw,320px)] top-0 overflow-hidden">
-          {previewPaneMode === 'score' && (
+          {createStage === 'preview' ? (
+            (uploadedGpBytes || importedScoreDocument) ? (
+              <ScorePreviewPane
+                gpBytes={uploadedGpBytes}
+                scoreDocument={importedScoreDocument}
+                fileType={uploadedFileType === 'gp' ? 'gp' : 'musicxml'}
+                loading={false}
+              />
+            ) : (
+              <GeneratedScorePreview draft={draft} />
+            )
+          ) : previewPaneMode === 'score' ? (
             <ScorePreviewPane
               gpBytes={uploadedGpBytes}
               scoreDocument={importedScoreDocument}
               fileType={uploadedFileType === 'gp' ? 'gp' : uploadedFileType === 'musicxml' ? 'musicxml' : null}
               loading={importing}
             />
-          )}
+          ) : scoreMode !== 'blank' ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 px-10 text-center">
+              <div className="flex size-16 items-center justify-center rounded-full bg-black/[0.06]">
+                <Music size={28} strokeWidth={1.2} className="text-[#888]" />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-[15px] font-medium text-[#444]">AI-generated score</p>
+                <p className="text-[13px] leading-relaxed text-[#999]">
+                  {aiPrompt.trim()
+                    ? 'Upload audio or sheet music to get started, or let AI generate from your description.'
+                    : 'Upload audio or sheet music, or describe a style to generate.'}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* RIGHT SIDEBAR */}
@@ -1127,8 +1236,8 @@ export function NewPackDialog({
                   }}
                 />
 
-                {/* Upload card */}
-                <div className="px-6 pb-5 pt-2">
+                {/* Upload card — hidden in blank mode */}
+                {scoreMode !== 'blank' && <div className="px-6 pb-5 pt-2">
                   {uploadedFile && uploadedFileType ? (
                     uploadedFileType === 'audio' ? (
                       <AudioUploadPlayer file={uploadedFile} onRemove={handleRemoveFile} />
@@ -1151,19 +1260,23 @@ export function NewPackDialog({
                       <Plus size={24} strokeWidth={1.5} className="text-[#444]" />
                     </button>
                   )}
-                </div>
+                </div>}
 
                 {/* Segmented control */}
                 <div className="px-6 pb-5">
                   <div className="flex h-[34px] gap-1 rounded-full bg-black/10 p-[2px]">
-                    {(['transcribe', 'rearrange'] as const).map((m) => {
+                    {(['transcribe', 'rearrange', 'blank'] as const).map((m) => {
                       const disabled = m === 'transcribe' && isScoreFile
                       const active = scoreMode === m
                       return (
                         <button
                           key={m}
                           type="button"
-                          onClick={() => !disabled && setScoreMode(m)}
+                          onClick={() => {
+                            if (disabled) return
+                            if (m === 'blank') setAiPrompt('')
+                            setScoreMode(m)
+                          }}
                           disabled={disabled}
                           className={cn(
                             'flex-1 rounded-full text-[13px] transition-all',
@@ -1174,15 +1287,136 @@ export function NewPackDialog({
                                 : 'font-medium text-[#555]',
                           )}
                         >
-                          {m === 'transcribe' ? 'Transcribe' : 'Rearrange'}
+                          {m === 'transcribe' ? 'Transcribe' : m === 'rearrange' ? 'Rearrange' : 'Blank'}
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* Notation Type */}
-                <div className="border-t border-black/[0.08] px-6 py-5">
+                {/* Blank setup form */}
+                {scoreMode === 'blank' && (
+                  <div className="border-t border-black/[0.08] px-6 py-5 space-y-3">
+                    {/* Project name */}
+                    <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Title</p>
+                      <input
+                        aria-label="Project name"
+                        value={draft.name}
+                        onChange={(e) => updateDraft('name', e.target.value)}
+                        placeholder="Untitled Score"
+                        className="w-full bg-transparent text-[15px] font-medium text-[#111] outline-none placeholder:text-[#bfbfbf]"
+                      />
+                    </div>
+
+                    {/* Bars + Tempo */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Bars</p>
+                        <select
+                          aria-label="Bars"
+                          value={String(draft.bars)}
+                          onChange={(e) => updateDraft('bars', Number(e.target.value))}
+                          className="w-full appearance-none bg-transparent text-[15px] font-medium text-[#111] outline-none"
+                        >
+                          {BAR_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                      </div>
+                      <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Tempo</p>
+                        <div className="flex items-center gap-1">
+                          <input
+                            aria-label="Tempo"
+                            inputMode="numeric"
+                            value={String(draft.tempo)}
+                            onChange={(e) => updateDraft('tempo', clampNumber(e.target.value, 40, 240, draft.tempo))}
+                            className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#111] outline-none"
+                          />
+                          <span className="text-[12px] text-[#8a8a8a]">BPM</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Key + Meter */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Key</p>
+                        <select
+                          aria-label="Key"
+                          value={draft.key}
+                          onChange={(e) => updateDraft('key', e.target.value)}
+                          className="w-full appearance-none bg-transparent text-[15px] font-medium text-[#111] outline-none"
+                        >
+                          {KEY_OPTIONS.map((k) => <option key={k} value={k}>{k}</option>)}
+                        </select>
+                      </div>
+                      <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Meter</p>
+                        <select
+                          aria-label="Meter"
+                          value={draft.timeSignature}
+                          onChange={(e) => updateDraft('timeSignature', e.target.value)}
+                          className="w-full appearance-none bg-transparent text-[15px] font-medium text-[#111] outline-none"
+                        >
+                          {TIME_SIGNATURE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* View */}
+                    <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">View</p>
+                      <div className="flex gap-2">
+                        {LAYOUT_OPTIONS.map((opt) => {
+                          const active = draft.layout === opt.value
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => updateDraft('layout', opt.value)}
+                              className={cn(
+                                'flex-1 rounded-full py-[6px] text-[13px] font-medium transition-all',
+                                active
+                                  ? 'bg-[#111] text-white shadow-sm'
+                                  : 'bg-black/[0.07] text-[#555] hover:bg-black/[0.12]',
+                              )}
+                            >
+                              {opt.value === 'tab' ? 'Tab' : opt.value === 'split' ? 'Split' : 'Staff'}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Tuning + Capo */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Tuning</p>
+                        <select
+                          aria-label="Tuning"
+                          value={draft.tuning}
+                          onChange={(e) => updateDraft('tuning', e.target.value as NewPackTuningId)}
+                          className="w-full appearance-none bg-transparent text-[15px] font-medium text-[#111] outline-none"
+                        >
+                          {NEW_PACK_TUNINGS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="rounded-[16px] border border-white/80 bg-white/60 px-4 py-3 backdrop-blur-sm shadow-[0px_4px_12px_rgba(0,0,0,0.06)]">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#737373]">Capo</p>
+                        <input
+                          aria-label="Capo"
+                          inputMode="numeric"
+                          value={String(draft.capo)}
+                          onChange={(e) => updateDraft('capo', clampNumber(e.target.value, 0, 12, draft.capo))}
+                          className="w-full bg-transparent text-[15px] font-medium text-[#111] outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notation Type — hidden in blank mode */}
+                {scoreMode !== 'blank' && <div className="border-t border-black/[0.08] px-6 py-5">
                   <p className="mb-4 text-[17px] tracking-[0.3px] text-[#111]">Notation Type</p>
 
                   <p className="mb-2 text-[13px] text-[#666]">Single</p>
@@ -1228,7 +1462,7 @@ export function NewPackDialog({
                       )
                     })}
                   </div>
-                </div>
+                </div>}
 
                 {scoreMode === 'rearrange' && (
                   <>
@@ -1248,7 +1482,7 @@ export function NewPackDialog({
                           aria-label="Random style suggestion"
                           className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/60 text-[#555] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all hover:bg-white/80"
                         >
-                          <RefreshCw size={15} />
+                          <Dices size={16} />
                         </button>
                       </div>
                     </div>
@@ -1267,23 +1501,69 @@ export function NewPackDialog({
 
           {/* Footer */}
           {!aiProcessing && (
-            <div className="px-6 pb-8 pt-4">
+            <div className="px-6 pb-8 pt-4 space-y-3">
               {error && (
-                <p role="alert" className="mb-3 text-[12px] text-[#b24d37]" aria-live="polite">{error}</p>
+                <p role="alert" className="text-[12px] text-[#b24d37]" aria-live="polite">{error}</p>
               )}
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={submitting || importing}
-                className={cn(
-                  'w-full rounded-full py-[14px] text-[17px] font-medium transition-all',
-                  submitting || importing
-                    ? 'cursor-not-allowed bg-black/10 text-black/30'
-                    : 'bg-[#111] text-white hover:bg-[#222]',
-                )}
-              >
-                {submitting ? 'Creating...' : 'Create'}
-              </button>
+              {createStage === 'preview' ? (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCreateStage('setup')}
+                    disabled={submitting}
+                    className="flex-1 rounded-full py-[14px] text-[17px] font-medium transition-all bg-black/[0.08] text-[#444] hover:bg-black/[0.13] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Redo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={submitting}
+                    className={cn(
+                      'flex-1 rounded-full py-[14px] text-[17px] font-medium transition-all',
+                      submitting
+                        ? 'cursor-not-allowed bg-[#22c55e]/60 text-white/60'
+                        : 'bg-[#22c55e] text-white hover:bg-[#16a34a]',
+                    )}
+                  >
+                    {submitting ? 'Creating...' : 'Confirm'}
+                  </button>
+                </div>
+              ) : (
+                (() => {
+                  const needsFile = scoreMode !== 'blank' && !uploadedFile
+                  const isDisabled = submitting || importing || needsFile
+                  return (
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleRemoveFile()
+                          setAiPrompt('')
+                          setScoreMode('rearrange')
+                        }}
+                        disabled={submitting}
+                        className="flex-1 rounded-full py-[14px] text-[17px] font-medium transition-all bg-black/[0.08] text-[#444] hover:bg-black/[0.13] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Redo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCreate}
+                        disabled={isDisabled}
+                        className={cn(
+                          'flex-1 rounded-full py-[14px] text-[17px] font-medium transition-all',
+                          isDisabled
+                            ? 'cursor-not-allowed bg-black/10 text-black/30'
+                            : 'bg-[#111] text-white hover:bg-[#222]',
+                        )}
+                      >
+                        {submitting ? 'Creating...' : 'Create'}
+                      </button>
+                    </div>
+                  )
+                })()
+              )}
             </div>
           )}
         </div>

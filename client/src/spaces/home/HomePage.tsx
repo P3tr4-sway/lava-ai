@@ -367,6 +367,8 @@ export function HomePage() {
   const [phase, setPhase] = useState<SubmitPhase>('idle')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [newPackOpen, setNewPackOpen] = useState(false)
+  const [newPackInitialFile, setNewPackInitialFile] = useState<File | null>(null)
+  const [newPackInitialPrompt, setNewPackInitialPrompt] = useState('')
   const [processingState, setProcessingState] = useState<ProcessingState | null>(null)
   const [setupState, setSetupState] = useState<SetupState | null>(null)
   const [waitingState, setWaitingState] = useState<WaitingState | null>(null)
@@ -415,7 +417,7 @@ export function HomePage() {
     const input = document.createElement('input')
     input.type = 'file'
     input.multiple = true
-    input.accept = 'audio/*,image/*,.pdf,.musicxml,.mxl,.xml'
+    input.accept = 'audio/*,image/*,.pdf,.musicxml,.mxl,.xml,.gp,.gp3,.gp4,.gp5,.gpx,.gp7'
     input.onchange = (e) => {
       const files = Array.from((e.target as HTMLInputElement).files ?? [])
       if (files.length > 0) setAttachedFiles(files)
@@ -423,92 +425,13 @@ export function HomePage() {
     input.click()
   }
 
-  const handleSend = useCallback(async (message: string) => {
+  const handleSend = useCallback((message: string) => {
     if (!message.trim() && attachedFiles.length === 0) return
-
-    if (attachedFiles.length > 1) {
-      const requestSummary = summarizeRequest(message || 'Multiple imports')
-      const queueItems = attachedFiles.map((file) => {
-        const source = detectImportSourceFromFile(file)
-        return {
-          id: `${Date.now()}-${file.name}-${Math.random().toString(36).slice(2, 8)}`,
-          fileName: file.name,
-          source,
-          draft: buildImportDraft(file, message, source),
-          requestSummary,
-          stageIndex: 0,
-          status: 'queued' as const,
-        }
-      })
-
-      setImportQueue((current) => [...queueItems, ...current])
-      setAttachedFiles([])
-      toast(`${queueItems.length} files added.`)
-      return
-    }
-
-    const attachedFile = attachedFiles[0] ?? null
-    const importSource = detectImportSource(attachedFile, message)
-    const requestSummary = summarizeRequest(message)
-    if (importSource) {
-      const draft = buildImportDraft(attachedFile, message, importSource)
-      const resolvedSourceLabel = sourceLabel(attachedFile, importSource)
-
-      if (importSource === 'musicxml') {
-        setSetupState({
-          draft,
-          source: importSource,
-          sourceLabel: resolvedSourceLabel,
-          detectedFields: buildDetectedFields(draft),
-          requestSummary,
-          previewVersion: 1,
-        })
-        return
-      }
-
-      setProcessingState({
-        source: importSource,
-        title: importSource === 'youtube'
-          ? 'Reading link'
-          : importSource === 'pdf-image'
-            ? 'Scanning score'
-            : 'Reading file',
-        stages: IMPORT_PIPELINE_STEPS[importSource],
-        stageIndex: 0,
-        draft,
-        fileName: attachedFile?.name,
-        file: attachedFile,
-        sourceLabel: resolvedSourceLabel,
-        requestSummary,
-      })
-      return
-    }
-
-    setPhase('analyzing')
-    setTimeout(() => setPhase('arranging'), 900)
-    setTimeout(() => setPhase('building'), 1800)
-
-    const draftName = message.trim().slice(0, 48) || attachedFile?.name.replace(/\.[^.]+$/, '') || 'New Practice Pack'
-
-    try {
-      const project = await projectService.create(buildNewPackProjectPayload({
-        name: draftName,
-        bars: 32,
-        tempo: 92,
-        timeSignature: '4/4',
-        key: 'C',
-        layout: 'split',
-        tuning: 'standard',
-        capo: 0,
-      }))
-      upsertProject(project)
-      setPhase('idle')
-      navigate(`/pack/${project.id}`)
-    } catch (error) {
-      console.error('Failed to create AI pack shell', error)
-      setPhase('idle')
-    }
-  }, [attachedFiles, navigate, upsertProject, toast])
+    // Open the New Score sidebar with the file and prompt pre-filled
+    setNewPackInitialFile(attachedFiles[0] ?? null)
+    setNewPackInitialPrompt(message)
+    setNewPackOpen(true)
+  }, [attachedFiles])
 
   useEffect(() => {
     if (!processingState) return
@@ -676,7 +599,12 @@ export function HomePage() {
             {PHASE_LABELS[phase]}
           </p>
         </div>
-        <NewPackDialog open={newPackOpen} onClose={() => setNewPackOpen(false)} />
+        <NewPackDialog
+          open={newPackOpen}
+          onClose={() => { setNewPackOpen(false); setNewPackInitialFile(null); setNewPackInitialPrompt('') }}
+          initialFile={newPackInitialFile}
+          initialAiPrompt={newPackInitialPrompt}
+        />
       </>
     )
   }
@@ -855,7 +783,12 @@ export function HomePage() {
         </div>
         </div>
 
-        <NewPackDialog open={newPackOpen} onClose={() => setNewPackOpen(false)} />
+        <NewPackDialog
+          open={newPackOpen}
+          onClose={() => { setNewPackOpen(false); setNewPackInitialFile(null); setNewPackInitialPrompt('') }}
+          initialFile={newPackInitialFile}
+          initialAiPrompt={newPackInitialPrompt}
+        />
         {exportDialogState ? (
           <ExportPdfDialog
             open={exportDialogState.open}
@@ -921,10 +854,16 @@ export function HomePage() {
               <ChatInput
                 ref={chatRef}
                 onSend={handleSend}
-                placeholder="Drop audio, sheet music, PDF, or a link. Describe the version you want to create..."
+                placeholder="Drop audio, sheet music, or PDF. Describe the version you want to create..."
                 density="roomy"
                 onAttachClick={handleFileSelect}
                 canSend={attachedFiles.length > 0}
+                submitLabel="Create"
+                onRandomize={() => {
+                  const pick = QUICK_ACTIONS[Math.floor(Math.random() * QUICK_ACTIONS.length)]
+                  chatRef.current?.setValue(pick.prompt)
+                  chatRef.current?.focus()
+                }}
               />
             </div>
 
@@ -1008,27 +947,6 @@ export function HomePage() {
               </div>
             )}
 
-            {/* Quick actions */}
-            <div className="flex flex-col gap-4 pt-4">
-              <div className="flex items-center gap-3">
-                <p className="figma-home-type__label text-[15px] font-medium text-text-primary">Start from a use case</p>
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {QUICK_ACTIONS.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => handleQuickActionClick(action.prompt)}
-                    className={cn(
-                      'shrink-0 rounded-full border border-border px-5 py-2.5 text-[15px] text-text-secondary transition-colors',
-                      'hover:bg-surface-1 hover:text-text-primary',
-                    )}
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {recentPacks.length > 0 && (
               <div className="flex flex-col gap-4 pt-2">
                 <div className="flex items-center gap-3">
@@ -1093,7 +1011,12 @@ export function HomePage() {
           )}
         </div>
 
-      <NewPackDialog open={newPackOpen} onClose={() => setNewPackOpen(false)} />
+      <NewPackDialog
+        open={newPackOpen}
+        onClose={() => { setNewPackOpen(false); setNewPackInitialFile(null); setNewPackInitialPrompt('') }}
+        initialFile={newPackInitialFile}
+        initialAiPrompt={newPackInitialPrompt}
+      />
 
       <Dialog
         open={showIntroDialog}

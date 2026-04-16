@@ -6,7 +6,14 @@
 import type { Command, CommandContext, CommandResult, Json } from './Command'
 import type { BarNode, VoiceNode, RepeatMarker } from '../ast/types'
 import { insertAt, removeAt, updateBar, updateTrack } from './helpers'
-import { makeBarBeats, getEffectiveTimeSig, findBarPosition } from '../ast/barFill'
+import {
+  makeBarBeats,
+  getEffectiveTimeSig,
+  findBarPosition,
+  barCapacityUnits,
+  durationToUnits,
+  splitIntoRests,
+} from '../ast/barFill'
 
 // ---------------------------------------------------------------------------
 // InsertBar
@@ -223,18 +230,63 @@ export class SetTimeSignature implements Command {
   readonly type = 'SetTimeSignature'
   readonly label = 'Set time signature'
 
+  // Snapshot of voices before rebalancing — used by invert() to restore exactly.
+  private _savedVoices: VoiceNode[] | undefined
+
   constructor(
     private readonly trackId: string,
     private readonly barId: string,
     private readonly timeSignature: { numerator: number; denominator: number } | undefined,
     private readonly oldTimeSignature: { numerator: number; denominator: number } | undefined,
+    // When provided (undo path), restore these voices directly without rebalancing.
+    private readonly _voicesToRestore?: VoiceNode[],
   ) {}
 
   execute(ctx: CommandContext): CommandResult {
-    const score = updateBarInTrack(ctx, this.trackId, this.barId, (bar) => ({
-      ...bar,
-      timeSignature: this.timeSignature,
-    }))
+    // Undo path: restore exact pre-change voices alongside the old time signature.
+    if (this._voicesToRestore !== undefined) {
+      const score = updateBarInTrack(ctx, this.trackId, this.barId, (bar) => ({
+        ...bar,
+        timeSignature: this.timeSignature,
+        voices: this._voicesToRestore!,
+      }))
+      return { score, affectedBarIds: [this.barId] }
+    }
+
+    // Forward path: rebalance voices to fit the new time signature.
+    const pos = findBarPosition(ctx.score, this.barId)
+
+    // Determine the new capacity. When clearing the bar's explicit ts (undefined),
+    // inherit from predecessor bars — same logic as getEffectiveTimeSig but skips
+    // the current bar so it doesn't read its own (about-to-be-removed) value.
+    let tsForCapacity: { numerator: number; denominator: number }
+    if (this.timeSignature) {
+      tsForCapacity = this.timeSignature
+    } else {
+      const bars = pos
+        ? (ctx.score.tracks.find((t) => t.id === this.trackId)?.staves[0]?.bars ?? [])
+        : []
+      const barIdx = pos?.barIndex ?? 0
+      tsForCapacity = { numerator: 4, denominator: 4 }
+      for (let i = barIdx - 1; i >= 0; i--) {
+        const ts = bars[i]?.timeSignature
+        if (ts) { tsForCapacity = ts; break }
+      }
+    }
+
+    const newCap = barCapacityUnits(tsForCapacity)
+
+    let savedVoices: VoiceNode[] | undefined
+    const score = updateBarInTrack(ctx, this.trackId, this.barId, (bar) => {
+      savedVoices = bar.voices
+      return {
+        ...bar,
+        timeSignature: this.timeSignature,
+        voices: bar.voices.map((v) => rebalanceVoiceToCapacity(v, newCap, ctx.generateId)),
+      }
+    })
+    this._savedVoices = savedVoices
+
     return { score, affectedBarIds: [this.barId] }
   }
 
@@ -244,6 +296,7 @@ export class SetTimeSignature implements Command {
       this.barId,
       this.oldTimeSignature,
       this.timeSignature,
+      this._savedVoices,
     )
   }
 
@@ -394,8 +447,46 @@ export class SetRepeat implements Command {
 }
 
 // ---------------------------------------------------------------------------
-// Internal helper
+// Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Rebalance a voice's beats to exactly fill `newCap` 64th-note units.
+ *
+ * Overflow: remove whole beats from the end until used ≤ newCap.
+ * Underflow: pad with canonical rest beats (binary decomposition).
+ *
+ * Called by SetTimeSignature to keep every bar valid after a metre change.
+ */
+function rebalanceVoiceToCapacity(
+  voice: VoiceNode,
+  newCap: number,
+  generateId: () => string,
+): VoiceNode {
+  const beats = [...voice.beats]
+  let used = beats.reduce((s, b) => s + durationToUnits(b.duration), 0)
+
+  // Trim overflow from the end
+  while (used > newCap && beats.length > 0) {
+    used -= durationToUnits(beats[beats.length - 1].duration)
+    beats.pop()
+  }
+
+  // Pad underflow with canonical rests
+  if (used < newCap) {
+    const restDurs = splitIntoRests(0, newCap - used)
+    for (const dur of restDurs) {
+      beats.push({
+        id: generateId(),
+        duration: { value: dur, dots: 0 as const },
+        notes: [],
+        rest: true as const,
+      })
+    }
+  }
+
+  return { ...voice, beats }
+}
 
 function updateBarInTrack(
   ctx: CommandContext,

@@ -6,7 +6,7 @@
  */
 
 import type { Command, CommandContext, CommandResult, Json } from './Command'
-import type { SlideType, BendPoint, VibratoType, HarmonicType, AccentType, StrokeType, DynamicsValue } from '../ast/types'
+import type { SlideType, BendPoint, VibratoType, HarmonicType, AccentType, StrokeType, DynamicsValue, OrnamentType, TrillNode, Duration } from '../ast/types'
 import { updateBeat, updateVoice } from './helpers'
 
 // ---------------------------------------------------------------------------
@@ -555,6 +555,394 @@ export class SetDynamics implements Command {
 
   serialize(): Json {
     return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetStaccato
+// ---------------------------------------------------------------------------
+
+export class SetStaccato implements Command {
+  readonly type = 'SetStaccato'
+  readonly label = 'Set staccato'
+
+  constructor(
+    private readonly loc: NoteLocation,
+    private readonly value: boolean | undefined,
+    private readonly oldValue: boolean | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateNoteField(ctx, this.loc, 'staccato', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetStaccato(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetSlur
+// ---------------------------------------------------------------------------
+
+export class SetSlur implements Command {
+  readonly type = 'SetSlur'
+  readonly label = 'Set slur'
+
+  constructor(
+    private readonly loc: NoteLocation,
+    private readonly value: number | undefined,
+    private readonly oldValue: number | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateNoteField(ctx, this.loc, 'slur', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetSlur(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetTrill
+// ---------------------------------------------------------------------------
+
+export class SetTrill implements Command {
+  readonly type = 'SetTrill'
+  readonly label = 'Set trill'
+
+  constructor(
+    private readonly loc: NoteLocation,
+    private readonly value: TrillNode | undefined,
+    private readonly oldValue: TrillNode | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateNoteField(ctx, this.loc, 'trill', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetTrill(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      ...this.loc,
+      value: (this.value as unknown as Json) ?? null,
+      oldValue: (this.oldValue as unknown as Json) ?? null,
+    }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetOrnament
+// ---------------------------------------------------------------------------
+
+export class SetOrnament implements Command {
+  readonly type = 'SetOrnament'
+  readonly label = 'Set ornament'
+
+  constructor(
+    private readonly loc: NoteLocation,
+    private readonly value: OrnamentType | undefined,
+    private readonly oldValue: OrnamentType | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateNoteField(ctx, this.loc, 'ornament', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetOrnament(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetCrescendo (beat-level)
+// ---------------------------------------------------------------------------
+
+export class SetCrescendo implements Command {
+  readonly type = 'SetCrescendo'
+  readonly label = 'Set crescendo'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: boolean | undefined,
+    private readonly oldValue: boolean | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'crescendo', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetCrescendo(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetDecrescendo (beat-level)
+// ---------------------------------------------------------------------------
+
+export class SetDecrescendo implements Command {
+  readonly type = 'SetDecrescendo'
+  readonly label = 'Set decrescendo'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: boolean | undefined,
+    private readonly oldValue: boolean | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'decrescendo', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetDecrescendo(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetArpeggio (beat-level) — 'up' | 'down' | undefined, mutually exclusive
+// ---------------------------------------------------------------------------
+
+export class SetArpeggio implements Command {
+  readonly type = 'SetArpeggio'
+  readonly label = 'Set arpeggio'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: 'up' | 'down' | undefined,
+    private readonly oldValue: 'up' | 'down' | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateVoice(
+      ctx.score,
+      this.loc.trackId,
+      this.loc.barId,
+      this.loc.voiceId,
+      (voice) => ({
+        ...voice,
+        beats: voice.beats.map((b) =>
+          b.id === this.loc.beatId
+            ? { ...b, arpeggioUp: this.value === 'up' || undefined, arpeggioDown: this.value === 'down' || undefined }
+            : b,
+        ),
+      }),
+    )
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetArpeggio(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetBrush (beat-level) — 'up' | 'down' | undefined, mutually exclusive
+// ---------------------------------------------------------------------------
+
+export class SetBrush implements Command {
+  readonly type = 'SetBrush'
+  readonly label = 'Set brush stroke'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: 'up' | 'down' | undefined,
+    private readonly oldValue: 'up' | 'down' | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateVoice(
+      ctx.score,
+      this.loc.trackId,
+      this.loc.barId,
+      this.loc.voiceId,
+      (voice) => ({
+        ...voice,
+        beats: voice.beats.map((b) =>
+          b.id === this.loc.beatId
+            ? { ...b, brushUp: this.value === 'up' || undefined, brushDown: this.value === 'down' || undefined }
+            : b,
+        ),
+      }),
+    )
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetBrush(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetFade (beat-level) — 'in' | 'out' | 'swell' | undefined
+// ---------------------------------------------------------------------------
+
+export type FadeType = 'in' | 'out' | 'swell'
+
+export class SetFade implements Command {
+  readonly type = 'SetFade'
+  readonly label = 'Set fade'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: FadeType | undefined,
+    private readonly oldValue: FadeType | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateVoice(
+      ctx.score,
+      this.loc.trackId,
+      this.loc.barId,
+      this.loc.voiceId,
+      (voice) => ({
+        ...voice,
+        beats: voice.beats.map((b) =>
+          b.id === this.loc.beatId
+            ? {
+                ...b,
+                fadeIn: this.value === 'in' || undefined,
+                fadeOut: this.value === 'out' || undefined,
+                volumeSwell: this.value === 'swell' || undefined,
+              }
+            : b,
+        ),
+      }),
+    )
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetFade(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetTremoloPicking (beat-level)
+// ---------------------------------------------------------------------------
+
+export class SetTremoloPicking implements Command {
+  readonly type = 'SetTremoloPicking'
+  readonly label = 'Set tremolo picking'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: Duration | undefined,
+    private readonly oldValue: Duration | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'tremoloPickingDuration', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetTremoloPicking(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetFermata (beat-level)
+// ---------------------------------------------------------------------------
+
+export type FermataValue = { type: 'short' | 'medium' | 'long'; length: number }
+
+export class SetFermata implements Command {
+  readonly type = 'SetFermata'
+  readonly label = 'Set fermata'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: FermataValue | undefined,
+    private readonly oldValue: FermataValue | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'fermata', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetFermata(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      ...this.loc,
+      value: (this.value as unknown as Json) ?? null,
+      oldValue: (this.oldValue as unknown as Json) ?? null,
+    }
   }
 
   affectedBarIds(): string[] { return [this.loc.barId] }

@@ -80,6 +80,34 @@ describe('01 minimal score', () => {
   })
 })
 
+describe('01b parenthesized track header from alphaTab exporter', () => {
+  const input = String.raw`\track ("Vocal" "s.guit.") { volume 12 balance 8 instrument acousticguitarsteel }
+\staff {
+  score
+  tabs
+}
+\tuning (E4 B3 G3 D3 A2 E2) { label "Guitar Standard Tuning" }
+\ts (3 4)
+\tempo 105
+9.3.4{lyrics (0 "") dy mf instrument acousticguitarsteel beam Down}
+9.3.4{beam Down}
+9.3.4{beam Down}`
+
+  it('parses parenthesized track name without creating a phantom beat', () => {
+    const { score, errors } = parse(input)
+    expect(errors).toHaveLength(0)
+    expect(score.tracks[0]).toMatchObject({
+      name: 'Vocal',
+      shortName: 's.guit.',
+    })
+    expect(score.tracks[0].staves[0].bars[0].voices[0].beats[0]).toMatchObject({
+      notes: [{ fret: 9, string: 3 }],
+      dynamics: 'mf',
+      lyrics: '',
+    })
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 2. Rest
 // ---------------------------------------------------------------------------
@@ -355,6 +383,57 @@ describe('16 dead note', () => {
   })
 })
 
+describe('16a note effects before duration suffix', () => {
+  const input = '.\n9.3{t}.2{d}'
+
+  it('parses note effects before the duration suffix', () => {
+    const { score, errors } = parse(input)
+    expect(errors).toHaveLength(0)
+    expect(firstBeat(score)).toMatchObject({
+      duration: { value: 2, dots: 1 },
+      notes: [{ fret: 9, string: 3, tie: true }],
+    })
+  })
+
+  it('round-trips', () => {
+    assertRoundtrip(input)
+  })
+})
+
+describe('16b dead note shorthand', () => {
+  const input = '.\nx.1'
+
+  it('parses dead-note shorthand', () => {
+    const { score } = parse(input)
+    expect(firstNote(score)).toMatchObject({
+      fret: 0,
+      string: 1,
+      dead: true,
+    })
+  })
+
+  it('round-trips', () => {
+    assertRoundtrip(input)
+  })
+})
+
+describe('16c dead note shorthand inside chord', () => {
+  const input = '.\n(x.6 3.5 5.4)'
+
+  it('parses dead-note shorthand inside a chord beat', () => {
+    const { score } = parse(input)
+    expect(firstBeat(score).notes).toMatchObject([
+      { fret: 0, string: 6, dead: true },
+      { fret: 3, string: 5 },
+      { fret: 5, string: 4 },
+    ])
+  })
+
+  it('round-trips', () => {
+    assertRoundtrip(input)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 17. Palm mute
 // ---------------------------------------------------------------------------
@@ -415,6 +494,24 @@ describe('20 tuplet explicit', () => {
   const input = '.\n:8 3.1 {tu (5 4)}'
 
   it('parses 5-against-4 tuplet', () => {
+    const { score } = parse(input)
+    const beat = firstBeat(score)
+    expect(beat.duration.tuplet).toEqual({ numerator: 5, denominator: 4 })
+  })
+
+  it('round-trips', () => {
+    assertRoundtrip(input)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 20b. Tuplet shorthand — non-triplet (quintuplet)
+// ---------------------------------------------------------------------------
+
+describe('20b tuplet shorthand quintuplet', () => {
+  const input = '.\n:8 3.1 {tu 5}'
+
+  it('parses tu 5 shorthand as denominator 4', () => {
     const { score } = parse(input)
     const beat = firstBeat(score)
     expect(beat.duration.tuplet).toEqual({ numerator: 5, denominator: 4 })

@@ -210,3 +210,9 @@ export const useTabEditorStore = create<TabEditorState>((set, get) => ({
     set({ activeTrackIndex: clamped, selection: updatedSelection })
   },
 }))
+
+// Dev-only debugging — expose store getter on window so we can inspect the AST
+// without reaching through React fibers.  Does nothing in production builds.
+if (typeof window !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+  ;(window as unknown as { __tabStore?: typeof useTabEditorStore }).__tabStore = useTabEditorStore
+}

@@ -34,6 +34,7 @@ export function Sidebar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const upsertProject = useProjectStore((s) => s.upsertProject)
+  const [newPackOpen, setNewPackOpen] = useState(false)
   // AI style multi-dialog flow
   const [showProcessing, setShowProcessing] = useState(false)
   const [processingStageIndex, setProcessingStageIndex] = useState(0)
@@ -87,7 +88,7 @@ export function Sidebar() {
 
       <div className="mb-3 flex justify-center px-0">
         <button
-          onClick={() => navigate('/pack/new')}
+          onClick={() => setNewPackOpen(true)}
           title="New Pack"
           className="flex size-11 items-center justify-center gap-2 rounded-2xl bg-accent text-surface-0 transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
         >
@@ -117,6 +118,9 @@ export function Sidebar() {
         })}
       </div>
       </nav>
+
+      {/* New Pack — default creation sidebar */}
+      <NewPackDialog open={newPackOpen} onClose={() => setNewPackOpen(false)} />
 
       {/* Step 1: Processing dialog (Stylize → Transcribe → Build score) */}
       <Dialog

@@ -1,5 +1,5 @@
 import { useState, useRef, forwardRef, useImperativeHandle, type KeyboardEvent } from 'react'
-import { ArrowUp, Plus } from 'lucide-react'
+import { ArrowUp, Dices, Plus } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 
 export interface ChatInputRef {
@@ -18,6 +18,10 @@ interface ChatInputProps {
   onAttachClick?: () => void
   canSend?: boolean
   onValueChange?: (value: string) => void
+  /** When set, replaces the arrow-up icon with a text pill button */
+  submitLabel?: string
+  /** When set, shows a dice button to the left of the submit button */
+  onRandomize?: () => void
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput({
@@ -30,6 +34,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
   onAttachClick,
   canSend = false,
   onValueChange,
+  submitLabel,
+  onRandomize,
 }, ref) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -103,21 +109,51 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
           <div />
         )}
 
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={disabled || !canSubmit}
-          aria-label="Send message"
-          className={cn(
-            'flex shrink-0 items-center justify-center rounded-full border transition-colors',
-            isRoomy ? 'size-12' : 'size-10',
-            canSubmit
-              ? 'border-text-primary bg-text-primary text-surface-0 hover:opacity-85'
-              : 'cursor-default border-border bg-surface-3 text-text-muted',
+        <div className="flex items-center gap-2">
+          {onRandomize && (
+            <button
+              type="button"
+              onClick={onRandomize}
+              aria-label="Random style suggestion"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/60 text-[#555] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all hover:bg-white/80"
+            >
+              <Dices size={16} />
+            </button>
           )}
-        >
-          <ArrowUp size={isRoomy ? 18 : 16} />
-        </button>
+          {submitLabel ? (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={disabled || !canSubmit}
+              aria-label={submitLabel}
+              className={cn(
+                'flex shrink-0 items-center justify-center rounded-full px-5 font-medium transition-colors',
+                isRoomy ? 'h-12 text-[15px]' : 'h-10 text-sm',
+                canSubmit
+                  ? 'bg-text-primary text-surface-0 hover:opacity-85'
+                  : 'cursor-default bg-surface-3 text-text-muted',
+              )}
+            >
+              {submitLabel}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={disabled || !canSubmit}
+              aria-label="Send message"
+              className={cn(
+                'flex shrink-0 items-center justify-center rounded-full border transition-colors',
+                isRoomy ? 'size-12' : 'size-10',
+                canSubmit
+                  ? 'border-text-primary bg-text-primary text-surface-0 hover:opacity-85'
+                  : 'cursor-default border-border bg-surface-3 text-text-muted',
+              )}
+            >
+              <ArrowUp size={isRoomy ? 18 : 16} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,6 +1,30 @@
-import type { CommandResult, ScoreCommand, ScoreDocument, ScorePitch } from '@lava/shared'
-import { choosePlacement, cloneDocument, divisionsToNoteType, DEFAULT_PLACEMENT_POLICY, createId } from '../helpers'
+import type { CommandResult, NoteValue, ScoreCommand, ScoreDocument, ScorePitch } from '@lava/shared'
+import { choosePlacement, cloneDocument, divisionsToNoteType, noteTypeToDivisions, DEFAULT_PLACEMENT_POLICY, createId } from '../helpers'
 import { midiToPitch, pitchToMidi } from '@/lib/pitchUtils'
+
+const NOTE_VALUES: NoteValue[] = ['whole', 'half', 'quarter', 'eighth', 'sixteenth']
+
+/**
+ * Decompose a total duration (in divisions) into (type, dots) so that
+ * computeEffectiveDuration(result) === totalDivisions whenever possible.
+ * `exact` is false when no clean dotted representation exists, in which case
+ * the result is the largest fitting base value with dots=0 (caller should warn).
+ */
+function decomposeDuration(
+  totalDivisions: number,
+  divisions: number,
+): { type: NoteValue; dots: number; base: number; exact: boolean } {
+  for (const type of NOTE_VALUES) {
+    const base = noteTypeToDivisions(type, divisions)
+    if (base === totalDivisions) return { type, dots: 0, base, exact: true }
+    if (base + Math.floor(base / 2) === totalDivisions) return { type, dots: 1, base, exact: true }
+    if (base + Math.floor(base / 2) + Math.floor(base / 4) === totalDivisions) {
+      return { type, dots: 2, base, exact: true }
+    }
+  }
+  const type = divisionsToNoteType(totalDivisions, divisions)
+  return { type, dots: 0, base: noteTypeToDivisions(type, divisions), exact: false }
+}
 
 export function handleMoveNoteToBeat(
   doc: ScoreDocument,
@@ -73,21 +97,26 @@ export function handleMergeWithNext(
   const nextNote = index >= 0 ? ordered[index + 1] : null
   if (!current || !nextNote) return { document: next, warnings: [] }
   if (current.measureIndex !== nextNote.measureIndex) return { document: next, warnings: [] }
+
+  const total = current.durationDivisions + nextNote.durationDivisions
+  const { type, dots, base, exact } = decomposeDuration(total, next.divisions)
+  const warnings: string[] = exact
+    ? []
+    : ['Merged duration could not be expressed exactly; truncated to nearest note value.']
+
   track.notes = ordered
     .filter((n) => n.id !== nextNote.id)
     .map((n) =>
       n.id === current.id
         ? {
             ...n,
-            durationDivisions: n.durationDivisions + nextNote.durationDivisions,
-            durationType: divisionsToNoteType(
-              n.durationDivisions + nextNote.durationDivisions,
-              next.divisions,
-            ),
+            durationDivisions: base,
+            durationType: type,
+            dots,
           }
         : n,
     )
-  return { document: next, warnings: [] }
+  return { document: next, warnings }
 }
 
 export function handleTransposeSelection(

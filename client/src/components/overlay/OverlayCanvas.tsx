@@ -8,6 +8,20 @@ interface OverlayCanvasProps {
   className?: string
   /** When true, cursor rects use orange (input mode). Default: blue (selection mode). */
   isInsertMode?: boolean
+  /**
+   * Active voice index — drives cursor color. V2 (index 1) gets green to match
+   * Sibelius convention and the visual separation between voices.
+   */
+  voiceIndex?: number
+}
+
+function cursorFill(isInsertMode: boolean, voiceIndex: number): string {
+  if (voiceIndex === 1) {
+    // V2 — green. Lighter tint in selection mode, saturated in insert mode.
+    return isInsertMode ? 'rgba(34,197,94,0.32)' : 'rgba(34,197,94,0.22)'
+  }
+  // V1 — default colors.
+  return isInsertMode ? 'rgba(255,138,0,0.28)' : 'rgba(99,179,237,0.22)'
 }
 
 /**
@@ -22,6 +36,7 @@ export function OverlayCanvas({
   height,
   className,
   isInsertMode = false,
+  voiceIndex = 0,
 }: OverlayCanvasProps) {
   return (
     <svg
@@ -40,9 +55,7 @@ export function OverlayCanvas({
           height={rect.height}
           fill={
             rect.kind === 'cursor'
-              ? isInsertMode
-                ? 'rgba(255,138,0,0.28)'
-                : 'rgba(99,179,237,0.22)'
+              ? cursorFill(isInsertMode, voiceIndex)
               : rect.kind === 'selection'
                 ? 'color-mix(in srgb, var(--accent) 30%, transparent)'
                 : 'color-mix(in srgb, var(--accent) 15%, transparent)'

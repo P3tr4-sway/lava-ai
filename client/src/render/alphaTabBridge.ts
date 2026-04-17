@@ -164,7 +164,14 @@ export class AlphaTabBridge {
         barsPerRow: opts.barsPerRow,
         layoutMode: LayoutMode.Page,
         scale: opts.scale,
-      } as Settings['display'],
+        resources: {
+          // Sibelius convention: V2 (secondary voice) renders in a distinct
+          // color so the user can visually distinguish it from V1. We use the
+          // project's --success green token so V2 reads as "additional" rather
+          // than "muted/disabled".
+          secondaryGlyphColor: '#22c55e',
+        },
+      } as unknown as Settings['display'],
       player: {
         playerMode: PlayerMode.EnabledAutomatic,
         soundFont: opts.soundFont,
@@ -175,6 +182,9 @@ export class AlphaTabBridge {
     }
 
     this.api = new AlphaTabApi(container, settings as unknown as Settings)
+    if (typeof window !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+      ;(window as unknown as { __atApi?: unknown }).__atApi = this.api
+    }
 
     // renderFinished fires after each render pass
     this.offRenderFinished = this.api.renderFinished.on(() => {

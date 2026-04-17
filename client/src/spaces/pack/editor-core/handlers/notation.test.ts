@@ -45,14 +45,52 @@ describe('handleToggleTuplet', () => {
 })
 
 describe('handleToggleTie', () => {
-  it('toggles tieStart on the note', () => {
+  it('refuses to tie when there is no next note in the voice', () => {
     const { document } = docWithNote()
     const trackId = document.tracks[0]!.id
     const noteId = document.tracks[0]!.notes[0]!.id
-    const r1 = handleToggleTie(document, { type: 'toggleTie', trackId, noteId })
-    expect(r1.document.tracks[0]!.notes[0]!.tieStart).toBe(true)
-    const r2 = handleToggleTie(r1.document, { type: 'toggleTie', trackId, noteId })
-    expect(r2.document.tracks[0]!.notes[0]!.tieStart).toBe(false)
+    const r = handleToggleTie(document, { type: 'toggleTie', trackId, noteId })
+    expect(r.document.tracks[0]!.notes[0]!.tieStart).toBeFalsy()
+    expect(r.warnings.length).toBe(1)
+  })
+
+  it('ties two adjacent same-pitch notes and sets tieStop on the second', () => {
+    const { document: d1 } = docWithNote()
+    const trackId = d1.tracks[0]!.id
+    // Insert second same-pitch note at beat 1
+    const d2 = handleInsertNoteAtCaret(d1, {
+      type: 'insertNoteAtCaret', trackId, measureIndex: 0, beat: 1, string: 1, fret: 5, durationType: 'quarter',
+    }).document
+    const firstId = d2.tracks[0]!.notes[0]!.id
+    const r = handleToggleTie(d2, { type: 'toggleTie', trackId, noteId: firstId })
+    expect(r.warnings).toEqual([])
+    const notes = r.document.tracks[0]!.notes
+    expect(notes[0]!.tieStart).toBe(true)
+    expect(notes[1]!.tieStop).toBe(true)
+  })
+
+  it('refuses to tie when the next note has a different pitch', () => {
+    const { document: d1 } = docWithNote()
+    const trackId = d1.tracks[0]!.id
+    const d2 = handleInsertNoteAtCaret(d1, {
+      // Different fret on same string → different pitch
+      type: 'insertNoteAtCaret', trackId, measureIndex: 0, beat: 1, string: 1, fret: 7, durationType: 'quarter',
+    }).document
+    const firstId = d2.tracks[0]!.notes[0]!.id
+    const r = handleToggleTie(d2, { type: 'toggleTie', trackId, noteId: firstId })
+    expect(r.warnings.length).toBe(1)
+    expect(r.document.tracks[0]!.notes[0]!.tieStart).toBeFalsy()
+  })
+
+  it('turning a tie off succeeds even with no matching next note', () => {
+    const { document: d1 } = docWithNote()
+    const trackId = d1.tracks[0]!.id
+    const noteId = d1.tracks[0]!.notes[0]!.id
+    // Seed tieStart=true manually (simulating stale data)
+    d1.tracks[0]!.notes[0]!.tieStart = true
+    const r = handleToggleTie(d1, { type: 'toggleTie', trackId, noteId })
+    expect(r.warnings).toEqual([])
+    expect(r.document.tracks[0]!.notes[0]!.tieStart).toBe(false)
   })
 })
 

@@ -117,4 +117,75 @@ describe('validateAndTruncate', () => {
     expect(result).toHaveLength(4)
     expect(result.every((n) => n.durationDivisions === DIVISIONS)).toBe(true)
   })
+
+  it('truncates a prior note whose duration overlaps the next note within the same voice', () => {
+    // beat 0: half (0..2), beat 1: quarter (1..2) → half must shrink to quarter
+    const notes: ScoreNoteEvent[] = [
+      makeNote({ id: 'n1', beat: 0, durationType: 'half', durationDivisions: 960 }),
+      makeNote({ id: 'n2', beat: 1, durationType: 'quarter', durationDivisions: DIVISIONS }),
+    ]
+    const result = validateAndTruncate(notes, 0, { numerator: 4, denominator: 4 }, DIVISIONS)
+    const n1 = result.find((n) => n.id === 'n1')!
+    expect(n1.durationType).toBe('quarter')
+    expect(n1.durationDivisions).toBe(DIVISIONS)
+    expect(n1.dots).toBe(0)
+    // n2 is unchanged
+    const n2 = result.find((n) => n.id === 'n2')!
+    expect(n2.durationDivisions).toBe(DIVISIONS)
+  })
+
+  it('keeps an eighth-on-quarter overwrite at its smaller duration (implicit rest fills gap)', () => {
+    // User overwrote beat 0's quarter with an eighth; beat 1 is still a quarter.
+    // The eighth should NOT get stretched to fill the gap.
+    const notes: ScoreNoteEvent[] = [
+      makeNote({ id: 'n1', beat: 0, durationType: 'eighth', durationDivisions: DIVISIONS / 2 }),
+      makeNote({ id: 'n2', beat: 1, durationType: 'quarter', durationDivisions: DIVISIONS }),
+    ]
+    const result = validateAndTruncate(notes, 0, { numerator: 4, denominator: 4 }, DIVISIONS)
+    const n1 = result.find((n) => n.id === 'n1')!
+    expect(n1.durationType).toBe('eighth')
+    expect(n1.durationDivisions).toBe(DIVISIONS / 2)
+  })
+
+  it('treats chord tones sharing a beat as one group (same start bound by next group)', () => {
+    // Two notes at beat 0 on different strings form a chord; next note at beat 1.
+    // Each chord tone is independently capped at (next.start - chord.start) = 1 quarter.
+    const notes: ScoreNoteEvent[] = [
+      makeNote({
+        id: 'n1-chord-a',
+        beat: 0,
+        durationType: 'half',
+        durationDivisions: 960,
+        placement: { string: 1, fret: 5, confidence: 'explicit' },
+      }),
+      makeNote({
+        id: 'n1-chord-b',
+        beat: 0,
+        durationType: 'half',
+        durationDivisions: 960,
+        placement: { string: 2, fret: 5, confidence: 'explicit' },
+      }),
+      makeNote({ id: 'n2', beat: 1, durationType: 'quarter', durationDivisions: DIVISIONS }),
+    ]
+    const result = validateAndTruncate(notes, 0, { numerator: 4, denominator: 4 }, DIVISIONS)
+    const chordA = result.find((n) => n.id === 'n1-chord-a')!
+    const chordB = result.find((n) => n.id === 'n1-chord-b')!
+    expect(chordA.durationType).toBe('quarter')
+    expect(chordB.durationType).toBe('quarter')
+  })
+
+  it('does not treat different voices as overlapping each other', () => {
+    // Voice 1 has a whole note; voice 2 has four quarters in the same bar.
+    // Neither should truncate the other.
+    const notes: ScoreNoteEvent[] = [
+      makeNote({ id: 'v1', voice: 1, beat: 0, durationType: 'whole', durationDivisions: 1920 }),
+      makeNote({ id: 'v2a', voice: 2, beat: 0 }),
+      makeNote({ id: 'v2b', voice: 2, beat: 1 }),
+      makeNote({ id: 'v2c', voice: 2, beat: 2 }),
+      makeNote({ id: 'v2d', voice: 2, beat: 3 }),
+    ]
+    const result = validateAndTruncate(notes, 0, { numerator: 4, denominator: 4 }, DIVISIONS)
+    expect(result.find((n) => n.id === 'v1')!.durationType).toBe('whole')
+    expect(result.filter((n) => n.voice === 2)).toHaveLength(4)
+  })
 })

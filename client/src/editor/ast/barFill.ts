@@ -143,3 +143,43 @@ export function makeBarBeats(
     rest: true as const,
   }))
 }
+
+/**
+ * Build a single-beat bar-rest (whole-bar rest) matching the time signature.
+ *
+ * Unlike `makeBarBeats`, this emits the minimum number of beats needed to fill
+ * the bar — typically one beat with a dotted duration. Used by `AddVoice` so
+ * V2 initialization doesn't clutter the score with N equal rests; AlphaTab
+ * renders the single bar-filling rest as a centered "bar rest" glyph.
+ *
+ * For 4/4  → [{ whole rest }]
+ * For 3/4  → [{ dotted half rest }]
+ * For 6/8  → [{ dotted half rest }]
+ * For 12/8 → [{ dotted whole rest }]
+ * For 5/4, 7/8, 9/8 → multi-beat fallback via splitIntoRests
+ */
+export function makeBarRestBeats(
+  ts: { numerator: number; denominator: number },
+  generateId: () => string,
+): BeatNode[] {
+  const capacity = barCapacityUnits(ts)
+  const candidates: DurationNode[] = [
+    { value: 1, dots: 1 },
+    { value: 1, dots: 0 },
+    { value: 2, dots: 1 },
+    { value: 2, dots: 0 },
+    { value: 4, dots: 1 },
+    { value: 4, dots: 0 },
+  ]
+  for (const dur of candidates) {
+    if (durationToUnits(dur) === capacity) {
+      return [{ id: generateId(), duration: dur, notes: [], rest: true as const }]
+    }
+  }
+  return splitIntoRests(64, capacity).map((durValue) => ({
+    id: generateId(),
+    duration: { value: durValue, dots: 0 as const },
+    notes: [],
+    rest: true as const,
+  }))
+}

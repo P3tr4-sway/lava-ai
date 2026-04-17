@@ -39,7 +39,13 @@ function findClosestDurationType(targetDivisions: number, divisions: number): No
 }
 
 /**
- * Validate all notes in a specific measure and truncate/remove any that overflow.
+ * Validate all notes in a specific measure and normalize any constraint violations:
+ *  1. Drop notes starting at or beyond measure capacity.
+ *  2. Truncate notes whose effective end exceeds capacity.
+ *  3. Truncate notes whose effective end overlaps the next chord group's start
+ *     (within the same voice). Chord tones at the same beat are treated as one
+ *     group and each tone is capped independently.
+ *
  * Returns a new array of notes (does not mutate input).
  */
 export function validateAndTruncate(
@@ -50,36 +56,59 @@ export function validateAndTruncate(
 ): ScoreNoteEvent[] {
   const capacity = getMeasureCapacity(meter, divisions)
 
-  const inMeasure = allNotes
-    .filter((n) => n.measureIndex === measureIndex)
-    .sort((a, b) => a.beat - b.beat)
-
   const otherNotes = allNotes.filter((n) => n.measureIndex !== measureIndex)
+  const inMeasure = allNotes.filter((n) => n.measureIndex === measureIndex)
+
+  // Group by voice — overlaps are only meaningful within the same voice.
+  const byVoice = new Map<number, ScoreNoteEvent[]>()
+  for (const note of inMeasure) {
+    const list = byVoice.get(note.voice) ?? []
+    list.push(note)
+    byVoice.set(note.voice, list)
+  }
 
   const validated: ScoreNoteEvent[] = []
 
-  for (const note of inMeasure) {
-    // beat is in quarter-note units (0 = bar start, 1.0 = 1 quarter note, etc.)
-    const beatPosition = Math.round(note.beat * divisions)
+  for (const voiceNotes of byVoice.values()) {
+    voiceNotes.sort((a, b) => a.beat - b.beat)
 
-    // Remove notes starting at or beyond capacity
-    if (beatPosition >= capacity) continue
+    // Build chord groups (notes sharing beat within the voice).
+    const groups: { start: number; notes: ScoreNoteEvent[] }[] = []
+    for (const note of voiceNotes) {
+      const start = Math.round(note.beat * divisions)
+      const last = groups[groups.length - 1]
+      if (last && last.start === start) {
+        last.notes.push(note)
+      } else {
+        groups.push({ start, notes: [note] })
+      }
+    }
 
-    const remaining = capacity - beatPosition
-    const effectiveDur = computeEffectiveDuration(note, divisions)
+    for (let g = 0; g < groups.length; g++) {
+      const group = groups[g]
+      if (group.start >= capacity) continue
 
-    if (effectiveDur <= remaining) {
-      validated.push(note)
-    } else {
-      const truncatedType = findClosestDurationType(remaining, divisions)
-      const truncatedDivisions = noteTypeToDivisions(truncatedType, divisions)
-      validated.push({
-        ...note,
-        durationType: truncatedType,
-        durationDivisions: truncatedDivisions,
-        dots: 0,
-        tuplet: undefined,
-      })
+      const next = groups[g + 1]
+      // Hard upper bound for any note in this group: next group's start, or capacity.
+      const bound = Math.min(next ? next.start : capacity, capacity)
+      const maxDur = bound - group.start
+
+      for (const note of group.notes) {
+        const effectiveDur = computeEffectiveDuration(note, divisions)
+        if (effectiveDur <= maxDur) {
+          validated.push(note)
+        } else {
+          const truncatedType = findClosestDurationType(maxDur, divisions)
+          const truncatedDivisions = noteTypeToDivisions(truncatedType, divisions)
+          validated.push({
+            ...note,
+            durationType: truncatedType,
+            durationDivisions: truncatedDivisions,
+            dots: 0,
+            tuplet: undefined,
+          })
+        }
+      }
     }
   }
 

@@ -77,6 +77,14 @@ interface TabEditorState {
 
   /** Switch the active track. Resets cursor to bar 0 of the new track. */
   setActiveTrackIndex: (index: number) => void
+
+  /**
+   * Transient hint shown when the user tries to enter a chord tone with a
+   * duration that doesn't fit the current beat — suggests Alt+2 / V2 instead.
+   * Null when no hint is active. Auto-cleared by the page after ~4 seconds.
+   */
+  voiceHint: string | null
+  setVoiceHint: (message: string | null) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +116,7 @@ export const useTabEditorStore = create<TabEditorState>((set, get) => ({
   currentDuration: DEFAULT_DURATION,
   isInsertMode: false,
   activeTrackIndex: 0,
+  voiceHint: null,
 
   // -------------------------------------------------------------------------
   // setAst
@@ -209,6 +218,8 @@ export const useTabEditorStore = create<TabEditorState>((set, get) => ({
     }
     set({ activeTrackIndex: clamped, selection: updatedSelection })
   },
+
+  setVoiceHint: (voiceHint) => set({ voiceHint }),
 }))
 
 // Dev-only debugging — expose store getter on window so we can inspect the AST

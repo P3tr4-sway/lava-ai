@@ -360,13 +360,15 @@ interface TabEditorToolbarProps {
   onOpenFile?: () => void
   isInsertMode?: boolean
   applyRestBeat?: () => void
+  /** Delegated voice switcher from useTabEditorInput — keeps selectionRef in sync. */
+  switchToVoice?: (voiceIndex: 0 | 1) => void
 }
 
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMode, applyRestBeat }: TabEditorToolbarProps) {
+export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMode, applyRestBeat, switchToVoice }: TabEditorToolbarProps) {
   const applyCommand = useTabEditorStore((s) => s.applyCommand)
   const currentDuration = useTabEditorStore((s) => s.currentDuration)
   const setDuration = useTabEditorStore((s) => s.setDuration)
@@ -507,6 +509,15 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
       hasTriplet ? undefined : { numerator: 3, denominator: 2 },
       ids.beat.duration.tuplet,
     ))
+  }
+
+  // Voice switch — mirrors the Alt+1/Alt+2 keyboard shortcut.
+  // Delegates to useTabEditorInput.switchToVoice so the hook's selectionRef
+  // (SelectionModel instance) stays in sync; otherwise subsequent keyboard
+  // events see stale cursor state and V1 can't be re-selected after V2.
+  const switchVoiceFromToolbar = (targetVoiceIndex: 0 | 1) => {
+    if (!switchToVoice) return
+    switchToVoice(targetVoiceIndex)
   }
 
   // Export
@@ -1110,6 +1121,23 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
               title="Rest (R)"
             >
               R
+            </GlassCircleBtn>
+
+            {/* Voice switcher — V1 / V2 (Alt+1 / Alt+2) */}
+            <GlassCircleBtn
+              active={ids?.cursor.voiceIndex === 0}
+              onClick={() => switchVoiceFromToolbar(0)}
+              title="Voice 1 (Alt+1)"
+            >
+              V1
+            </GlassCircleBtn>
+            <GlassCircleBtn
+              active={ids?.cursor.voiceIndex === 1}
+              onClick={() => switchVoiceFromToolbar(1)}
+              title="Voice 2 (Alt+2)"
+              className={ids?.cursor.voiceIndex === 1 ? '[&>button]:!bg-[rgba(34,197,94,0.85)] [&>button]:!text-white' : ''}
+            >
+              V2
             </GlassCircleBtn>
 
             {/* Technique / Articulation / Dynamic */}

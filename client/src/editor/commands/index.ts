@@ -28,6 +28,8 @@ export {
   SetRepeat,
 } from './barCommands'
 
+export { AddVoice, RemoveVoice } from './voiceCommands'
+
 export {
   InsertTrack,
   DeleteTrack,

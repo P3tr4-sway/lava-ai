@@ -130,6 +130,7 @@ export class Player {
       beatIndex: 0,
       stringIndex: 1,
       stringLineY: 0,
+      onNotehead: false,
     }
   }
 

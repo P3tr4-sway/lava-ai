@@ -41,6 +41,7 @@ const DEFAULT_CURSOR: Cursor = {
 
 export type Selection =
   | { kind: 'caret'; cursor: Cursor }
+  | { kind: 'note'; cursor: Cursor }
   | { kind: 'range'; anchor: Cursor; focus: Cursor }
   | { kind: 'bar'; from: BarSpan; to: BarSpan }
 
@@ -109,9 +110,12 @@ export class SelectionModel {
     return this._selection
   }
 
-  /** Returns the active cursor position (focus for range, cursor for caret). */
+  /** Returns the active cursor position (focus for range, cursor for caret/note). */
   get cursor(): Cursor {
     if (this._selection.kind === 'caret') {
+      return this._selection.cursor
+    }
+    if (this._selection.kind === 'note') {
       return this._selection.cursor
     }
     if (this._selection.kind === 'range') {
@@ -253,6 +257,19 @@ export class SelectionModel {
   /** Directly set the cursor (collapses to caret). */
   setCursor(cursor: Cursor): void {
     this._selection = { kind: 'caret', cursor }
+  }
+
+  /**
+   * Set a single-note selection (Sibelius-style notehead pick).
+   *
+   * Semantically distinct from `caret`:
+   *   - `caret` = an insert position (the user is about to type a new note)
+   *   - `note`  = a notehead is selected for inspection/editing without
+   *               implying insert mode. Typing a digit later promotes the
+   *               selection into a caret + insert mode (see commitFret).
+   */
+  setNote(cursor: Cursor): void {
+    this._selection = { kind: 'note', cursor }
   }
 
   /**

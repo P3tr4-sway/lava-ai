@@ -70,6 +70,20 @@ const HANDLER_MAP: Record<string, Handler> = {
   setMeasureRange: (doc) => ({ document: doc, warnings: [] }),
 }
 
+function resolveMeasureIndex(doc: ScoreDocument, cmd: ScoreCommand): number | undefined {
+  if ('measureIndex' in cmd && typeof (cmd as { measureIndex?: unknown }).measureIndex === 'number') {
+    return (cmd as { measureIndex: number }).measureIndex
+  }
+  if ('noteId' in cmd && typeof (cmd as { noteId?: unknown }).noteId === 'string') {
+    const noteId = (cmd as { noteId: string }).noteId
+    for (const track of doc.tracks) {
+      const note = track.notes.find((n) => n.id === noteId)
+      if (note) return note.measureIndex
+    }
+  }
+  return undefined
+}
+
 const COMMANDS_NEEDING_VALIDATION = new Set([
   'insertNoteAtCaret',
   'insertRestAtCaret',
@@ -105,7 +119,10 @@ export function applyCommandToDocument(
         }
       }
     } else {
-      const measureIndex = 'measureIndex' in cmd ? (cmd as { measureIndex: number }).measureIndex : undefined
+      // Look up measureIndex on the command, or derive it from the target noteId
+      // so note-targeted commands (toggleDot, setDuration, etc.) still trigger
+      // the post-mutation normalization pass.
+      const measureIndex = resolveMeasureIndex(result.document, cmd)
       if (measureIndex !== undefined) {
         const meter = getEffectiveTimeSignature(result.document, measureIndex)
         for (const track of result.document.tracks) {

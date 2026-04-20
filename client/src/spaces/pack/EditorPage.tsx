@@ -481,6 +481,24 @@ export function EditorPage() {
   const alphaTabAst = useTabEditorStore((s) => s.ast)
   const alphaTabSelection = useTabEditorStore((s) => s.selection)
   const currentDuration = useTabEditorStore((s) => s.currentDuration)
+  const isInsertMode = useTabEditorStore((s) => s.isInsertMode)
+  const voiceHint = useTabEditorStore((s) => s.voiceHint)
+
+  // Auto-dismiss the voice hint after ~4 seconds
+  useEffect(() => {
+    if (!voiceHint) return
+    const t = window.setTimeout(() => {
+      useTabEditorStore.getState().setVoiceHint(null)
+    }, 4000)
+    return () => window.clearTimeout(t)
+  }, [voiceHint])
+  const activeVoiceIndex = useMemo(() => {
+    if (!alphaTabSelection) return 0
+    if (alphaTabSelection.kind === 'caret' || alphaTabSelection.kind === 'note')
+      return alphaTabSelection.cursor.voiceIndex
+    if (alphaTabSelection.kind === 'range') return alphaTabSelection.focus.voiceIndex
+    return 0
+  }, [alphaTabSelection])
   const stringCount = useMemo(() => scoreDocument.tracks[0]?.tuning?.length ?? 6, [scoreDocument.tracks])
   // Stable ref so beat-click can call the hook's handler at any time
   const alphaTabInputRef = useRef<ReturnType<typeof useTabEditorInput> | null>(null)
@@ -511,6 +529,35 @@ export function EditorPage() {
     alphaTabContainerRef as React.RefObject<HTMLElement | null>,
     stringCount,
     (hit) => { alphaTabInputRef.current?.handleBeatClick(hit) },
+    undefined, // onBarDblClick — not used here
+    // onBarClick: empty-area click inside a bar → bar selection (Sibelius-style
+    // "staff passage"). Shift extends the existing range. We synthesize the
+    // minimum HitPosition needed by handleBarClick — only trackIndex/barIndex
+    // are read from it.
+    (span, shiftKey) => {
+      alphaTabInputRef.current?.handleBarClick(
+        {
+          trackIndex: span.trackIndex,
+          barIndex: span.barIndex,
+          voiceIndex: 0,
+          beatIndex: 0,
+          stringIndex: 1,
+          stringLineY: 0,
+          onNotehead: false,
+        },
+        shiftKey,
+      )
+    },
+    // onClearSelection: click landed in a margin → drop any selection.
+    () => {
+      useTabEditorStore.getState().setSelection(null)
+      useTabEditorStore.getState().setInsertMode(false)
+    },
+    // onSelectAll: triple-click anywhere in the score → select every bar in
+    // the clicked track (GP "global selection of the active track").
+    (trackIndex) => {
+      alphaTabInputRef.current?.handleSelectAll(trackIndex)
+    },
   )
 
   const alphaTabInput = useTabEditorInput({
@@ -632,18 +679,37 @@ export function EditorPage() {
         beatIndex: c.beatIndex,
         stringIndex: c.stringIndex,
         stringLineY: c.stringLineY ?? 0,
+        onNotehead: false,
       })
       setOverlayRects(cursorRect ? [cursorRect] : [])
-    } else if (alphaTabSelection.kind === 'range') {
+    } else if (alphaTabSelection.kind === 'note') {
+      const c = alphaTabSelection.cursor
+      const noteRect = layer.getNoteRect(
+        {
+          trackIndex: c.trackIndex,
+          barIndex: c.barIndex,
+          voiceIndex: c.voiceIndex,
+          beatIndex: c.beatIndex,
+          stringIndex: c.stringIndex,
+          stringLineY: c.stringLineY ?? 0,
+          onNotehead: false,
+        },
+        stringCount,
+      )
+      setOverlayRects(noteRect ? [noteRect] : [])
+    } else if (alphaTabSelection.kind === 'bar') {
+      const barRects = layer.getBarRects(alphaTabSelection.from, alphaTabSelection.to)
+      setOverlayRects(barRects)
+    } else {
       const from = alphaTabSelection.anchor
       const to = alphaTabSelection.focus
       const selRects = layer.getSelectionRects(
-        { trackIndex: from.trackIndex, barIndex: from.barIndex, voiceIndex: from.voiceIndex, beatIndex: from.beatIndex, stringIndex: from.stringIndex, stringLineY: from.stringLineY ?? 0 },
-        { trackIndex: to.trackIndex, barIndex: to.barIndex, voiceIndex: to.voiceIndex, beatIndex: to.beatIndex, stringIndex: to.stringIndex, stringLineY: to.stringLineY ?? 0 },
+        { trackIndex: from.trackIndex, barIndex: from.barIndex, voiceIndex: from.voiceIndex, beatIndex: from.beatIndex, stringIndex: from.stringIndex, stringLineY: from.stringLineY ?? 0, onNotehead: false },
+        { trackIndex: to.trackIndex, barIndex: to.barIndex, voiceIndex: to.voiceIndex, beatIndex: to.beatIndex, stringIndex: to.stringIndex, stringLineY: to.stringLineY ?? 0, onNotehead: false },
       )
       setOverlayRects(selRects)
     }
-  }, [alphaTabSelection, bridgeRef])
+  }, [alphaTabSelection, bridgeRef, stringCount])
 
   // Bar management
   const handleDeleteBars = useCallback(() => {
@@ -899,6 +965,8 @@ export function EditorPage() {
                   rects={overlayRects}
                   width={alphaTabContainerRef.current?.scrollWidth ?? 0}
                   height={alphaTabContainerRef.current?.scrollHeight ?? 0}
+                  isInsertMode={isInsertMode}
+                  voiceIndex={activeVoiceIndex}
                 />
                 <PlaybackCursor
                   bridge={bridgeRef.current}
@@ -914,6 +982,15 @@ export function EditorPage() {
                   width={alphaTabContainerRef.current?.scrollWidth ?? 0}
                   height={alphaTabContainerRef.current?.scrollHeight ?? 0}
                 />
+                {voiceHint ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 animate-fade-in rounded-full border border-border bg-surface-0/95 px-4 py-2 text-xs text-text-primary shadow-[0_8px_24px_rgba(0,0,0,0.12)] backdrop-blur-sm"
+                  >
+                    {voiceHint}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -931,6 +1008,7 @@ export function EditorPage() {
               bridgeRef={bridgeRef as React.RefObject<import('@/render/alphaTabBridge').AlphaTabBridge | null>}
               onOpenFile={handleOpenGpFile}
               applyRestBeat={alphaTabInput.applyRestBeat}
+              switchToVoice={alphaTabInput.switchToVoice}
             />
 
             {isRendering || isVersionSwitching ? (

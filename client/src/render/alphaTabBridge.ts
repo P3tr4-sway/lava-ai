@@ -28,6 +28,12 @@ export interface HitPosition {
   stringIndex: number
   /** Y coordinate of the resolved string line in alphaTab coordinate space */
   stringLineY: number
+  /**
+   * True when the click landed inside a rendered notehead rect for the
+   * resolved beat — distinguishes "clicked the digit" (Sibelius-style note
+   * pick) from "clicked empty space" (caret placement).
+   */
+  onNotehead: boolean
 }
 
 export interface BeatBoundsRect {
@@ -85,10 +91,17 @@ interface AlphaBoundsLike {
   h: number
 }
 
+interface AlphaNoteBounds {
+  noteHeadBounds: AlphaBoundsLike
+  note: { string: number; fret?: number }
+}
+
 interface AlphaBeatBounds {
   visualBounds: AlphaBoundsLike
   realBounds: AlphaBoundsLike
   beat: AlphaBeat
+  /** Per-note bounds — only populated when `core.includeNoteBounds: true`. */
+  notes?: AlphaNoteBounds[]
 }
 
 interface AlphaBarBounds {
@@ -164,7 +177,14 @@ export class AlphaTabBridge {
         barsPerRow: opts.barsPerRow,
         layoutMode: LayoutMode.Page,
         scale: opts.scale,
-      } as Settings['display'],
+        resources: {
+          // Sibelius convention: V2 (secondary voice) renders in a distinct
+          // color so the user can visually distinguish it from V1. We use the
+          // project's --success green token so V2 reads as "additional" rather
+          // than "muted/disabled".
+          secondaryGlyphColor: '#22c55e',
+        },
+      } as unknown as Settings['display'],
       player: {
         playerMode: PlayerMode.EnabledAutomatic,
         soundFont: opts.soundFont,
@@ -175,6 +195,9 @@ export class AlphaTabBridge {
     }
 
     this.api = new AlphaTabApi(container, settings as unknown as Settings)
+    if (typeof window !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+      ;(window as unknown as { __atApi?: unknown }).__atApi = this.api
+    }
 
     // renderFinished fires after each render pass
     this.offRenderFinished = this.api.renderFinished.on(() => {
@@ -195,6 +218,7 @@ export class AlphaTabBridge {
         // mouse y-coordinate against the boundsLookup.
         stringIndex: 1,
         stringLineY: 0,
+        onNotehead: false,
       }
       this.onBeatMouseDown(pos)
     })
@@ -341,6 +365,53 @@ export class AlphaTabBridge {
       barBounds.lineAlignedBounds ?? barBounds.realBounds ?? barBounds.visualBounds
     if (!fallback) return null
     return { x: fallback.x, y: fallback.y, w: fallback.w, h: fallback.h }
+  }
+
+  /**
+   * Returns the screen rect for a single notehead (the digit on the tab staff)
+   * at the given AST position. Returns null when the beat is a rest, the bar
+   * has no per-note bounds, or no note matches the requested string.
+   *
+   * AlphaTab string indices on `note.string` are 1-indexed (1 = high E).
+   * `stringIndex` here uses the same 1-indexed convention.
+   */
+  getNoteHeadRect(
+    trackIndex: number,
+    barIndex: number,
+    voiceIndex: number,
+    beatIndex: number,
+    stringIndex: number,
+  ): BeatBoundsRect | null {
+    if (!this.api) return null
+    const lookup = this.api.boundsLookup as AlphaBoundsLookup | null
+    if (!lookup) return null
+
+    const masterBarBounds = lookup.findMasterBarByIndex(barIndex)
+    if (!masterBarBounds) return null
+
+    const barBounds: AlphaBarBounds | undefined =
+      masterBarBounds.bars[masterBarBounds.bars.length - 1]
+    if (!barBounds) return null
+
+    for (const beatBounds of barBounds.beats) {
+      const b = beatBounds.beat
+      if (
+        b.voice.bar.staff.track.index !== trackIndex ||
+        b.voice.index !== voiceIndex ||
+        b.index !== beatIndex
+      ) {
+        continue
+      }
+      const notes = beatBounds.notes ?? []
+      for (const nb of notes) {
+        if (nb.note.string === stringIndex) {
+          const r = nb.noteHeadBounds
+          return { x: r.x, y: r.y, w: r.w, h: r.h }
+        }
+      }
+      return null
+    }
+    return null
   }
 
   /**

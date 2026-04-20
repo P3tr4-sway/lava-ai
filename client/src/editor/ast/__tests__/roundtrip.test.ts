@@ -1315,3 +1315,27 @@ describe('60 no metadata separator', () => {
     expect(score).toBeDefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// 61. Multi-voice (V1 + V2) round-trip
+// ---------------------------------------------------------------------------
+
+describe('61 multi-voice', () => {
+  const input = `.
+\\voice
+:4 3.1 3.1 3.1 3.1 | :4 5.1 5.1 5.1 5.1
+\\voice
+:4 r r r r | :4 r r r r`
+
+  it('parses two voices', () => {
+    const { score } = parse(input)
+    const bar0 = score.tracks[0].staves[0].bars[0]
+    expect(bar0.voices.length).toBe(2)
+    expect(bar0.voices[0].beats[0].notes[0].fret).toBe(3)
+    expect(bar0.voices[1].beats[0].rest).toBe(true)
+  })
+
+  it('round-trips', () => {
+    assertRoundtrip(input)
+  })
+})

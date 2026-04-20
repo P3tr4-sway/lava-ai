@@ -12,6 +12,7 @@ import type {
   BeatNode,
   BendPoint,
   ChordDefNode,
+  Duration,
   DurationNode,
   MetaNode,
   NoteNode,
@@ -20,6 +21,7 @@ import type {
   TrackNode,
   VoiceNode,
 } from './types'
+import { barCapacityUnits, durationToUnits, splitIntoRests, UNITS_PER_WHOLE } from './barFill'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -321,25 +323,99 @@ function printBarMeta(bar: BarNode): string {
   return parts.length > 0 ? parts.join(' ') + ' ' : ''
 }
 
-function printBar(
-  bar: BarNode,
-  prevDuration: DurationNode = { value: 4, dots: 0 },
+/**
+ * Emit enough rest beats to exactly fill `timeSig`'s bar capacity. Prefers a
+ * single dotted/simple rest (so AlphaTab renders a centered bar-rest glyph);
+ * falls back to a binary decomposition for odd meters.
+ *
+ * Returns the beat text and the final sticky DurationNode.
+ */
+function emitBarRest(
+  timeSig: { numerator: number; denominator: number },
+  prevDuration: DurationNode,
 ): [string, DurationNode] {
-  const meta = printBarMeta(bar)
+  const capacity = barCapacityUnits(timeSig)
+  const candidates: DurationNode[] = [
+    { value: 1, dots: 1 },
+    { value: 1, dots: 0 },
+    { value: 2, dots: 1 },
+    { value: 2, dots: 0 },
+    { value: 4, dots: 1 },
+    { value: 4, dots: 0 },
+  ]
+  for (const dur of candidates) {
+    if (durationToUnits(dur) === capacity) {
+      const parts: string[] = []
+      if (dur.value !== prevDuration.value) parts.push(`:${dur.value}`)
+      const dotSuffix = dur.dots === 1 ? ' {d}' : dur.dots === 2 ? ' {dd}' : ''
+      parts.push('r' + dotSuffix)
+      return [parts.join(' '), { value: dur.value, dots: 0 }]
+    }
+  }
 
-  // Single voice (common case)
-  if (bar.voices.length === 0) return [meta, prevDuration]
+  // Fallback for odd meters (5/4, 7/8, 9/8, …)
+  const durs: Duration[] = splitIntoRests(UNITS_PER_WHOLE, capacity)
+  const beatStrs: string[] = []
+  let prev = prevDuration
+  for (const durValue of durs) {
+    const parts: string[] = []
+    if (durValue !== prev.value) parts.push(`:${durValue}`)
+    parts.push('r')
+    beatStrs.push(parts.join(' '))
+    prev = { value: durValue, dots: 0 }
+  }
+  return [beatStrs.join(' '), prev]
+}
 
-  const [voiceStr, endDuration] = printVoice(bar.voices[0], prevDuration)
+/**
+ * Print a single voice within a bar, including meta and repeat-close suffix.
+ * Used both by the single-voice fast path and the multi-voice staff emitter.
+ */
+function printBarVoice(
+  bar: BarNode,
+  voice: VoiceNode | undefined,
+  prevDuration: DurationNode,
+  options: {
+    includeMeta: boolean
+    includeRepeatClose: boolean
+    timeSig: { numerator: number; denominator: number }
+  },
+): [string, DurationNode] {
+  const meta = options.includeMeta ? printBarMeta(bar) : ''
+
+  if (!voice || voice.beats.length === 0) {
+    // Emit a bar-filling rest so AlphaTab renders a centered bar-rest glyph
+    // instead of a single quarter rest at the start of the bar.
+    const [restStr, endDuration] = emitBarRest(options.timeSig, prevDuration)
+    let result = meta + restStr
+    if (options.includeRepeatClose && bar.repeat?.end) {
+      const count = bar.repeat.count ?? 2
+      result += ` \\rc ${count}`
+    }
+    return [result, endDuration]
+  }
+
+  const [voiceStr, endDuration] = printVoice(voice, prevDuration)
   let result = meta + voiceStr
 
-  // Repeat close (appended to bar content, before |)
-  if (bar.repeat?.end) {
+  if (options.includeRepeatClose && bar.repeat?.end) {
     const count = bar.repeat.count ?? 2
     result += ` \\rc ${count}`
   }
 
   return [result, endDuration]
+}
+
+function printBar(
+  bar: BarNode,
+  prevDuration: DurationNode = { value: 4, dots: 0 },
+  timeSig: { numerator: number; denominator: number } = { numerator: 4, denominator: 4 },
+): [string, DurationNode] {
+  return printBarVoice(bar, bar.voices[0], prevDuration, {
+    includeMeta: true,
+    includeRepeatClose: true,
+    timeSig,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -353,14 +429,63 @@ function printBar(
  * would inherit the wrong duration (e.g. an eighth-rest bar becoming half-length).
  */
 function printStaff(staff: StaffNode): string {
-  const barStrs: string[] = []
-  let prevDuration: DurationNode = { value: 4, dots: 0 }
+  const maxVoices = staff.bars.reduce((m, b) => Math.max(m, b.voices.length), 1)
+
+  // Pre-compute effective time signature per bar by walking forward, inheriting
+  // the latest explicit `timeSignature` from earlier bars. Needed so bars
+  // without an explicit TS still emit correct bar-filling rests for empty voices.
+  const effectiveTimeSigs: { numerator: number; denominator: number }[] = []
+  let currentTs: { numerator: number; denominator: number } = { numerator: 4, denominator: 4 }
   for (const bar of staff.bars) {
-    const [barStr, endDuration] = printBar(bar, prevDuration)
-    barStrs.push(barStr)
-    prevDuration = endDuration
+    if (bar.timeSignature) currentTs = bar.timeSignature
+    effectiveTimeSigs.push(currentTs)
   }
-  return barStrs.join(' | ')
+
+  // Fast path: all bars are single-voice — emit the flat form, no \voice tags.
+  if (maxVoices <= 1) {
+    const barStrs: string[] = []
+    let prevDuration: DurationNode = { value: 4, dots: 0 }
+    for (let i = 0; i < staff.bars.length; i++) {
+      const bar = staff.bars[i]
+      const [barStr, endDuration] = printBar(bar, prevDuration, effectiveTimeSigs[i])
+      barStrs.push(barStr)
+      prevDuration = endDuration
+    }
+    return barStrs.join(' | ')
+  }
+
+  // Multi-voice: emit one `\voice` block per voice index, with all bars for
+  // that voice separated by `|`. Bar meta (ts, ks, tempo, section, etc.) is
+  // only written on voice 0 to avoid duplicated attributes. Repeat-close is
+  // likewise written only on voice 0.
+  //
+  // AlphaTab threads the sticky `:N` duration ACROSS `\voice` blocks within
+  // a staff — it does NOT reset per-block. So we thread `globalPrevDuration`
+  // from each voice's final state into the next voice's initial state, which
+  // causes `printBeat` to correctly emit an explicit duration prefix on the
+  // next voice's first beat whenever that beat's duration differs from the
+  // previous voice's final sticky value (e.g. V1 ending with a whole rest
+  // and V2 starting with a quarter note must emit `:4`).
+  const blocks: string[] = []
+  let globalPrevDuration: DurationNode = { value: 4, dots: 0 }
+  for (let vi = 0; vi < maxVoices; vi++) {
+    const barStrs: string[] = []
+    let prevDuration: DurationNode = globalPrevDuration
+    for (let i = 0; i < staff.bars.length; i++) {
+      const bar = staff.bars[i]
+      const voice = bar.voices[vi]
+      const [barStr, endDuration] = printBarVoice(bar, voice, prevDuration, {
+        includeMeta: vi === 0,
+        includeRepeatClose: vi === 0,
+        timeSig: effectiveTimeSigs[i],
+      })
+      barStrs.push(barStr)
+      prevDuration = endDuration
+    }
+    blocks.push(`\\voice\n${barStrs.join(' | ')}`)
+    globalPrevDuration = prevDuration
+  }
+  return blocks.join('\n')
 }
 
 // ---------------------------------------------------------------------------

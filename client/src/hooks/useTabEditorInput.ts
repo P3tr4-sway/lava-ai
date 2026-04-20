@@ -34,7 +34,9 @@ import { useAudioStore } from '../stores/audioStore'
 import type { Cursor, BarSpan } from '../editor/selection/SelectionModel'
 import type { HitPosition } from '../render/alphaTabBridge'
 import type { HoverState } from './useTabEditorPlacement'
-import type { BeatNode, NoteNode, ScoreNode } from '../editor/ast/types'
+import type { BeatNode, NoteNode, ScoreNode, VoiceNode } from '../editor/ast/types'
+import { resolveTieTarget } from '../editor/ast/tieResolver'
+import { resolveLegatoTarget } from '../editor/ast/legatoResolver'
 import type { Command } from '../editor/commands'
 import {
   durationToUnits,
@@ -225,12 +227,95 @@ export function useTabEditorInput({
     const timeSig = getEffectiveTimeSig(ast, cursor.trackIndex, cursor.barIndex)
     const capacity = barCapacityUnits(timeSig)
 
-    // Sibelius rule: when placing a note on a rest, absorb subsequent rests to
-    // make room for the requested duration.  Absorption only applies when the
-    // target beat is a rest and the new duration exceeds the immediate slot.
+    // Sibelius rule: when writing a note on an overwrite target (rest beat, or
+    // replacing an existing note on the same string), absorb subsequent rests
+    // so the new duration fits. Chord-adds (new string on a non-rest beat)
+    // never absorb — the beat's duration stays fixed to keep chord-mates in sync.
+    const isOverwrite = beat.rest || !!existingNote
+
+    // Sibelius convention: chord-add on V1 with a different selected duration
+    // can't share a beat (chord-mates must share a duration). Auto-switch to V2
+    // and place the note at the matching rhythmic position so the user gets the
+    // two-voice result they intended without pressing Alt+2 manually.
+    const isChordAdd = !isOverwrite
+    const durationMismatch =
+      beat.duration.value !== currentDuration.value ||
+      beat.duration.dots !== currentDuration.dots
+    const existingV2 = bar?.voices[1]
+    const v2IsAllRests =
+      !existingV2 || existingV2.beats.every((b) => b.rest || b.notes.length === 0)
+    const targetUnits = voice.beats
+      .slice(0, cursor.beatIndex)
+      .reduce((sum: number, b) => sum + durationToUnits(b.duration), 0)
+    const trailingUnits = capacity - targetUnits - newBeatUnits
+    const shouldAutoSwitchToV2 =
+      isChordAdd &&
+      durationMismatch &&
+      cursor.voiceIndex === 0 &&
+      v2IsAllRests &&
+      targetUnits >= 0 &&
+      trailingUnits >= 0
+
+    if (shouldAutoSwitchToV2) {
+      import('../editor/commands').then(({ AddVoice, RemoveVoice, CompositeCommand }) => {
+        const newBeats: BeatNode[] = []
+        if (targetUnits > 0) {
+          for (const d of splitIntoRests(newBeatUnits, targetUnits).reverse()) {
+            newBeats.push({
+              id: nanoid(),
+              duration: { value: d, dots: 0 },
+              notes: [],
+              rest: true,
+            })
+          }
+        }
+        const noteBeatIndex = newBeats.length
+        newBeats.push({
+          id: nanoid(),
+          duration: currentDuration,
+          notes: [{ id: nanoid(), string: cursor.stringIndex, fret }],
+          rest: false,
+        })
+        if (trailingUnits > 0) {
+          for (const d of splitIntoRests(newBeatUnits, trailingUnits)) {
+            newBeats.push({
+              id: nanoid(),
+              duration: { value: d, dots: 0 },
+              notes: [],
+              rest: true,
+            })
+          }
+        }
+
+        const newVoice: VoiceNode = { id: nanoid(), beats: newBeats }
+        const cmds: Command[] = []
+        if (existingV2) {
+          cmds.push(new RemoveVoice(ids.trackId, ids.barId, existingV2.id))
+        }
+        cmds.push(new AddVoice(ids.trackId, ids.barId, 1, newVoice))
+        useTabEditorStore.getState().applyCommand(
+          cmds.length === 1 ? cmds[0] : new CompositeCommand(cmds, 'Write to Voice 2'),
+        )
+
+        // Move cursor onto the new V2 beat and clear any stale hint.
+        const model = selectionRef.current
+        model.setCursor({ ...cursor, voiceIndex: 1, beatIndex: noteBeatIndex })
+        useTabEditorStore.getState().setSelection(model.selection)
+        useTabEditorStore.getState().setVoiceHint(null)
+      })
+      return
+    }
+
+    if (isChordAdd && durationMismatch && cursor.voiceIndex === 0) {
+      // V2 already has notes — we can't safely replace it, so fall back to
+      // the textual hint and let the user resolve it manually.
+      useTabEditorStore
+        .getState()
+        .setVoiceHint('Different duration on same beat — press Alt+2 to use Voice 2')
+    }
     let slotUnits = capacity - (oldBarTotal - oldBeatUnits)  // immediate room
     const absorbedBeatIds: string[] = []
-    if (beat.rest && newBeatUnits > slotUnits) {
+    if (isOverwrite && newBeatUnits > slotUnits) {
       for (let i = cursor.beatIndex + 1; i < voice.beats.length; i++) {
         const nb = voice.beats[i]
         if (!nb.rest) break
@@ -262,15 +347,15 @@ export function useTabEditorInput({
         cmds.push(new SetRest(loc, false, true))
       }
 
-      // Step 2: apply selected duration when it differs — only on rest beats.
-      // An existing note beat's duration must not be silently coerced: the beat
-      // is shared by all notes in that chord, and changing it would corrupt any
-      // already-placed notes.  Different durations at the same time position
-      // belong in a separate voice (Voice 2), which is a future feature.
+      // Step 2: apply selected duration when it differs.
+      // Overwriting a rest or replacing an existing note on the same string
+      // adopts the keypad duration (Sibelius rewrite semantics — the current
+      // duration is authoritative). Adding a chord tone on a different string
+      // preserves beat.duration so chord-mates stay in sync.
       const durationChanged =
         beat.duration.value !== currentDuration.value ||
         beat.duration.dots !== currentDuration.dots
-      if (durationChanged && beat.rest && canChangeDuration) {
+      if (durationChanged && isOverwrite && canChangeDuration) {
         cmds.push(new SetDuration(loc, currentDuration, beat.duration))
       }
 
@@ -365,7 +450,46 @@ export function useTabEditorInput({
       // entered.
       if (hover && pendingDigit === null) {
         const model = selectionRef.current
-        model.setFromHitPosition(hover.hit)
+        const currentVoiceIndex = model.cursor.voiceIndex
+        const hit = hover.hit
+
+        // Voice is a persistent mode set via V1/V2 buttons, Alt+1/Alt+2, or an
+        // explicit beat click. Hover provides position only — if alphaTab's
+        // hit-test landed on a different voice (e.g. V2's whole-bar rest
+        // spanning the same horizontal region as V1 notes), snapping to that
+        // voice would silently drop the user's selection, so map the hit back
+        // into the current voice by rhythmic offset.
+        if (hit.voiceIndex !== currentVoiceIndex) {
+          const ast = useTabEditorStore.getState().ast
+          const hoverBar = ast?.tracks[hit.trackIndex]?.staves[0]?.bars[hit.barIndex]
+          const srcVoice = hoverBar?.voices[hit.voiceIndex]
+          const dstVoice = hoverBar?.voices[currentVoiceIndex]
+          if (srcVoice && dstVoice) {
+            const srcOffset = srcVoice.beats
+              .slice(0, hit.beatIndex)
+              .reduce((sum, b) => sum + durationToUnits(b.duration), 0)
+            let acc = 0
+            let mappedBeatIndex = Math.max(0, dstVoice.beats.length - 1)
+            for (let i = 0; i < dstVoice.beats.length; i++) {
+              const u = durationToUnits(dstVoice.beats[i].duration)
+              if (srcOffset >= acc && srcOffset < acc + u) {
+                mappedBeatIndex = i
+                break
+              }
+              acc += u
+            }
+            model.setFromHitPosition({
+              ...hit,
+              voiceIndex: currentVoiceIndex,
+              beatIndex: mappedBeatIndex,
+            })
+          } else {
+            // Target voice missing in the hovered bar — accept hover's voice.
+            model.setFromHitPosition(hit)
+          }
+        } else {
+          model.setFromHitPosition(hit)
+        }
         useTabEditorStore.getState().setSelection(model.selection)
         if (!isInsertingNow) {
           useTabEditorStore.getState().setInsertMode(true)
@@ -373,6 +497,20 @@ export function useTabEditorInput({
           isInsertingNow = true
         }
         hoverTriggeredRef.current = true
+      } else if (!isInsertingNow && pendingDigit === null) {
+        // Sibelius-style promotion: a beat-position selection + digit press →
+        // enter insert mode at that position. Cursor is already on the
+        // selected position (model.cursor handles both 'note' and 'caret'
+        // kinds), so we just collapse to a caret and flip insert mode on.
+        const model = selectionRef.current
+        const k = model.selection.kind
+        if (k === 'note' || k === 'caret') {
+          model.setCursor(model.cursor)
+          useTabEditorStore.getState().setSelection(model.selection)
+          useTabEditorStore.getState().setInsertMode(true)
+          send({ type: 'ENTER_INSERT' })
+          isInsertingNow = true
+        }
       }
 
       const exitAfter = hoverTriggeredRef.current
@@ -652,18 +790,60 @@ export function useTabEditorInput({
       noteId: ids.noteId,
     }
 
+    // Guard helper for legato connectors (H/P, legato slide). Validates that
+    // a landing target exists on the same string in the next beat. Mirrors the
+    // toolbar's guardLegatoTarget (toast) — keyboard path uses console.warn so
+    // the shortcut doesn't silently succeed on a bad state.
+    const canLegato = (): boolean => {
+      if (!note) return false
+      const res = resolveLegatoTarget(
+        ast,
+        cursor.trackIndex,
+        cursor.barIndex,
+        cursor.voiceIndex,
+        cursor.beatIndex,
+        note.string,
+      )
+      if (!res.ok) {
+        console.warn(`[${name}]`, res.message)
+        return false
+      }
+      return true
+    }
+
     import('../editor/commands').then((cmds) => {
       let cmd
       switch (name) {
-        case 'hammerOn':
-          cmd = new cmds.SetHammerOn(noteLoc, !note?.hammerOrPull || undefined, note?.hammerOrPull)
+        case 'hammerOn': {
+          // Toggling OFF is always allowed; toggling ON needs a valid target.
+          if (note?.hammerOrPull) {
+            cmd = new cmds.SetHammerOn(noteLoc, undefined, note.hammerOrPull)
+          } else {
+            if (!canLegato()) return
+            cmd = new cmds.SetHammerOn(noteLoc, true, note?.hammerOrPull)
+          }
           break
-        case 'pullOff':
-          cmd = new cmds.SetPullOff(noteLoc, !note?.hammerOrPull || undefined, note?.hammerOrPull)
+        }
+        case 'pullOff': {
+          if (note?.hammerOrPull) {
+            cmd = new cmds.SetPullOff(noteLoc, undefined, note.hammerOrPull)
+          } else {
+            if (!canLegato()) return
+            cmd = new cmds.SetPullOff(noteLoc, true, note?.hammerOrPull)
+          }
           break
-        case 'slide':
-          cmd = new cmds.SetSlide(noteLoc, note?.slide === 'legato' ? undefined : 'legato', note?.slide)
+        }
+        case 'slide': {
+          // Legato slide is the connecting variant — shortcut 's' maps to it
+          // by convention. Toggle OFF when already active; otherwise guard.
+          if (note?.slide === 'legato') {
+            cmd = new cmds.SetSlide(noteLoc, undefined, note.slide)
+          } else {
+            if (!canLegato()) return
+            cmd = new cmds.SetSlide(noteLoc, 'legato', note?.slide)
+          }
           break
+        }
         case 'vibrato': {
           // Cycle: none → slight → wide → none
           const next = note?.vibrato === undefined ? 'slight' : note.vibrato === 'slight' ? 'wide' : undefined
@@ -678,9 +858,29 @@ export function useTabEditorInput({
             cmd = new cmds.SetBend(noteLoc, undefined, note.bend)
           }
           break
-        case 'tie':
-          cmd = new cmds.SetTie(noteLoc, !note?.tie || undefined, note?.tie)
+        case 'tie': {
+          // Sibelius rule: pressing tie on A ties A → next same-pitch note.
+          // Encode on the destination note (matches AST `note.tie` = "tied to
+          // previous"). Identical to handleTie in TabEditorToolbar.
+          if (!note) return
+          const res = resolveTieTarget(
+            ast,
+            cursor.trackIndex,
+            cursor.barIndex,
+            cursor.voiceIndex,
+            cursor.beatIndex,
+            note.string,
+          )
+          if (!res.ok) {
+            // Keyboard path has no toast dependency; log instead so the user
+            // can debug. UI path (toolbar) surfaces the message visibly.
+            console.warn('[tie]', res.message)
+            return
+          }
+          const { destLoc, dest } = res.target
+          cmd = new cmds.SetTie(destLoc, dest.tie ? undefined : true, dest.tie)
           break
+        }
         case 'staccato':
           cmd = new cmds.SetStaccato(noteLoc, !note?.staccato || undefined, note?.staccato)
           break
@@ -800,6 +1000,168 @@ export function useTabEditorInput({
   }, [])
 
   // -------------------------------------------------------------------------
+  // switchToVoice — change cursor.voiceIndex, creating the voice in the current
+  // bar if it doesn't yet exist. Sibelius-style Alt+1/Alt+2 voice switching.
+  //
+  // Rules:
+  //   • Alt+1 always succeeds — voice 0 must always exist.
+  //   • Alt+2 on a bar that has only voice 0 → apply AddVoice so V2 exists
+  //     (default = bar rest), then move cursor to voiceIndex 1, beatIndex 0.
+  //   • Alt+2 on a bar that already has voice 1 → just move the cursor.
+  // -------------------------------------------------------------------------
+  const switchToVoice = useCallback((targetVoiceIndex: 0 | 1) => {
+    // User acted on the hint — clear it regardless of which voice they chose.
+    useTabEditorStore.getState().setVoiceHint(null)
+    const { ast, currentDuration } = useTabEditorStore.getState()
+    if (!ast) return
+    const cursor = selectionRef.current.cursor
+    const track = ast.tracks[cursor.trackIndex]
+    const bar = track?.staves[0]?.bars[cursor.barIndex]
+    if (!track || !bar) return
+
+    const currentVoice = bar.voices[cursor.voiceIndex]
+    const targetVoice = bar.voices[targetVoiceIndex]
+    const voiceExists = !!targetVoice
+
+    // Source rhythmic offset (64th-note units from bar start to cursor.beatIndex).
+    // Preserving this offset across the voice switch is what lets a V2 note land
+    // stacked on its V1 counterpart instead of snapping to the bar's first beat.
+    const srcOffset = currentVoice
+      ? currentVoice.beats
+          .slice(0, cursor.beatIndex)
+          .reduce((sum, b) => sum + durationToUnits(b.duration), 0)
+      : 0
+
+    const timeSig = getEffectiveTimeSig(ast, cursor.trackIndex, cursor.barIndex)
+    const capacity = barCapacityUnits(timeSig)
+    const noteUnits = Math.max(1, durationToUnits(currentDuration))
+
+    // Sibelius convention: when leaving V2 → V1, if the V2 being left has no
+    // notes (all rests), remove it from this bar so the bar renders cleanly.
+    const shouldRemoveLeftVoice =
+      cursor.voiceIndex === 1 &&
+      targetVoiceIndex === 0 &&
+      !!currentVoice &&
+      currentVoice.beats.every((b) => b.rest || b.notes.length === 0)
+
+    // Does the target voice already have a beat boundary starting at srcOffset?
+    const beatIndexAtOffset = (voice: VoiceNode, offset: number): number | null => {
+      let acc = 0
+      for (let i = 0; i < voice.beats.length; i++) {
+        if (acc === offset) return i
+        acc += durationToUnits(voice.beats[i].duration)
+      }
+      return null
+    }
+
+    // Build an all-rest voice whose beats split cleanly at srcOffset so the
+    // cursor can land on a beat that starts exactly there.
+    const buildAlignedRestVoice = (): VoiceNode => {
+      const beats: BeatNode[] = []
+      if (srcOffset > 0) {
+        for (const d of splitIntoRests(noteUnits, srcOffset).reverse()) {
+          beats.push({
+            id: nanoid(),
+            duration: { value: d, dots: 0 },
+            notes: [],
+            rest: true,
+          })
+        }
+      }
+      const postUnits = capacity - srcOffset
+      if (postUnits > 0) {
+        for (const d of splitIntoRests(noteUnits, postUnits)) {
+          beats.push({
+            id: nanoid(),
+            duration: { value: d, dots: 0 },
+            notes: [],
+            rest: true,
+          })
+        }
+      }
+      return { id: nanoid(), beats }
+    }
+
+    const finishCursorMove = (overrideVoice?: VoiceNode) => {
+      const freshAst = useTabEditorStore.getState().ast
+      const freshBar = freshAst?.tracks[cursor.trackIndex]?.staves[0]?.bars[cursor.barIndex]
+      const freshTargetVoice = overrideVoice ?? freshBar?.voices[targetVoiceIndex]
+      let newBeatIndex = 0
+      if (freshTargetVoice && freshTargetVoice.beats.length > 0) {
+        const exact = beatIndexAtOffset(freshTargetVoice, srcOffset)
+        newBeatIndex = exact ?? Math.min(cursor.beatIndex, freshTargetVoice.beats.length - 1)
+      }
+      const newCursor: Cursor = {
+        ...cursor,
+        voiceIndex: targetVoiceIndex,
+        beatIndex: newBeatIndex,
+      }
+      selectionRef.current.setCursor(newCursor)
+      useTabEditorStore.getState().setSelection(selectionRef.current.selection)
+    }
+
+    // Case 1 — leaving an empty V2 for V1. Remove V2, land on V1 at the
+    // corresponding rhythmic offset.
+    if (shouldRemoveLeftVoice && currentVoice) {
+      import('../editor/commands').then(({ RemoveVoice }) => {
+        useTabEditorStore.getState().applyCommand(
+          new RemoveVoice(track.id, bar.id, currentVoice.id),
+        )
+        finishCursorMove()
+      })
+      return
+    }
+
+    // Case 2 — target voice doesn't exist. Create it pre-aligned so a beat
+    // starts at srcOffset (otherwise the default whole-bar-rest would trap the
+    // cursor at beatIndex 0).
+    if (!voiceExists) {
+      const newVoice = buildAlignedRestVoice()
+      import('../editor/commands').then(({ AddVoice }) => {
+        useTabEditorStore.getState().applyCommand(
+          new AddVoice(track.id, bar.id, targetVoiceIndex, newVoice),
+        )
+        finishCursorMove(newVoice)
+      })
+      return
+    }
+
+    // Case 3 — target exists and already has a beat boundary at srcOffset.
+    // No AST mutation needed; just move the cursor.
+    if (beatIndexAtOffset(targetVoice!, srcOffset) !== null) {
+      finishCursorMove()
+      return
+    }
+
+    // Case 4 — target exists but has no beat boundary at srcOffset. When the
+    // voice is all rests (typical: a fresh V2 created earlier as a single bar
+    // rest), rebuild it aligned. When it has real notes, fall through — we
+    // can't safely rewrite user content, so finishCursorMove clamps to the
+    // nearest valid index.
+    const targetIsAllRests = targetVoice!.beats.every(
+      (b) => b.rest || b.notes.length === 0,
+    )
+    if (targetIsAllRests) {
+      const newVoice = buildAlignedRestVoice()
+      import('../editor/commands').then(({ AddVoice, RemoveVoice, CompositeCommand }) => {
+        useTabEditorStore.getState().applyCommand(
+          new CompositeCommand(
+            [
+              new RemoveVoice(track.id, bar.id, targetVoice!.id),
+              new AddVoice(track.id, bar.id, targetVoiceIndex, newVoice),
+            ],
+            'Switch voice',
+          ),
+        )
+        finishCursorMove(newVoice)
+      })
+      return
+    }
+
+    finishCursorMove()
+  }, [])
+
+  // -------------------------------------------------------------------------
   // handleClearBars — wipe all note content from the selected bar(s)
   // -------------------------------------------------------------------------
   const handleClearBars = useCallback(() => {
@@ -827,6 +1189,27 @@ export function useTabEditorInput({
   }, [])
 
   // -------------------------------------------------------------------------
+  // Select-all — selects every bar in the given track (GP "global selection").
+  // Invoked by ⌘A and triple-click.
+  // -------------------------------------------------------------------------
+  const handleSelectAll = useCallback(
+    (trackIndex: number) => {
+      const ast = useTabEditorStore.getState().ast
+      const barCount = ast?.tracks[trackIndex]?.staves[0]?.bars.length ?? 0
+      if (barCount === 0) return
+      const model = selectionRef.current
+      model.setBarRange(
+        { trackIndex, barIndex: 0 },
+        { trackIndex, barIndex: barCount - 1 },
+      )
+      useTabEditorStore.getState().setSelection(model.selection)
+      useTabEditorStore.getState().setInsertMode(false)
+      send({ type: 'ESCAPE' })
+    },
+    [send],
+  )
+
+  // -------------------------------------------------------------------------
   // Keydown handler
   // -------------------------------------------------------------------------
   const handleKeyDown = useCallback(
@@ -835,6 +1218,22 @@ export function useTabEditorInput({
       const isInserting = stateValue === 'inserting'
       const isIdle = stateValue === 'idle'
       const isMeta = e.ctrlKey || e.metaKey
+
+      // --- Don't hijack keys when focus is inside a text input ---
+      // Without this, PropertyPanel / toolbar / dialog inputs can't receive
+      // any digit, technique letter, or Backspace because the global editor
+      // shortcut handler below calls preventDefault() on them.
+      // Meta-shortcuts (Cmd+Z / Cmd+C / etc.) are still allowed through.
+      const target = e.target as Element | null
+      if (target && !isMeta) {
+        const tag = target.tagName
+        const editable =
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          (target as HTMLElement).isContentEditable
+        if (editable) return
+      }
 
       // --- Global shortcuts (any state) ---
       if (isMeta && !e.shiftKey && e.key.toLowerCase() === 'z') {
@@ -867,6 +1266,31 @@ export function useTabEditorInput({
         return
       }
 
+      // --- ⌘A / Ctrl+A → select all bars in current track ---
+      // The outer editable-target early-return only fires for non-meta keys, so
+      // we re-check here to let native "select all text" keep working inside
+      // <input>/<textarea>/contentEditable.
+      if (isMeta && !e.shiftKey && e.key.toLowerCase() === 'a') {
+        const editable =
+          target?.tagName === 'INPUT' ||
+          target?.tagName === 'TEXTAREA' ||
+          target?.tagName === 'SELECT' ||
+          (target as HTMLElement | null)?.isContentEditable === true
+        if (editable) return
+        e.preventDefault()
+        const trackIndex = selectionRef.current.cursor.trackIndex
+        handleSelectAll(trackIndex)
+        return
+      }
+
+      // --- Alt+1 / Alt+2 → voice switching (Sibelius convention) ---
+      // Works in both idle and inserting modes. Alt+2 auto-creates V2 if missing.
+      if (e.altKey && !isMeta && (e.key === '1' || e.key === '2')) {
+        e.preventDefault()
+        switchToVoice(e.key === '1' ? 0 : 1)
+        return
+      }
+
       // --- Escape ---
       if (e.key === 'Escape') {
         send({ type: 'ESCAPE' })
@@ -874,6 +1298,14 @@ export function useTabEditorInput({
         hoverPendingFretRef.current = null
         setHoverPendingFret(null)
         hoverTriggeredRef.current = false
+        // Drop any active note/range/bar selection — Escape is the universal
+        // "deselect everything" affordance and must clear the orange digit
+        // highlight as well as the xstate machine. clearToCaret keeps the
+        // model's cursor position so subsequent typing has a sensible default,
+        // but the store is set to null so the overlay clears entirely.
+        selectionRef.current.clearToCaret()
+        useTabEditorStore.getState().setSelection(null)
+        useTabEditorStore.getState().setInsertMode(false)
         return
       }
 
@@ -910,10 +1342,16 @@ export function useTabEditorInput({
         return
       }
 
-      // Digits 0-9 — available in insert mode OR when hovering (for fret preview)
+      // Digits 0-9 — available in insert mode OR when hovering (for fret
+      // preview) OR when a caret/note selection is active (Sibelius-style:
+      // typing a digit on a selected position promotes it into insert mode
+      // and commits the fret). 'caret' covers click-on-empty-space; 'note'
+      // covers click-on-digit. Both should accept digit input.
       if (e.key >= '0' && e.key <= '9') {
         const isHovering = (hoverStateRef?.current ?? null) !== null
-        if (isInserting || isHovering) {
+        const sel = selectionRef.current.selection
+        const hasBeatSelection = sel.kind === 'note' || sel.kind === 'caret'
+        if (isInserting || isHovering || hasBeatSelection) {
           e.preventDefault()
           handleDigit(Number(e.key))
           return
@@ -1036,6 +1474,8 @@ export function useTabEditorInput({
       applyBeatTechnique,
       applyDeleteNote,
       applyDeleteBeat,
+      switchToVoice,
+      handleSelectAll,
     ],
   )
 
@@ -1052,22 +1492,41 @@ export function useTabEditorInput({
   // -------------------------------------------------------------------------
   // Beat-click handler (called by useTabEditorPlacement.handleClick)
   //
-  // Places the cursor at the clicked position and enters insert mode.
-  // If a fret was previewed in hover mode (hoverPendingFretRef), it is
-  // committed immediately so the workflow is: hover → type → click = place.
+  // Sibelius-style: a plain click selects the clicked notehead (kind: 'note').
+  // Insert mode is NOT entered until the user actually types a digit
+  // (handleDigit will promote the note selection → caret + insert).
+  //
+  // Hover-pending fret carve-out: if the user was hovering and previewed a
+  // fret with the keyboard, the click commits that fret immediately AND enters
+  // insert mode (the click is conceptually the tail of a typing flow).
   // -------------------------------------------------------------------------
   const handleBeatClick = useCallback(
     (hit: HitResult) => {
       const model = selectionRef.current
-      model.setFromHitPosition(hit)
-      useTabEditorStore.getState().setSelection(model.selection)
-      useTabEditorStore.getState().setInsertMode(true)
-      send({ type: 'ENTER_INSERT' })
-      hoverTriggeredRef.current = false // click-initiated insert — don't auto-exit
+      // Callers pass a full HitPosition (extends HitResult with stringLineY).
+      // Read it through a widened type so the per-string overlay can snap.
+      const stringLineY = (hit as HitResult & { stringLineY?: number }).stringLineY
+      const cursor: Cursor = {
+        trackIndex: hit.trackIndex,
+        barIndex: hit.barIndex,
+        voiceIndex: hit.voiceIndex,
+        beatIndex: hit.beatIndex,
+        stringIndex: hit.stringIndex,
+        stringLineY,
+      }
 
-      // Commit hover-mode preview fret, if any
       const pendingHover = hoverPendingFretRef.current
+
       if (pendingHover !== null) {
+        // Hover-pending fret commit path: snap caret + enter insert mode +
+        // commit the previewed fret. This preserves the existing hover→type→
+        // click workflow.
+        model.setCursor(cursor)
+        useTabEditorStore.getState().setSelection(model.selection)
+        useTabEditorStore.getState().setInsertMode(true)
+        send({ type: 'ENTER_INSERT' })
+        hoverTriggeredRef.current = false // click-initiated insert — don't auto-exit
+
         hoverPendingFretRef.current = null
         setHoverPendingFret(null)
         // Also clear any in-flight XState pendingDigit / timer
@@ -1077,7 +1536,23 @@ export function useTabEditorInput({
         }
         send({ type: 'PENDING_DIGIT_TIMEOUT' })
         commitFret(pendingHover)
+        return
       }
+
+      // Sibelius split: click ON the digit → 'note' selection (orange tint);
+      // click on empty staff space → 'caret' (transparent — just a position
+      // marker for typing). The hit-test reports `onNotehead` based on whether
+      // the click landed inside the rendered notehead rect.
+      const onNotehead = (hit as HitResult & { onNotehead?: boolean }).onNotehead === true
+      if (onNotehead) {
+        model.setNote(cursor)
+      } else {
+        model.setCursor(cursor)
+      }
+      useTabEditorStore.getState().setSelection(model.selection)
+      useTabEditorStore.getState().setInsertMode(false)
+      send({ type: 'ESCAPE' })
+      hoverTriggeredRef.current = false
     },
     [send, commitFret],
   )
@@ -1110,9 +1585,11 @@ export function useTabEditorInput({
     send,
     handleBeatClick,
     handleBarClick,
+    handleSelectAll,
     selectionRef,
     hoverPendingFret,
     applyRestBeat,
     applyDuration,
+    switchToVoice,
   }
 }

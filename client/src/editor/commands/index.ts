@@ -26,7 +26,12 @@ export {
   SetKeySignature,
   SetBarTempo,
   SetRepeat,
+  SetJump,
+  SetAlternateEnding,
+  SetSection,
 } from './barCommands'
+
+export { AddVoice, RemoveVoice } from './voiceCommands'
 
 export {
   InsertTrack,
@@ -63,6 +68,8 @@ export {
   SetFade,
   SetTremoloPicking,
   SetFermata,
+  SetWhammy,
+  SetChord,
 } from './techniqueCommands'
 export type { FadeType, FermataValue } from './techniqueCommands'
 

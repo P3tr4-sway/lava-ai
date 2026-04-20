@@ -38,10 +38,17 @@ interface AlphaBeat {
   }
 }
 
+interface AlphaNoteBoundsLite {
+  noteHeadBounds: AlphaBoundsLike
+  note: { string: number }
+}
+
 interface AlphaBeatBounds {
   beat: AlphaBeat
   visualBounds: AlphaBoundsLike
   realBounds: AlphaBoundsLike
+  /** Per-note bounds — populated when `core.includeNoteBounds: true`. */
+  notes?: AlphaNoteBoundsLite[]
 }
 
 interface AlphaBarBounds {
@@ -221,6 +228,8 @@ export function hitTest(
   const barIndex = beat.voice.bar.index
   const masterBarBounds = lookup.findMasterBarByIndex(barIndex)
   let stringIndex = 1
+  let onNotehead = false
+  let snappedNoteCenterY: number | null = null
 
   let stringLineY = y
   if (masterBarBounds && masterBarBounds.bars.length > 0) {
@@ -230,10 +239,42 @@ export function hitTest(
     if (tabBarBounds) {
       const staffBounds = preferredBounds(tabBarBounds)
       stringIndex = deriveStringIndex(staffBounds, y, stringCount)
-      // Compute exact Y of the resolved string line (matches deriveStringIndex)
-      // string 1 → top (ratio=0), string N → bottom (ratio=1)
-      const lineRatio = stringCount > 1 ? (stringIndex - 1) / (stringCount - 1) : 0
-      stringLineY = staffBounds.y + lineRatio * staffBounds.h
+
+      // Notehead-snap: TAB digits sit *outside* the staff line bounds, so a
+      // click directly on a digit can derive the wrong string from staff y
+      // alone. When the click lands inside any rendered notehead rect for the
+      // resolved beat, prefer that note's string — this matches Sibelius's
+      // "click the digit, select that exact note" behaviour.
+      for (const beatBounds of tabBarBounds.beats) {
+        if (beatBounds.beat.index !== beat.index) continue
+        if (beatBounds.beat.voice.index !== beat.voice.index) continue
+        const notes = beatBounds.notes ?? []
+        for (const nb of notes) {
+          const r = nb.noteHeadBounds
+          if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+            stringIndex = nb.note.string
+            snappedNoteCenterY = r.y + r.h / 2
+            onNotehead = true
+            break
+          }
+        }
+        break
+      }
+
+      // Resolve string-line Y. When notehead-snap fired, prefer the digit's
+      // actual rendered center — alphaTab does not align noteHeadBounds.y to
+      // the staff-bounds line formula (the digit can sit dozens of pixels
+      // away from `staffBounds.y + lineRatio * staffBounds.h`), so the formula
+      // would push hover/selection overlays off the digit. Fall back to the
+      // formula only when no notehead is under the cursor (caret on bare
+      // staff line). string 1 → top (ratio=0), string N → bottom (ratio=1).
+      if (snappedNoteCenterY !== null) {
+        stringLineY = snappedNoteCenterY
+      } else {
+        const lineRatio =
+          stringCount > 1 ? (stringIndex - 1) / (stringCount - 1) : 0
+        stringLineY = staffBounds.y + lineRatio * staffBounds.h
+      }
     }
   }
 
@@ -244,5 +285,6 @@ export function hitTest(
     beatIndex: beat.index,
     stringIndex,
     stringLineY,
+    onNotehead,
   }
 }

@@ -4,7 +4,7 @@
  */
 
 import type { Command, CommandContext, CommandResult, Json } from './Command'
-import type { BarNode, VoiceNode, RepeatMarker } from '../ast/types'
+import type { BarNode, VoiceNode, RepeatMarker, JumpType } from '../ast/types'
 import { insertAt, removeAt, updateBar, updateTrack } from './helpers'
 import {
   makeBarBeats,
@@ -444,6 +444,143 @@ export class SetRepeat implements Command {
   affectedBarIds(): string[] {
     return [this.barId]
   }
+}
+
+// ---------------------------------------------------------------------------
+// SetJump — D.S. / D.C. / Fine / Coda / Segno markers
+// ---------------------------------------------------------------------------
+
+export class SetJump implements Command {
+  readonly type = 'SetJump'
+  readonly label = 'Set jump'
+
+  constructor(
+    private readonly trackId: string,
+    private readonly barId: string,
+    private readonly jump: JumpType | undefined,
+    private readonly oldJump: JumpType | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBarInTrack(ctx, this.trackId, this.barId, (bar) => ({
+      ...bar,
+      jump: this.jump,
+    }))
+    return { score, affectedBarIds: [this.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetJump(this.trackId, this.barId, this.oldJump, this.jump)
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      trackId: this.trackId,
+      barId: this.barId,
+      jump: this.jump ?? null,
+      oldJump: this.oldJump ?? null,
+    }
+  }
+
+  affectedBarIds(): string[] { return [this.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetAlternateEnding — \ae (1 2 3)
+// ---------------------------------------------------------------------------
+
+export class SetAlternateEnding implements Command {
+  readonly type = 'SetAlternateEnding'
+  readonly label = 'Set alternate ending'
+
+  constructor(
+    private readonly trackId: string,
+    private readonly barId: string,
+    private readonly alternateEnding: number[] | undefined,
+    private readonly oldAlternateEnding: number[] | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBarInTrack(ctx, this.trackId, this.barId, (bar) => ({
+      ...bar,
+      alternateEnding: this.alternateEnding,
+    }))
+    return { score, affectedBarIds: [this.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetAlternateEnding(
+      this.trackId,
+      this.barId,
+      this.oldAlternateEnding,
+      this.alternateEnding,
+    )
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      trackId: this.trackId,
+      barId: this.barId,
+      alternateEnding: (this.alternateEnding as unknown as Json) ?? null,
+      oldAlternateEnding: (this.oldAlternateEnding as unknown as Json) ?? null,
+    }
+  }
+
+  affectedBarIds(): string[] { return [this.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetSection — section name and optional marker symbol
+// ---------------------------------------------------------------------------
+
+export class SetSection implements Command {
+  readonly type = 'SetSection'
+  readonly label = 'Set section'
+
+  constructor(
+    private readonly trackId: string,
+    private readonly barId: string,
+    private readonly section: string | undefined,
+    private readonly marker: string | undefined,
+    private readonly oldSection: string | undefined,
+    private readonly oldMarker: string | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBarInTrack(ctx, this.trackId, this.barId, (bar) => ({
+      ...bar,
+      section: this.section,
+      sectionMarker: this.marker,
+    }))
+    return { score, affectedBarIds: [this.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetSection(
+      this.trackId,
+      this.barId,
+      this.oldSection,
+      this.oldMarker,
+      this.section,
+      this.marker,
+    )
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      trackId: this.trackId,
+      barId: this.barId,
+      section: this.section ?? null,
+      marker: this.marker ?? null,
+      oldSection: this.oldSection ?? null,
+      oldMarker: this.oldMarker ?? null,
+    }
+  }
+
+  affectedBarIds(): string[] { return [this.barId] }
 }
 
 // ---------------------------------------------------------------------------

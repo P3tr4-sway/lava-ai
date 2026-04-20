@@ -21,7 +21,7 @@ import type {
   TrackNode,
   VoiceNode,
 } from './types'
-import { barCapacityUnits, durationToUnits, splitIntoRests } from './barFill'
+import { barCapacityUnits, durationToUnits, splitIntoRests, UNITS_PER_WHOLE } from './barFill'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -354,7 +354,7 @@ function emitBarRest(
   }
 
   // Fallback for odd meters (5/4, 7/8, 9/8, …)
-  const durs: Duration[] = splitIntoRests(64, capacity)
+  const durs: Duration[] = splitIntoRests(UNITS_PER_WHOLE, capacity)
   const beatStrs: string[] = []
   let prev = prevDuration
   for (const durValue of durs) {

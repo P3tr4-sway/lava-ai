@@ -30,6 +30,9 @@ import {
   SetKeySignature,
   SetBarTempo,
   SetRepeat,
+  SetJump,
+  SetAlternateEnding,
+  SetSection,
 } from '../../commands/barCommands'
 import {
   InsertTrack,
@@ -53,6 +56,8 @@ import {
   SetLetRing,
   SetAccent,
   SetStroke,
+  SetWhammy,
+  SetChord,
 } from '../../commands/techniqueCommands'
 import {
   BulkTranspose,
@@ -870,6 +875,62 @@ describe('SetRepeat', () => {
   })
 })
 
+describe('SetJump', () => {
+  beforeEach(() => resetIdCounter())
+
+  it('execute and invert', () => {
+    const score = makeScore()
+    const i = ids(score)
+    const cmd = new SetJump(i.trackId, i.barId, 'DaCapoAlFine', undefined)
+    const r1 = cmd.execute(makeCtx(score))
+    expect(r1.score.tracks[0].staves[0].bars[0].jump).toBe('DaCapoAlFine')
+
+    const inv = cmd.invert(makeCtx(score))
+    const r2 = inv.execute(makeCtx(r1.score))
+    expect(r2.score.tracks[0].staves[0].bars[0].jump).toBeUndefined()
+  })
+})
+
+describe('SetAlternateEnding', () => {
+  beforeEach(() => resetIdCounter())
+
+  it('execute and invert', () => {
+    const score = makeScore()
+    const i = ids(score)
+    const cmd = new SetAlternateEnding(i.trackId, i.barId, [1, 2], undefined)
+    const r1 = cmd.execute(makeCtx(score))
+    expect(r1.score.tracks[0].staves[0].bars[0].alternateEnding).toEqual([1, 2])
+
+    const inv = cmd.invert(makeCtx(score))
+    const r2 = inv.execute(makeCtx(r1.score))
+    expect(r2.score.tracks[0].staves[0].bars[0].alternateEnding).toBeUndefined()
+  })
+})
+
+describe('SetSection', () => {
+  beforeEach(() => resetIdCounter())
+
+  it('execute sets both section name and marker', () => {
+    const score = makeScore()
+    const i = ids(score)
+    const cmd = new SetSection(i.trackId, i.barId, 'Chorus', 'A', undefined, undefined)
+    const r1 = cmd.execute(makeCtx(score))
+    expect(r1.score.tracks[0].staves[0].bars[0].section).toBe('Chorus')
+    expect(r1.score.tracks[0].staves[0].bars[0].sectionMarker).toBe('A')
+  })
+
+  it('invert restores previous values', () => {
+    const score = makeScore()
+    const i = ids(score)
+    const cmd = new SetSection(i.trackId, i.barId, 'Chorus', 'A', 'Verse', 'V')
+    const r1 = cmd.execute(makeCtx(score))
+    const inv = cmd.invert(makeCtx(score))
+    const r2 = inv.execute(makeCtx(r1.score))
+    expect(r2.score.tracks[0].staves[0].bars[0].section).toBe('Verse')
+    expect(r2.score.tracks[0].staves[0].bars[0].sectionMarker).toBe('V')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Track commands
 // ---------------------------------------------------------------------------
@@ -1151,6 +1212,31 @@ describe('Technique commands', () => {
     const inv = cmd.invert(makeCtx(score))
     const r2 = inv.execute(makeCtx(r1.score))
     expect(r2.score.tracks[0].staves[0].bars[0].voices[0].beats[0].pickStroke).toBeUndefined()
+  })
+
+  it('SetWhammy execute / invert', () => {
+    const score = makeScore()
+    const loc = beatLoc(score)
+    const points = [{ position: 0, value: 0 }, { position: 30, value: 8 }, { position: 60, value: 0 }]
+    const cmd = new SetWhammy(loc, points, undefined)
+    const r1 = cmd.execute(makeCtx(score))
+    expect(r1.score.tracks[0].staves[0].bars[0].voices[0].beats[0].whammy).toEqual(points)
+
+    const inv = cmd.invert(makeCtx(score))
+    const r2 = inv.execute(makeCtx(r1.score))
+    expect(r2.score.tracks[0].staves[0].bars[0].voices[0].beats[0].whammy).toBeUndefined()
+  })
+
+  it('SetChord execute / invert', () => {
+    const score = makeScore()
+    const loc = beatLoc(score)
+    const cmd = new SetChord(loc, 'Cm7', undefined)
+    const r1 = cmd.execute(makeCtx(score))
+    expect(r1.score.tracks[0].staves[0].bars[0].voices[0].beats[0].chord).toBe('Cm7')
+
+    const inv = cmd.invert(makeCtx(score))
+    const r2 = inv.execute(makeCtx(r1.score))
+    expect(r2.score.tracks[0].staves[0].bars[0].voices[0].beats[0].chord).toBeUndefined()
   })
 })
 

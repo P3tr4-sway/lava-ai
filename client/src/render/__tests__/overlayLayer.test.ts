@@ -22,6 +22,7 @@ function makePos(overrides?: Partial<HitPosition>): HitPosition {
     beatIndex: 0,
     stringIndex: 1,
     stringLineY: 0,
+    onNotehead: false,
     ...overrides,
   }
 }
@@ -33,8 +34,19 @@ function makeRect(overrides?: Partial<BeatBoundsRect>): BeatBoundsRect {
 function makeBridge(
   getBeatRect: (t: number, b: number, v: number, beat: number) => BeatBoundsRect | null,
   getBarRect?: (t: number, b: number) => BeatBoundsRect | null,
+  getNoteHeadRect?: (
+    t: number,
+    b: number,
+    v: number,
+    beat: number,
+    str: number,
+  ) => BeatBoundsRect | null,
 ): AlphaTabBridge {
-  return { getBeatRect, getBarRect: getBarRect ?? (() => null) } as unknown as AlphaTabBridge
+  return {
+    getBeatRect,
+    getBarRect: getBarRect ?? (() => null),
+    getNoteHeadRect: getNoteHeadRect ?? (() => null),
+  } as unknown as AlphaTabBridge
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +60,7 @@ describe('OverlayLayer.getCursorRect', () => {
     expect(layer.getCursorRect(makePos())).toBeNull()
   })
 
-  it('returns a full-column highlight for the beat bounds', () => {
+  it('returns a thin 2-px Sibelius-style cursor line at the left edge of the beat', () => {
     const beatRect = makeRect({ x: 50, y: 100, w: 60, h: 30 })
     const bridge = makeBridge(() => beatRect)
     const layer = new OverlayLayer(bridge)
@@ -57,14 +69,14 @@ describe('OverlayLayer.getCursorRect', () => {
 
     expect(result).not.toBeNull()
     expect(result!.kind).toBe('cursor')
-    // x aligns with left edge of beat
+    // x aligns with the left edge of the beat
     expect(result!.x).toBe(beatRect.x)
-    // width spans the full beat column
-    expect(result!.width).toBe(beatRect.w)
-    // height should be at least the beat height (expanded by vertical padding)
-    expect(result!.height).toBeGreaterThanOrEqual(beatRect.h)
-    // top should be at or above the beat rect top
-    expect(result!.y).toBeLessThanOrEqual(beatRect.y)
+    // width is a thin 2-px vertical line, not the full beat column
+    expect(result!.width).toBe(2)
+    // height is the beat height plus VERTICAL_PADDING (4) above and below
+    expect(result!.height).toBe(beatRect.h + 8)
+    // top is shifted up by VERTICAL_PADDING (4)
+    expect(result!.y).toBe(beatRect.y - 4)
   })
 
   it('passes the correct trackIndex/barIndex/voiceIndex/beatIndex to bridge', () => {
@@ -198,7 +210,7 @@ describe('OverlayLayer.getNoteRect', () => {
     expect(layer.getNoteRect(makePos(), 6)).toBeNull()
   })
 
-  it('falls back to full beat rect when stringLineY is 0', () => {
+  it('falls back to a thin full-height cursor line when stringLineY is 0', () => {
     const beatRect = makeRect({ x: 10, y: 50, w: 40, h: 60 })
     const bridge = makeBridge(() => beatRect)
     const layer = new OverlayLayer(bridge)
@@ -207,7 +219,8 @@ describe('OverlayLayer.getNoteRect', () => {
 
     expect(result).not.toBeNull()
     expect(result!.kind).toBe('cursor')
-    expect(result!.width).toBe(beatRect.w)
+    // Thin 2-px line, not full beat width
+    expect(result!.width).toBe(2)
     // Full beat height (+ padding) when no stringLineY
     expect(result!.height).toBeGreaterThanOrEqual(beatRect.h)
   })
@@ -223,7 +236,8 @@ describe('OverlayLayer.getNoteRect', () => {
 
     expect(result).not.toBeNull()
     expect(result!.kind).toBe('cursor')
-    expect(result!.width).toBe(beatRect.w)
+    // Thin 2-px vertical tick on the targeted string row
+    expect(result!.width).toBe(2)
     // Should be much shorter than the full beat height
     expect(result!.height).toBeLessThan(beatRect.h)
     // Should be centred on stringLineY
@@ -241,6 +255,29 @@ describe('OverlayLayer.getNoteRect', () => {
 
     expect(result).not.toBeNull()
     expect(result!.height).toBeGreaterThanOrEqual(6)
+  })
+
+  it('uses notehead bounds (kind: "note") when bridge has per-note bounds', () => {
+    // When alphaTab reports a notehead rect for the targeted string, we
+    // highlight just the digit (slightly padded) instead of drawing a cursor
+    // line — matches the Sibelius convention "the number itself is selected".
+    const noteHeadRect = makeRect({ x: 100, y: 200, w: 14, h: 16 })
+    const bridge = makeBridge(
+      () => makeRect(), // beat exists
+      () => null,
+      () => noteHeadRect,
+    )
+    const layer = new OverlayLayer(bridge)
+
+    const result = layer.getNoteRect(makePos(), 6)
+
+    expect(result).not.toBeNull()
+    expect(result!.kind).toBe('note')
+    // Padded by 2px horizontally and 1px vertically.
+    expect(result!.x).toBe(noteHeadRect.x - 2)
+    expect(result!.y).toBe(noteHeadRect.y - 1)
+    expect(result!.width).toBe(noteHeadRect.w + 4)
+    expect(result!.height).toBe(noteHeadRect.h + 2)
   })
 })
 

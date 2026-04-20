@@ -17,7 +17,7 @@ export interface OverlayRect {
   y: number
   width: number
   height: number
-  kind: 'cursor' | 'selection' | 'hover'
+  kind: 'cursor' | 'selection' | 'hover' | 'note'
 }
 
 // ---------------------------------------------------------------------------
@@ -37,6 +37,8 @@ const VERTICAL_PADDING = 4
 /**
  * Convert a BeatBoundsRect into an OverlayRect of the given kind.
  * Expands the rect vertically by VERTICAL_PADDING for visual breathing room.
+ *
+ * Used for `selection` and `hover` kinds — full beat-width rectangles.
  */
 function beatRectToOverlay(
   rect: BeatBoundsRect,
@@ -48,6 +50,21 @@ function beatRectToOverlay(
     width: rect.w,
     height: rect.h + VERTICAL_PADDING * 2,
     kind,
+  }
+}
+
+/**
+ * Convert a BeatBoundsRect into a thin Sibelius-style cursor line at the
+ * LEFT edge of the beat. Width is fixed at CURSOR_WIDTH (2 px); height matches
+ * the beat plus VERTICAL_PADDING above/below for breathing room.
+ */
+function beatRectToCursorLine(rect: BeatBoundsRect): OverlayRect {
+  return {
+    x: rect.x,
+    y: rect.y - VERTICAL_PADDING,
+    width: CURSOR_WIDTH,
+    height: rect.h + VERTICAL_PADDING * 2,
+    kind: 'cursor',
   }
 }
 
@@ -71,7 +88,7 @@ export class OverlayLayer {
     )
     if (!rect) return null
 
-    return beatRectToOverlay(rect, 'cursor')
+    return beatRectToCursorLine(rect)
   }
 
   /**
@@ -142,11 +159,37 @@ export class OverlayLayer {
   }
 
   /**
-   * Compute the note cursor rect for a given HitPosition.
-   * When `stringLineY` is available, narrows the highlight to the clicked
-   * string line. Otherwise falls back to the full beat rect.
+   * Compute the highlight rect for a single selected notehead.
+   *
+   * Prefer the per-note bounds reported by alphaTab (`getNoteHeadRect`) so the
+   * highlight wraps the actual TAB digit. This is the Sibelius-style "the
+   * number itself is selected" visual — implemented as a translucent accent
+   * background rect (kind: 'selection') sized just to the digit, plus a small
+   * padding so the digit isn't clipped.
+   *
+   * When the beat is a rest (no notehead) we fall back to a thin vertical
+   * cursor tick at the clicked string row, since there's no digit to wrap.
    */
   getNoteRect(pos: HitPosition, stringCount: number): OverlayRect | null {
+    const noteHead = this.bridge.getNoteHeadRect(
+      pos.trackIndex,
+      pos.barIndex,
+      pos.voiceIndex,
+      pos.beatIndex,
+      pos.stringIndex,
+    )
+    if (noteHead) {
+      const padX = 2
+      const padY = 1
+      return {
+        x: noteHead.x - padX,
+        y: noteHead.y - padY,
+        width: noteHead.w + padX * 2,
+        height: noteHead.h + padY * 2,
+        kind: 'note',
+      }
+    }
+
     const beat = this.bridge.getBeatRect(
       pos.trackIndex,
       pos.barIndex,
@@ -155,14 +198,14 @@ export class OverlayLayer {
     )
     if (!beat) return null
 
-    if (!pos.stringLineY) return beatRectToOverlay(beat, 'cursor')
+    if (!pos.stringLineY) return beatRectToCursorLine(beat)
 
-    // Per-string height ≈ beat.h / (stringCount - 1). Cap at readable minimum.
+    // Rest fallback — thin vertical tick at the targeted string row.
     const perString = Math.max(beat.h / Math.max(1, stringCount - 1), 6)
     return {
       x: beat.x,
       y: pos.stringLineY - perString / 2,
-      width: beat.w,
+      width: CURSOR_WIDTH,
       height: perString,
       kind: 'cursor',
     }

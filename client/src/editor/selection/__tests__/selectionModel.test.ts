@@ -294,4 +294,56 @@ describe('SelectionModel', () => {
     expect(next.barIndex).toBe(2)
     expect(next.beatIndex).toBe(1) // 2 beats → last index is 1
   })
+
+  // -------------------------------------------------------------------------
+  // setNote — Sibelius-style notehead selection
+  // -------------------------------------------------------------------------
+
+  it('setNote produces a kind="note" selection at the given cursor', () => {
+    model.setNote({
+      trackIndex: 0,
+      barIndex: 1,
+      voiceIndex: 0,
+      beatIndex: 1,
+      stringIndex: 3,
+    })
+
+    expect(model.selection.kind).toBe('note')
+    const c = model.cursor
+    expect(c.barIndex).toBe(1)
+    expect(c.beatIndex).toBe(1)
+    expect(c.stringIndex).toBe(3)
+  })
+
+  it('setNote followed by setCursor collapses note → caret', () => {
+    model.setNote({
+      trackIndex: 0,
+      barIndex: 0,
+      voiceIndex: 0,
+      beatIndex: 1,
+      stringIndex: 2,
+    })
+    expect(model.selection.kind).toBe('note')
+
+    model.setCursor(model.cursor)
+    expect(model.selection.kind).toBe('caret')
+    expect(model.cursor.beatIndex).toBe(1)
+    expect(model.cursor.stringIndex).toBe(2)
+  })
+
+  it('cursor getter returns the note cursor when kind="note"', () => {
+    model.setNote({
+      trackIndex: 0,
+      barIndex: 2,
+      voiceIndex: 0,
+      beatIndex: 0,
+      stringIndex: 4,
+      stringLineY: 42,
+    })
+
+    const c = model.cursor
+    expect(c.barIndex).toBe(2)
+    expect(c.stringIndex).toBe(4)
+    expect(c.stringLineY).toBe(42)
+  })
 })

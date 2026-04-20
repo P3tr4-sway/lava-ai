@@ -35,6 +35,8 @@ import type { Cursor, BarSpan } from '../editor/selection/SelectionModel'
 import type { HitPosition } from '../render/alphaTabBridge'
 import type { HoverState } from './useTabEditorPlacement'
 import type { BeatNode, NoteNode, ScoreNode, VoiceNode } from '../editor/ast/types'
+import { resolveTieTarget } from '../editor/ast/tieResolver'
+import { resolveLegatoTarget } from '../editor/ast/legatoResolver'
 import type { Command } from '../editor/commands'
 import {
   durationToUnits,
@@ -495,6 +497,20 @@ export function useTabEditorInput({
           isInsertingNow = true
         }
         hoverTriggeredRef.current = true
+      } else if (!isInsertingNow && pendingDigit === null) {
+        // Sibelius-style promotion: a beat-position selection + digit press →
+        // enter insert mode at that position. Cursor is already on the
+        // selected position (model.cursor handles both 'note' and 'caret'
+        // kinds), so we just collapse to a caret and flip insert mode on.
+        const model = selectionRef.current
+        const k = model.selection.kind
+        if (k === 'note' || k === 'caret') {
+          model.setCursor(model.cursor)
+          useTabEditorStore.getState().setSelection(model.selection)
+          useTabEditorStore.getState().setInsertMode(true)
+          send({ type: 'ENTER_INSERT' })
+          isInsertingNow = true
+        }
       }
 
       const exitAfter = hoverTriggeredRef.current
@@ -774,18 +790,60 @@ export function useTabEditorInput({
       noteId: ids.noteId,
     }
 
+    // Guard helper for legato connectors (H/P, legato slide). Validates that
+    // a landing target exists on the same string in the next beat. Mirrors the
+    // toolbar's guardLegatoTarget (toast) — keyboard path uses console.warn so
+    // the shortcut doesn't silently succeed on a bad state.
+    const canLegato = (): boolean => {
+      if (!note) return false
+      const res = resolveLegatoTarget(
+        ast,
+        cursor.trackIndex,
+        cursor.barIndex,
+        cursor.voiceIndex,
+        cursor.beatIndex,
+        note.string,
+      )
+      if (!res.ok) {
+        console.warn(`[${name}]`, res.message)
+        return false
+      }
+      return true
+    }
+
     import('../editor/commands').then((cmds) => {
       let cmd
       switch (name) {
-        case 'hammerOn':
-          cmd = new cmds.SetHammerOn(noteLoc, !note?.hammerOrPull || undefined, note?.hammerOrPull)
+        case 'hammerOn': {
+          // Toggling OFF is always allowed; toggling ON needs a valid target.
+          if (note?.hammerOrPull) {
+            cmd = new cmds.SetHammerOn(noteLoc, undefined, note.hammerOrPull)
+          } else {
+            if (!canLegato()) return
+            cmd = new cmds.SetHammerOn(noteLoc, true, note?.hammerOrPull)
+          }
           break
-        case 'pullOff':
-          cmd = new cmds.SetPullOff(noteLoc, !note?.hammerOrPull || undefined, note?.hammerOrPull)
+        }
+        case 'pullOff': {
+          if (note?.hammerOrPull) {
+            cmd = new cmds.SetPullOff(noteLoc, undefined, note.hammerOrPull)
+          } else {
+            if (!canLegato()) return
+            cmd = new cmds.SetPullOff(noteLoc, true, note?.hammerOrPull)
+          }
           break
-        case 'slide':
-          cmd = new cmds.SetSlide(noteLoc, note?.slide === 'legato' ? undefined : 'legato', note?.slide)
+        }
+        case 'slide': {
+          // Legato slide is the connecting variant — shortcut 's' maps to it
+          // by convention. Toggle OFF when already active; otherwise guard.
+          if (note?.slide === 'legato') {
+            cmd = new cmds.SetSlide(noteLoc, undefined, note.slide)
+          } else {
+            if (!canLegato()) return
+            cmd = new cmds.SetSlide(noteLoc, 'legato', note?.slide)
+          }
           break
+        }
         case 'vibrato': {
           // Cycle: none → slight → wide → none
           const next = note?.vibrato === undefined ? 'slight' : note.vibrato === 'slight' ? 'wide' : undefined
@@ -800,9 +858,29 @@ export function useTabEditorInput({
             cmd = new cmds.SetBend(noteLoc, undefined, note.bend)
           }
           break
-        case 'tie':
-          cmd = new cmds.SetTie(noteLoc, !note?.tie || undefined, note?.tie)
+        case 'tie': {
+          // Sibelius rule: pressing tie on A ties A → next same-pitch note.
+          // Encode on the destination note (matches AST `note.tie` = "tied to
+          // previous"). Identical to handleTie in TabEditorToolbar.
+          if (!note) return
+          const res = resolveTieTarget(
+            ast,
+            cursor.trackIndex,
+            cursor.barIndex,
+            cursor.voiceIndex,
+            cursor.beatIndex,
+            note.string,
+          )
+          if (!res.ok) {
+            // Keyboard path has no toast dependency; log instead so the user
+            // can debug. UI path (toolbar) surfaces the message visibly.
+            console.warn('[tie]', res.message)
+            return
+          }
+          const { destLoc, dest } = res.target
+          cmd = new cmds.SetTie(destLoc, dest.tie ? undefined : true, dest.tie)
           break
+        }
         case 'staccato':
           cmd = new cmds.SetStaccato(noteLoc, !note?.staccato || undefined, note?.staccato)
           break
@@ -1111,6 +1189,27 @@ export function useTabEditorInput({
   }, [])
 
   // -------------------------------------------------------------------------
+  // Select-all — selects every bar in the given track (GP "global selection").
+  // Invoked by ⌘A and triple-click.
+  // -------------------------------------------------------------------------
+  const handleSelectAll = useCallback(
+    (trackIndex: number) => {
+      const ast = useTabEditorStore.getState().ast
+      const barCount = ast?.tracks[trackIndex]?.staves[0]?.bars.length ?? 0
+      if (barCount === 0) return
+      const model = selectionRef.current
+      model.setBarRange(
+        { trackIndex, barIndex: 0 },
+        { trackIndex, barIndex: barCount - 1 },
+      )
+      useTabEditorStore.getState().setSelection(model.selection)
+      useTabEditorStore.getState().setInsertMode(false)
+      send({ type: 'ESCAPE' })
+    },
+    [send],
+  )
+
+  // -------------------------------------------------------------------------
   // Keydown handler
   // -------------------------------------------------------------------------
   const handleKeyDown = useCallback(
@@ -1119,6 +1218,22 @@ export function useTabEditorInput({
       const isInserting = stateValue === 'inserting'
       const isIdle = stateValue === 'idle'
       const isMeta = e.ctrlKey || e.metaKey
+
+      // --- Don't hijack keys when focus is inside a text input ---
+      // Without this, PropertyPanel / toolbar / dialog inputs can't receive
+      // any digit, technique letter, or Backspace because the global editor
+      // shortcut handler below calls preventDefault() on them.
+      // Meta-shortcuts (Cmd+Z / Cmd+C / etc.) are still allowed through.
+      const target = e.target as Element | null
+      if (target && !isMeta) {
+        const tag = target.tagName
+        const editable =
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          (target as HTMLElement).isContentEditable
+        if (editable) return
+      }
 
       // --- Global shortcuts (any state) ---
       if (isMeta && !e.shiftKey && e.key.toLowerCase() === 'z') {
@@ -1151,6 +1266,23 @@ export function useTabEditorInput({
         return
       }
 
+      // --- ⌘A / Ctrl+A → select all bars in current track ---
+      // The outer editable-target early-return only fires for non-meta keys, so
+      // we re-check here to let native "select all text" keep working inside
+      // <input>/<textarea>/contentEditable.
+      if (isMeta && !e.shiftKey && e.key.toLowerCase() === 'a') {
+        const editable =
+          target?.tagName === 'INPUT' ||
+          target?.tagName === 'TEXTAREA' ||
+          target?.tagName === 'SELECT' ||
+          (target as HTMLElement | null)?.isContentEditable === true
+        if (editable) return
+        e.preventDefault()
+        const trackIndex = selectionRef.current.cursor.trackIndex
+        handleSelectAll(trackIndex)
+        return
+      }
+
       // --- Alt+1 / Alt+2 → voice switching (Sibelius convention) ---
       // Works in both idle and inserting modes. Alt+2 auto-creates V2 if missing.
       if (e.altKey && !isMeta && (e.key === '1' || e.key === '2')) {
@@ -1166,6 +1298,14 @@ export function useTabEditorInput({
         hoverPendingFretRef.current = null
         setHoverPendingFret(null)
         hoverTriggeredRef.current = false
+        // Drop any active note/range/bar selection — Escape is the universal
+        // "deselect everything" affordance and must clear the orange digit
+        // highlight as well as the xstate machine. clearToCaret keeps the
+        // model's cursor position so subsequent typing has a sensible default,
+        // but the store is set to null so the overlay clears entirely.
+        selectionRef.current.clearToCaret()
+        useTabEditorStore.getState().setSelection(null)
+        useTabEditorStore.getState().setInsertMode(false)
         return
       }
 
@@ -1202,10 +1342,16 @@ export function useTabEditorInput({
         return
       }
 
-      // Digits 0-9 — available in insert mode OR when hovering (for fret preview)
+      // Digits 0-9 — available in insert mode OR when hovering (for fret
+      // preview) OR when a caret/note selection is active (Sibelius-style:
+      // typing a digit on a selected position promotes it into insert mode
+      // and commits the fret). 'caret' covers click-on-empty-space; 'note'
+      // covers click-on-digit. Both should accept digit input.
       if (e.key >= '0' && e.key <= '9') {
         const isHovering = (hoverStateRef?.current ?? null) !== null
-        if (isInserting || isHovering) {
+        const sel = selectionRef.current.selection
+        const hasBeatSelection = sel.kind === 'note' || sel.kind === 'caret'
+        if (isInserting || isHovering || hasBeatSelection) {
           e.preventDefault()
           handleDigit(Number(e.key))
           return
@@ -1329,6 +1475,7 @@ export function useTabEditorInput({
       applyDeleteNote,
       applyDeleteBeat,
       switchToVoice,
+      handleSelectAll,
     ],
   )
 
@@ -1345,22 +1492,41 @@ export function useTabEditorInput({
   // -------------------------------------------------------------------------
   // Beat-click handler (called by useTabEditorPlacement.handleClick)
   //
-  // Places the cursor at the clicked position and enters insert mode.
-  // If a fret was previewed in hover mode (hoverPendingFretRef), it is
-  // committed immediately so the workflow is: hover → type → click = place.
+  // Sibelius-style: a plain click selects the clicked notehead (kind: 'note').
+  // Insert mode is NOT entered until the user actually types a digit
+  // (handleDigit will promote the note selection → caret + insert).
+  //
+  // Hover-pending fret carve-out: if the user was hovering and previewed a
+  // fret with the keyboard, the click commits that fret immediately AND enters
+  // insert mode (the click is conceptually the tail of a typing flow).
   // -------------------------------------------------------------------------
   const handleBeatClick = useCallback(
     (hit: HitResult) => {
       const model = selectionRef.current
-      model.setFromHitPosition(hit)
-      useTabEditorStore.getState().setSelection(model.selection)
-      useTabEditorStore.getState().setInsertMode(true)
-      send({ type: 'ENTER_INSERT' })
-      hoverTriggeredRef.current = false // click-initiated insert — don't auto-exit
+      // Callers pass a full HitPosition (extends HitResult with stringLineY).
+      // Read it through a widened type so the per-string overlay can snap.
+      const stringLineY = (hit as HitResult & { stringLineY?: number }).stringLineY
+      const cursor: Cursor = {
+        trackIndex: hit.trackIndex,
+        barIndex: hit.barIndex,
+        voiceIndex: hit.voiceIndex,
+        beatIndex: hit.beatIndex,
+        stringIndex: hit.stringIndex,
+        stringLineY,
+      }
 
-      // Commit hover-mode preview fret, if any
       const pendingHover = hoverPendingFretRef.current
+
       if (pendingHover !== null) {
+        // Hover-pending fret commit path: snap caret + enter insert mode +
+        // commit the previewed fret. This preserves the existing hover→type→
+        // click workflow.
+        model.setCursor(cursor)
+        useTabEditorStore.getState().setSelection(model.selection)
+        useTabEditorStore.getState().setInsertMode(true)
+        send({ type: 'ENTER_INSERT' })
+        hoverTriggeredRef.current = false // click-initiated insert — don't auto-exit
+
         hoverPendingFretRef.current = null
         setHoverPendingFret(null)
         // Also clear any in-flight XState pendingDigit / timer
@@ -1370,7 +1536,23 @@ export function useTabEditorInput({
         }
         send({ type: 'PENDING_DIGIT_TIMEOUT' })
         commitFret(pendingHover)
+        return
       }
+
+      // Sibelius split: click ON the digit → 'note' selection (orange tint);
+      // click on empty staff space → 'caret' (transparent — just a position
+      // marker for typing). The hit-test reports `onNotehead` based on whether
+      // the click landed inside the rendered notehead rect.
+      const onNotehead = (hit as HitResult & { onNotehead?: boolean }).onNotehead === true
+      if (onNotehead) {
+        model.setNote(cursor)
+      } else {
+        model.setCursor(cursor)
+      }
+      useTabEditorStore.getState().setSelection(model.selection)
+      useTabEditorStore.getState().setInsertMode(false)
+      send({ type: 'ESCAPE' })
+      hoverTriggeredRef.current = false
     },
     [send, commitFret],
   )
@@ -1403,6 +1585,7 @@ export function useTabEditorInput({
     send,
     handleBeatClick,
     handleBarClick,
+    handleSelectAll,
     selectionRef,
     hoverPendingFret,
     applyRestBeat,

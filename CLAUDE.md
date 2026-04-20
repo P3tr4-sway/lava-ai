@@ -1,23 +1,21 @@
-# LAVA AI — Design System Rules
+# LAVA AI — Agent Rules
 
-This file governs how AI coding agents work in this repository. Follow every rule here — not just during Figma-driven changes.
+How AI coding agents work in this repo. Follow these rules, not just during Figma-driven changes.
 
 ---
 
-## Project Stack
+## Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | React 18 + Vite 5 |
-| Language | TypeScript 5 (strict) |
-| Styling | Tailwind CSS 3 + CSS custom properties |
-| Class merging | `cn()` from `@/components/ui/utils` |
-| Variants | `class-variance-authority` (cva) |
-| Icons | `lucide-react` |
+| Client | React 18 + Vite 5, TypeScript 5 strict, Tailwind 3 + CSS custom properties |
+| Server | Fastify 4, better-sqlite3 + Drizzle, Zod, Pino, tsx watch (dev) |
 | State | Zustand |
 | Routing | React Router DOM v6 |
-| Audio synthesis | tone.js |
-| Audio waveforms | wavesurfer.js |
+| Audio | tone.js (synth), wavesurfer.js (waveforms) |
+| Icons | `lucide-react` (never install other icon libs) |
+| Class merging | `cn()` from `@/components/ui/utils` |
+| Variants | `class-variance-authority` (cva) |
 | Path alias | `@/*` → `client/src/*` |
 
 ---
@@ -25,411 +23,233 @@ This file governs how AI coding agents work in this repository. Follow every rul
 ## Commands
 
 ```bash
-pnpm dev          # Start client (port 5173) + server (port 3001) concurrently
+pnpm dev          # Client (5173) + server (3001) concurrently
 pnpm build        # Build all workspaces
 pnpm lint         # Lint all workspaces
 pnpm typecheck    # Type-check all workspaces
-pnpm clean        # Remove all dist/ and node_modules/
 ```
 
-Implementation plans: `docs/superpowers/plans/` (used with `superpowers:subagent-driven-development`)
-
-> `pnpm dev` runs `scripts/dev.mjs` which kills any processes on ports 3001/5173 then starts both services together.
+`pnpm dev` runs `scripts/dev.mjs` — kills existing processes on 3001/5173, then starts both.
 
 ---
 
-## Monorepo Structure
+## Monorepo
 
-pnpm workspace with three packages:
+pnpm workspace, three packages:
 
 ```
-client/    @lava/client  — React + Vite frontend (port 5173)
-server/    @lava/server  — Fastify API server (port 3001)
-packages/
-  shared/  @lava/shared  — shared types/utils consumed by both
+client/    @lava/client  — React + Vite frontend (5173)
+server/    @lava/server  — Fastify API (3001)
+packages/shared/ @lava/shared — shared types/utils
 ```
 
-Import shared code: `import { ... } from '@lava/shared'`
+Import shared: `import { ... } from '@lava/shared'`
 
 ### Spaces (page organization)
 
-Pages live in `client/src/spaces/<folder>/`. Each space maps to a route group:
+Pages live in `client/src/spaces/<folder>/`:
 
-| Product name | Folder | Route(s) | Pages |
-|---|---|---|---|
-| Home | `home` | `/` | `HomePage` — search-first hero, centered `max-w-3xl pt-[22vh]` layout |
-| Play | `jam` | `/jam`, `/jam/new`, `/jam/:id` | `PlayHubPage` (hub), `TonePage` (effect pedals editor), `JamPage` (free play) |
-| Player | `learn` | `/play/:id` | `SongsPage` — score + accompaniment player |
-| Editor | `pack` | `/editor`, `/editor/:id` | `EditorPage`, `EditorCanvas`, `EditorToolbar` — lead sheet editor |
+| Product | Folder | Routes |
+|---|---|---|
+| Home | `home` | `/` |
+| Play | `jam` | `/jam`, `/jam/new`, `/jam/:id` |
+| Player | `learn` | `/play/:id` |
+| Editor | `pack` | `/editor`, `/editor/:id` |
 
-New entrance/hub pages should follow the HomePage pattern: centered hero with `max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10`.
+Entrance/hub pages follow the HomePage pattern: `max-w-3xl mx-auto px-6 pt-[22vh] flex flex-col gap-10`.
 
-### DAW Panel reuse
+### Reuse patterns
 
-`DawPanel` from `@/components/daw/DawPanel` is the shared DAW component. Seed tracks with `useDawPanelStore` + `makeTrack()` on mount, then render at the bottom of a `flex flex-col h-full` layout with `showRecordButton={true} totalBars={16} beatsPerBar={4}`.
-
-### Agent input components
-
-- `ChatInput` — general search input with `forwardRef` and `ChatInputRef.setValue()`
-- `SpaceAgentInput` — wraps `ChatInput` for space-specific agent context, also supports `forwardRef` via `SpaceAgentInputRef`
-- Both support suggestion-tag patterns: `ref.current?.setValue(text)` to prefill the input
+- **`DawPanel`** (`@/components/daw/DawPanel`) — seed tracks with `useDawPanelStore` + `makeTrack()` on mount, render at bottom of `flex flex-col h-full` layout.
+- **`ChatInput` / `SpaceAgentInput`** — both support `forwardRef`; use `ref.current?.setValue(text)` to prefill.
+- Always check `client/src/components/ui/` (barrel `index.ts`) before creating new primitives.
 
 ---
 
-## Environment Setup
+## Environment
 
-Copy `.env.example` to `.env` at the repo root before running `pnpm dev`:
+Copy `.env.example` to `.env` before `pnpm dev`.
 
-```bash
-cp .env.example .env
-```
-
-Required variables:
-
-| Variable | Description |
+| Variable | Notes |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key (`sk-ant-...`) |
+| `ANTHROPIC_API_KEY` | Anthropic key |
 | `LLM_PROVIDER` | `"claude"` or `"openai"` |
-| `OPENAI_API_KEY` | Optional, only if using OpenAI |
-| `TENCENT_VOD_SECRET_ID` | Tencent Cloud SecretId — enables VOD AIGC mode when set |
-| `TENCENT_VOD_SECRET_KEY` | Tencent Cloud SecretKey |
-| `TENCENT_VOD_SUB_APP_ID` | Tencent VOD SubAppId (integer) |
-| `TENCENT_VOD_CHAT_BASE_URL` | VOD chat endpoint, default `https://text-aigc.vod-qcloud.com/v1` |
-| `DATABASE_URL` | SQLite path, default `./data/lava.db` |
+| `OPENAI_API_KEY` | Only if `LLM_PROVIDER=openai` |
+| `TENCENT_VOD_SECRET_ID` / `_SECRET_KEY` / `_SUB_APP_ID` | Setting these enables VOD AIGC mode |
+| `TENCENT_VOD_CHAT_BASE_URL` | Default `https://text-aigc.vod-qcloud.com/v1` |
+| `DATABASE_URL` | Default `./data/lava.db` |
 | `CLIENT_ORIGIN` | CORS origin, default `http://localhost:5173` |
 | `PORT` | Server port, default `3001` |
 
----
+### AI provider gotchas
 
-## Server Stack
-
-`server/` runs on **Fastify 4** with the following:
-
-| Layer | Technology |
-|---|---|
-| HTTP framework | Fastify 4 + @fastify/cors, multipart, rate-limit |
-| AI providers | @anthropic-ai/sdk, openai |
-| Database | better-sqlite3 + Drizzle ORM |
-| Schema validation | Zod |
-| Logging | Pino |
-| Runtime | tsx watch (dev), compiled JS (prod) |
-
-Source layout: `server/src/` → `agent/`, `config/`, `db/`, `routes/`, `utils/`
-
-### AI Provider routing
-
-- `LLM_PROVIDER=claude` → `ClaudeProvider` (Anthropic SDK)
-- `LLM_PROVIDER=openai` → `OpenAIProvider` (OpenAI Node SDK)
-  - If `TENCENT_VOD_*` vars are set, auto-exchanges them for an `ApiToken` via `CreateAigcApiToken` (TC3-HMAC-SHA256) then calls the VOD OpenAI-compatible endpoint
-  - Freshly issued tokens take ~35 s to activate — first request after server start will be slow; subsequent requests reuse the cached token
-  - `stream_options: { include_usage: true }` is incompatible with the Tencent endpoint and is automatically omitted in VOD mode
-- `AgentOrchestrator` is a singleton (instantiated once at route registration, not per-request) — token state persists across requests
+- `LLM_PROVIDER=openai` + `TENCENT_VOD_*` set → auto-exchanges creds for an `ApiToken` via `CreateAigcApiToken` (TC3-HMAC-SHA256) and calls the VOD OpenAI-compatible endpoint.
+- **Fresh VOD tokens take ~35 s to activate** — first request after server start is slow; subsequent requests reuse the cached token.
+- `stream_options: { include_usage: true }` is incompatible with the Tencent endpoint and is auto-stripped in VOD mode.
+- `AgentOrchestrator` is a singleton (instantiated once at route registration) — token state persists across requests.
 
 ---
 
-## Figma MCP Integration — Required Workflow
+## Styling
 
-Follow these steps in order for every Figma-driven change. Do not skip steps.
-
-1. Run `get_design_context` with the exact `nodeId` and `fileKey` from the Figma URL
-2. If the response is truncated, run `get_metadata` first to get a node map, then re-fetch specific nodes with `get_design_context`
-3. Run `get_screenshot` for a visual reference of the node variant being implemented
-4. Only after you have both `get_design_context` output and the screenshot, start implementation
-5. Translate the output (React + Tailwind with `--sds-*` variables) into this project's conventions (see token mapping below)
-6. Validate the final UI against the Figma screenshot for 1:1 visual parity before marking complete
-
----
-
-## Component Organization
-
-- **Base UI components:** `client/src/components/ui/` — always check here before creating new components
-- **Layout components:** `client/src/components/layout/`
-- **Feature components:** `client/src/components/agent/`, `client/src/components/daw/`, `client/src/components/library/`, `client/src/components/auth/`, `client/src/components/marketing/`, `client/src/components/onboarding/`, `client/src/components/score/`, `client/src/components/settings/`
-- **New UI components:** place in `client/src/components/ui/`
-- **New feature components:** place in the closest matching feature subdirectory
-
-### Existing reusable components
-
-Always reuse these before building from scratch:
-
-```tsx
-import { Button } from '@/components/ui'
-// variants: 'default' | 'ghost' | 'outline' | 'destructive' | 'link'
-// sizes: 'sm' | 'default' | 'lg' | 'icon' | 'icon-sm'
-
-import { Card } from '@/components/ui'
-// props: hoverable?: boolean
-
-import { Input } from '@/components/ui'
-import { Slider } from '@/components/ui'
-import { Toggle } from '@/components/ui'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
-import { Avatar } from '@/components/ui'
-import { Badge } from '@/components/ui'
-import { Dialog } from '@/components/ui'
-import { ToastProvider, useToast } from '@/components/ui'
-import { TaskCard } from '@/components/ui'
-import { TaskNotifications } from '@/components/ui'
-```
-
-Layout primitives:
-```tsx
-import { AppShell } from '@/components/layout/AppShell'
-import { TopBar } from '@/components/layout/TopBar'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { BottomNav } from '@/components/layout/BottomNav'
-import { MobileHeader } from '@/components/layout/MobileHeader'
-```
+- Use `cn()` for all class merging: `<div className={cn('flex gap-2', isActive && 'bg-surface-2', className)} />`
+- **Never hardcode hex colors.** All colors are Tailwind semantic tokens backed by CSS variables in [tokens.css](client/src/styles/tokens.css). Use `bg-surface-{0-4}`, `text-text-{primary,secondary,muted}`, `text-accent`, `border-border`, `text-{error,success,warning}`.
+- **Never use `style={{ }}`** for colors or spacing.
+- **Never copy Figma `--sds-*` variables** into source — translate to project tokens. Most are mechanical: `--sds-color-background-default-default` → `bg-surface-0`, `--sds-color-text-default-default` → `text-text-primary`, `--sds-size-space-400` (16px) → `p-4`/`gap-4`, `--sds-size-radius-200` (8px) → `rounded-lg`.
+- Layout shell dimensions: `var(--sidebar-width)`, `var(--topbar-height)`, `var(--agent-panel-width)`, etc. — see [tokens.css](client/src/styles/tokens.css).
+- Animations: `animate-fade-in` (150 ms) and `animate-slide-in-right` (200 ms).
+- Icon size default: `size-4` or `size-5`.
 
 ---
 
-## Styling Rules
+## Figma MCP Workflow
 
-### Class merging — always use `cn()`
+Do these in order, no skipping:
 
-```tsx
-import { cn } from '@/components/ui/utils'
+1. `get_design_context` with exact `nodeId` + `fileKey` from the Figma URL.
+2. If truncated → `get_metadata` first for a node map, then refetch specific nodes.
+3. `get_screenshot` for visual reference.
+4. Only now start implementation. Translate `--sds-*` tokens → project tokens (see Styling).
+5. Validate final UI against the screenshot for 1:1 parity before marking complete.
 
-// Correct
-<div className={cn('flex items-center gap-2', isActive && 'bg-surface-2', className)} />
-```
-
-### IMPORTANT: Never hardcode colors
-
-All colors are CSS custom properties defined in `client/src/styles/tokens.css`. Reference them through Tailwind's semantic color names:
-
-| Tailwind class | CSS variable | Dark value | Light value |
-|---|---|---|---|
-| `bg-surface-0` | `--surface-0` | `#000000` | `#ffffff` |
-| `bg-surface-1` | `--surface-1` | `#0a0a0a` | `#f7f7f7` |
-| `bg-surface-2` | `--surface-2` | `#141414` | `#efefef` |
-| `bg-surface-3` | `--surface-3` | `#1e1e1e` | `#e5e5e5` |
-| `bg-surface-4` | `--surface-4` | `#282828` | `#d9d9d9` |
-| `text-text-primary` | `--text-primary` | `#ffffff` | `#0d0d0d` |
-| `text-text-secondary` | `--text-secondary` | `#888888` | `#555555` |
-| `text-text-muted` | `--text-muted` | `#555555` | `#ababab` |
-| `text-accent` / `bg-accent` | `--accent` | `#e5e5e5` | `#0d0d0d` |
-| `text-accent-dim` | `--accent-dim` | `#a0a0a0` | `#444444` |
-| `border-border` | `--border` | `#1e1e1e` | `#e5e5e5` |
-| `border-border-hover` | `--border-hover` | `#333333` | `#cccccc` |
-| `text-error` / `bg-error` | `--error` | `#ef4444` | `#ef4444` |
-| `text-success` | `--success` | `#22c55e` | `#22c55e` |
-| `text-warning` | `--warning` | `#f59e0b` | `#f59e0b` |
-
-### Border radius — use project tokens
-
-| Tailwind | CSS variable | Value |
-|---|---|---|
-| `rounded` | `--radius` | `4px` |
-| `rounded-md` | `--radius-md` | `6px` |
-| `rounded-lg` | `--radius-lg` | `8px` |
-
-### Typography — project fonts
-
-| Tailwind class | Font |
-|---|---|
-| `font-sans` | Inter, system-ui, sans-serif |
-| `font-mono` | JetBrains Mono, Fira Code, monospace |
+If `get_design_context` returns a `figma.com/api/mcp/asset/...` URL for a non-icon image, use it directly — do not create placeholders. Static assets → `client/public/`.
 
 ---
 
-## Figma `--sds-*` Token → Project Token Mapping
+## TypeScript
 
-The Figma design uses Figma's Standard Design System (`--sds-*`) tokens. Always translate them to this project's equivalents:
-
-### Colors
-
-| Figma `--sds-*` token | Figma fallback | Project equivalent |
-|---|---|---|
-| `--sds-color-background-default-default` | `white` | `bg-surface-0` |
-| `--sds-color-background-default-secondary` | `#f5f5f5` | `bg-surface-1` |
-| `--sds-color-background-neutral-tertiary` | `#e3e3e3` | `bg-surface-3` |
-| `--sds-color-background-brand-default` | `#2c2c2c` | `bg-surface-4` (dark) / `bg-accent` |
-| `--sds-color-background-brand-tertiary` | `#f5f5f5` | `bg-surface-1` |
-| `--sds-color-text-default-default` | `#1e1e1e` | `text-text-primary` |
-| `--sds-color-text-default-secondary` | `#757575` | `text-text-secondary` |
-| `--sds-color-text-brand-on-brand` | `#f5f5f5` | `text-accent` |
-| `--sds-color-text-brand-on-brand-secondary` | `#1e1e1e` | `text-text-primary` |
-| `--sds-color-border-default-default` | `#d9d9d9` | `border-border` |
-| `--sds-color-border-neutral-secondary` | `#767676` | `border-border-hover` |
-| `--sds-color-border-brand-default` | `#2c2c2c` | `border-border` |
-| `--sds-color-slate-200` | `#e3e3e3` | `bg-surface-3` |
-
-### Spacing (`--sds-size-space-*`)
-
-| Figma token | Value | Tailwind |
-|---|---|---|
-| `--sds-size-space-200` | 8px | `p-2` / `gap-2` / `m-2` |
-| `--sds-size-space-300` | 12px | `p-3` / `gap-3` |
-| `--sds-size-space-400` | 16px | `p-4` / `gap-4` |
-| `--sds-size-space-600` | 24px | `p-6` / `gap-6` |
-| `--sds-size-space-800` | 32px | `p-8` / `gap-8` |
-| `--sds-size-space-1200` | 48px | `p-12` / `gap-12` |
-| `--sds-size-space-1600` | 64px | `p-16` / `gap-16` |
-| `--sds-size-space-4000` | 160px | `py-40` |
-
-### Border radius
-
-| Figma token | Value | Tailwind |
-|---|---|---|
-| `--sds-size-radius-200` | 8px | `rounded-lg` |
-| `--sds-size-radius-full` | 9999px | `rounded-full` |
-
-### Typography (`--sds-typography-*`)
-
-| Figma style | Size | Weight | Tailwind |
-|---|---|---|---|
-| Title Hero | 72px, bold, lh 1.2, ls -3 | Bold | `text-[72px] font-bold leading-tight tracking-tighter` |
-| Subtitle | 32px, regular, lh 1.2 | Regular | `text-3xl leading-tight` |
-| Heading | 24px, semi-bold, lh 1.2, ls -0.48 | SemiBold | `text-2xl font-semibold leading-tight tracking-tight` |
-| Subheading | 20px, regular, lh 1.2 | Regular | `text-xl leading-tight` |
-| Body Base | 16px, regular, lh 1.4 | Regular | `text-base leading-normal` |
-| Body Strong | 16px, semi-bold, lh 1.4 | SemiBold | `text-base font-semibold leading-normal` |
-| Single Line Body | 16px, regular, lh 1 | Regular | `text-base leading-none` |
+- Strict — no `any`. All component props typed with interfaces.
+- Always accept and spread `className?: string`.
+- Export components as named exports from barrel `index.ts`.
 
 ---
 
-## Icons
+## Editor Space (`client/src/spaces/pack/`)
 
-- **IMPORTANT:** Use `lucide-react` for all icons. Do not install other icon libraries.
-- Search lucide for the matching icon before creating custom SVGs.
+Key files:
+- `EditorPage.tsx` — top-level; owns `handleAddBar`, `handleDeleteBars`, keyboard hook.
+- `EditorCanvas.tsx` — score render, event handlers, overlays.
+- `EditorToolbar.tsx` — toolbar + training-wheel toggles.
+- `useEditorKeyboard.ts` — keyboard shortcut dispatcher (dispatches `lava-*` events).
+- `useScoreSync.ts` — DOM sync for highlights, beat markers, playhead.
 
-```tsx
-import { ChevronDown, Search, X, Menu } from 'lucide-react'
-// Default icon size: className="size-4" or "size-5"
-```
+### MusicXML engine
 
-- Only use Figma asset URLs (from `get_design_context`) for non-icon images (photos, illustrations, brand marks).
+`@/lib/musicXmlEngine` — pure functions, no side effects:
+`addBars`, `deleteBars`, `clearBars`, `copyBars`, `pasteBars`, `duplicateBars`, `transposeBars`, `setNotePitch`, `setNoteDuration`, `addAccidental`, `toggleTie`, `toggleRest`, `setLyric`, `setAnnotation`, `parseXml`, `getMeasures`.
 
----
+### Stores
 
-## Asset Handling
+- `useEditorStore` — selection, toolMode, undo/redo, saveStatus, showChordDiagrams, showBeatMarkers.
+- `useLeadSheetStore` — `musicXml`, `setMusicXml`.
+- `useAudioStore` — `transportState`, `setCurrentBar`.
 
-- **IMPORTANT:** If `get_design_context` returns a `https://www.figma.com/api/mcp/asset/...` URL for an image or SVG, use that source directly — do not create placeholders.
-- Static assets belong in `client/public/`
-- Do not import or install new image/icon packages
+### Undo/Redo pattern
 
-```tsx
-// Correct — use Figma MCP asset URL directly
-const imgHero = "https://www.figma.com/api/mcp/asset/..."
-<img src={imgHero} alt="Hero" className="w-full object-cover" />
-```
+Call `pushUndo(xml)` **after** the engine call succeeds, inside the `try`:
 
----
-
-## Layout Tokens
-
-Use CSS variables for app shell dimensions (already defined in `tokens.css`):
-
-```css
-var(--sidebar-width)           /* 240px */
-var(--sidebar-collapsed-width) /* 56px  */
-var(--topbar-height)           /* 48px  */
-var(--agent-panel-width)       /* 360px */
-var(--bottom-nav-height)       /* 56px  */
-```
-
----
-
-## Animations
-
-Use the two project animations for UI transitions:
-
-```tsx
-// Fade in  — className="animate-fade-in"   (150ms ease-out)
-// Slide in — className="animate-slide-in-right" (200ms ease-out)
-```
-
----
-
-## TypeScript Conventions
-
-- Strict mode — no `any`
-- All component props typed with interfaces
-- Always accept and spread `className?: string` for composability
-- Export components as named exports from barrel `index.ts`
-
----
-
-## Figma Design Patterns — Component Notes
-
-From the design file (`5kHaKzGmOD9Qr74lYmI6p5`):
-
-- **Card** — use `flex-1` / `min-w-[240px]` when placed in grids so width is driven by parent auto layout (not fixed 440px as in the component set)
-- **Button Group** — renders action sets; map to `<Button>` variants from `@/components/ui`
-- **Navigation Pill** — active state uses `bg-surface-1` background; inactive is transparent
-- **Header layout** — `flex flex-wrap items-center justify-between gap-6 px-8 py-8 border-b border-border`
-- **Hero section** — centered content with `py-40`, secondary background `bg-surface-1`
-- **Card Grid** — `flex flex-wrap gap-12` at section level; cards use `flex-1 min-w-[240px]`
-- **Footer** — `flex flex-wrap gap-4 px-8 pt-8 border-t border-border`
-
----
-
-## Editor Space Internals
-
-Editor pages live in `client/src/spaces/pack/` (not `editor/`). Key files:
-- `EditorPage.tsx` — top-level; owns `handleAddBar`, `handleDeleteBars`, keyboard hook
-- `EditorCanvas.tsx` — score render + all custom event handlers + overlays
-- `EditorToolbar.tsx` — toolbar buttons and training-wheel toggles
-- `useEditorKeyboard.ts` — keyboard shortcut dispatcher (dispatches `lava-*` events)
-- `useScoreSync.ts` — DOM sync for highlights, beat markers, playhead
-
-### MusicXML Engine
-
-`@/lib/musicXmlEngine` — pure-function transforms (no side effects):
-`addBars`, `deleteBars`, `clearBars`, `copyBars`, `pasteBars`, `duplicateBars`,
-`transposeBars`, `setNotePitch`, `setNoteDuration`, `addAccidental`, `toggleTie`,
-`toggleRest`, `setLyric`, `setAnnotation`, `parseXml`, `getMeasures`
-
-### Editor Stores
-
-- `useEditorStore` — selection, toolMode, undo/redo, saveStatus, showChordDiagrams, showBeatMarkers
-- `useLeadSheetStore` — `musicXml`, `setMusicXml`
-- `useAudioStore` — `transportState`, `setCurrentBar`
-
-### Undo/Redo Pattern
-
-**Always** call `pushUndo(xml)` AFTER the engine call succeeds, inside the `try` block — never before:
 ```ts
 try {
-  const newXml = engineFn(xml, ...)   // engine call first
-  pushUndo(xml)                        // then push undo
+  const newXml = engineFn(xml, ...)   // engine first
+  pushUndo(xml)                        // then undo
   setMusicXml(newXml)                  // then persist
 } catch (err) { ... }
 ```
 
-### Custom Event Bus
+### Zustand callbacks — read fresh state
 
-Keyboard shortcuts dispatch `window.dispatchEvent(new CustomEvent('lava-*'))`. EditorCanvas registers all listeners in one `useEffect` (with cleanup). Events: `lava-pitch-step`, `lava-duration-key`, `lava-accidental`, `lava-toggle-tie`, `lava-toggle-rest`, `lava-copy`, `lava-paste`, `lava-duplicate`, `lava-transpose`, `lava-toggle-dot`, `lava-toggle-triplet`, `lava-bar-delete`, `lava-open-fretboard`, `lava-open-duration`.
+Use `useStore.getState()` inside callbacks; hook subscriptions become stale closures:
 
-### Zustand Callback Pattern
-
-Always use `useStore.getState()` inside callbacks/event handlers for fresh reads — not hook subscriptions (which would be stale closures):
 ```ts
 const handleFoo = useCallback(() => {
-  const { selectedBars } = useEditorStore.getState()  // ✓ fresh
+  const { selectedBars } = useEditorStore.getState()  // fresh
 }, [])
 ```
 
-### Pitch Utilities
+### Custom event bus
 
-`@/lib/pitchUtils` — `Pitch { step: string; octave: number; alter?: number }`, `pitchToMidi(pitch)`, `midiToPitch(midi, preferFlat?)`, `stepDiatonic`
+Keyboard shortcuts dispatch `window.dispatchEvent(new CustomEvent('lava-*'))`. EditorCanvas registers all listeners in one `useEffect` (with cleanup). Events: `lava-pitch-step`, `lava-duration-key`, `lava-accidental`, `lava-toggle-tie`, `lava-toggle-rest`, `lava-copy`, `lava-paste`, `lava-duplicate`, `lava-transpose`, `lava-toggle-dot`, `lava-toggle-triplet`, `lava-bar-delete`, `lava-open-fretboard`, `lava-open-duration`.
 
-### OSMD DOM Conventions
+### Pitch utilities
 
-- Measures: `.vf-measure[id="N"]` (1-indexed)
-- Notes: `#note-{barIndex}-{noteIndex}` (0-indexed bar/note)
-- Beat markers: SVG `<line class="lava-beat-marker">` injected inside measure SVG elements
+`@/lib/pitchUtils` — `Pitch { step, octave, alter? }`, `pitchToMidi`, `midiToPitch(midi, preferFlat?)`, `stepDiatonic`.
+
+### OSMD DOM conventions
+
+- Measures: `.vf-measure[id="N"]` (1-indexed).
+- Notes: `#note-{barIndex}-{noteIndex}` (0-indexed).
+- Beat markers: SVG `<line class="lava-beat-marker">` injected inside measure SVG.
+
+---
+
+## Planning discipline
+
+### Tiering — decide in 5 seconds which level applies
+
+Judge by **touch surface**, not line count. One-line change to a React `key` can be tier C; 500-line refactor inside one pure function can be tier A.
+
+| Tier | When | Plan format |
+|---|---|---|
+| **A** | Copy / styling / logs / typo / single-file pure-function internals / mechanical repeat of existing pattern | Just do it, no plan |
+| **B** | New self-contained component / 2–3 files, single concern / local signature change | 3–5 line preamble: goal + surface + how to verify |
+| **C** | Touches store / global listener / selection / routing / new `<input>` or `<select>` / changes a React `key` or memo dep / 3+ files crossing interaction modes | Full five-section plan + boundary grep |
+
+Red flags — seeing any of these in the task or surrounding code bumps to **at least C**:
+
+- `window.addEventListener` / `document.addEventListener` in scope
+- `setPointerCapture` / `.focus()` / `onKeyDown` / `onKeyUp`
+- Adding `<input>` / `<textarea>` / `<select>` / `contenteditable` anywhere under the editor
+- Changing what goes into a React `key={...}`
+- Writing to `cursor` / `selection` / `ast` or touching undo/redo
+
+If none of the above apply, default to tier A. Don't write plan sections nobody will read.
+
+### Plan template (tier C)
+
+Write these five short sections per task — one-liners, no code blocks:
+
+| Section | Contents |
+|---|---|
+| Contract | Input/output signature + runtime invariants |
+| Surface | Stores / events / DOM this reads and writes |
+| Boundary audit | Interactions with existing global listeners, commands, selection consumers |
+| Traps | 1–5 project-specific pitfalls (not generic React advice) |
+| Gate | Browser evidence required to exit this task — **not** "tests pass" |
+
+### Boundary grep (before confirming any plan)
+
+```bash
+grep -rn "window.addEventListener" client/src
+grep -rn "document.addEventListener" client/src
+grep -rn "setPointerCapture\|\.focus()" client/src
+```
+
+For each hit, answer: does this change affect it, or does it affect this change? Paste relevant hits into the plan's Boundary audit section.
+
+Known landmine: `useTabEditorInput.ts` registers a `window` keydown handler — any new `<input>` / `<textarea>` / `<select>` in the editor subtree requires the global handler to early-return when `e.target` is editable, otherwise digit / letter keys get hijacked.
+
+### Completion reporting
+
+- **Pure logic / data layer** — unit tests + typecheck passing is sufficient to report "complete".
+- **Interactive changes** (UI / pointer / focus / keyboard / selection / drag) — never report complete on unit tests alone. Either run Claude Preview / Playwright MCP end-to-end, or explicitly hand off: *"Unit tests pass. Please verify in browser: [specific actions]."*
+
+jsdom no-ops `setPointerCapture`, skips real focus routing, and doesn't route window keydown the way a real browser does. Static checks are necessary but not sufficient for interaction code.
+
+### React event-time reasoning
+
+Before writing code that mixes pointer events, `key={}`, controlled inputs, or effects that dispatch commands, mentally walk the timeline:
+
+> T0 user action → T1 React handler → T2 setState → T3 re-render → T4 DOM diff (what keys change?) → T5 next event (where does it go?)
+
+If step T4 or T5 is unclear, the code is risky. Classic foot-gun: putting mutable values inside a React `key` while holding `setPointerCapture` — key change remounts the node and drops the capture.
 
 ---
 
 ## What NOT to do
 
-- ESLint for `client/` is configured in `client/eslint.config.js` (TypeScript parser + react-hooks plugin) — do not edit the root `eslint.config.js` for client-side rules
-- Do not place static routes after dynamic `:id` routes — e.g. `/jam/new` must come before `/jam/:id` in `router.tsx`
-- Do not hardcode hex colors — always use Tailwind tokens above
-- Do not install Tailwind (already configured)
-- Do not install Radix UI, Headless UI, or shadcn/ui — components are custom
-- Do not use `style={{ }}` inline styles for colors or spacing
-- Do not create absolute pixel sizes from Figma without first checking if a Tailwind scale value matches
-- Do not copy `--sds-*` variable names directly into the codebase — always translate to project tokens
+- Don't edit root `eslint.config.js` for client rules — client ESLint lives in `client/eslint.config.js`.
+- Don't place static routes after dynamic `:id` routes — e.g. `/jam/new` must come before `/jam/:id` in `router.tsx`.
+- Don't hardcode hex colors or use `style={{ }}` for colors/spacing.
+- Don't install Tailwind, Radix UI, Headless UI, or shadcn/ui — components are custom.
+- Don't create absolute pixel sizes without first checking a matching Tailwind scale.
+- Don't copy `--sds-*` variable names into source.

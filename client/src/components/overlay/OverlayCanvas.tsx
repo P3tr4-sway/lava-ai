@@ -16,12 +16,15 @@ interface OverlayCanvasProps {
 }
 
 function cursorFill(isInsertMode: boolean, voiceIndex: number): string {
+  // Cursor renders as a thin Sibelius-style 2-px line — high opacity required
+  // for the line to read at a glance against the score background.
+  // Insert mode is the only state where the caret tick is shown; selection-mode
+  // cursors fall through to a transparent fill so the per-note tint is the only
+  // visible affordance.
   if (voiceIndex === 1) {
-    // V2 — green. Lighter tint in selection mode, saturated in insert mode.
-    return isInsertMode ? 'rgba(34,197,94,0.32)' : 'rgba(34,197,94,0.22)'
+    return isInsertMode ? 'rgba(34,197,94,0.9)' : 'transparent'
   }
-  // V1 — default colors.
-  return isInsertMode ? 'rgba(255,138,0,0.28)' : 'rgba(99,179,237,0.22)'
+  return isInsertMode ? 'rgba(255,138,0,0.9)' : 'transparent'
 }
 
 /**
@@ -46,23 +49,44 @@ export function OverlayCanvas({
       style={{ overflow: 'visible' }}
       aria-hidden="true"
     >
-      {rects.map((rect, i) => (
-        <rect
-          key={i}
-          x={rect.x}
-          y={rect.y}
-          width={rect.width}
-          height={rect.height}
-          fill={
-            rect.kind === 'cursor'
-              ? cursorFill(isInsertMode, voiceIndex)
-              : rect.kind === 'selection'
-                ? 'color-mix(in srgb, var(--accent) 30%, transparent)'
-                : 'color-mix(in srgb, var(--accent) 15%, transparent)'
-          }
-          opacity={1}
-        />
-      ))}
+      {rects.map((rect, i) => {
+        if (rect.kind === 'note') {
+          // Per-note selection: tint the TAB digit itself by drawing a strong
+          // accent fill over the notehead with `mix-blend-mode: multiply`. The
+          // digit shows through, but its color shifts toward the accent — so
+          // the *number* reads as selected, not a box around it.
+          return (
+            <rect
+              key={i}
+              x={rect.x}
+              y={rect.y}
+              width={rect.width}
+              height={rect.height}
+              fill={voiceIndex === 1 ? 'rgb(134,239,172)' : 'rgb(255,200,140)'}
+              opacity={0.55}
+              style={{ mixBlendMode: 'multiply' }}
+              rx={2}
+            />
+          )
+        }
+        return (
+          <rect
+            key={i}
+            x={rect.x}
+            y={rect.y}
+            width={rect.width}
+            height={rect.height}
+            fill={
+              rect.kind === 'cursor'
+                ? cursorFill(isInsertMode, voiceIndex)
+                : rect.kind === 'selection'
+                  ? 'color-mix(in srgb, var(--accent) 30%, transparent)'
+                  : 'color-mix(in srgb, var(--accent) 15%, transparent)'
+            }
+            opacity={1}
+          />
+        )
+      })}
     </svg>
   )
 }

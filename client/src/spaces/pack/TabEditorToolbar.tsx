@@ -8,7 +8,7 @@
  * All button groups dispatch commands through useTabEditorStore.applyCommand().
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
 import {
   FileJson,
@@ -18,10 +18,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/components/ui/utils'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui'
 import { useTabEditorStore } from '@/stores/tabEditorStore'
+import type { Command } from '@/editor/commands'
 import {
   SetDuration,
   InsertBeat,
+  DeleteBeat,
   ToggleDot,
   SetTuplet,
   SetRest,
@@ -50,7 +53,6 @@ import {
   SetStroke,
   SetDynamics,
   SetStaccato,
-  SetSlur,
   SetTrill,
   SetOrnament,
   SetCrescendo,
@@ -65,11 +67,14 @@ import {
 } from '@/editor/commands'
 import { barCapacityUnits, durationToUnits, getEffectiveTimeSig, makeBarBeats, splitIntoRests } from '@/editor/ast/barFill'
 import type {
+  BeatNode,
   Duration,
   DynamicsValue,
   SlideType,
   StrokeType,
 } from '@/editor/ast/types'
+import { resolveTieTarget } from '@/editor/ast/tieResolver'
+import { resolveLegatoTarget } from '@/editor/ast/legatoResolver'
 import { downloadAst } from '@/io/json'
 import type { AlphaTabBridge } from '@/render/alphaTabBridge'
 import { KeyboardShortcutsPanel, useKeyboardShortcutsPanel } from '@/components/editor/KeyboardShortcutsPanel'
@@ -208,11 +213,11 @@ function GlassCircleBtn({
         aria-label={title}
         onClick={onClick}
         className={cn(
-          'relative flex size-12 items-center justify-center rounded-full text-[19px] font-semibold',
+          'relative flex size-9 items-center justify-center rounded-full text-[13px] font-semibold',
           'transition-all duration-100 ease-out active:scale-[0.88] active:duration-[50ms]',
           active
-            ? 'bg-accent text-surface-0 shadow-[0_2px_10px_rgba(0,0,0,0.22)]'
-            : 'bg-surface-2 text-text-secondary shadow-[0_1px_3px_rgba(0,0,0,0.07)] hover:scale-[1.08] hover:bg-surface-3 hover:text-text-primary hover:shadow-[0_4px_14px_rgba(0,0,0,0.11)]',
+            ? 'bg-accent text-surface-0 shadow-[0_2px_8px_rgba(0,0,0,0.18)]'
+            : 'bg-surface-2 text-text-secondary shadow-[0_1px_2px_rgba(0,0,0,0.06)] hover:scale-[1.08] hover:bg-surface-3 hover:text-text-primary hover:shadow-[0_3px_10px_rgba(0,0,0,0.10)]',
         )}
       >
         {children}
@@ -242,12 +247,12 @@ function GlassPillBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-12 items-center justify-center rounded-full px-5',
-        'text-base font-medium',
+        'flex h-9 items-center justify-center rounded-full px-3.5',
+        'text-[12.5px] font-medium',
         'transition-all duration-100 ease-out active:scale-[0.95] active:duration-[50ms]',
         active
-          ? 'bg-accent text-surface-0 shadow-[0_2px_10px_rgba(0,0,0,0.22)]'
-          : 'bg-surface-2 text-text-secondary shadow-[0_1px_3px_rgba(0,0,0,0.07)] hover:bg-surface-3 hover:text-text-primary hover:shadow-[0_4px_14px_rgba(0,0,0,0.11)]',
+          ? 'bg-accent text-surface-0 shadow-[0_2px_8px_rgba(0,0,0,0.18)]'
+          : 'bg-surface-2 text-text-secondary shadow-[0_1px_2px_rgba(0,0,0,0.06)] hover:bg-surface-3 hover:text-text-primary hover:shadow-[0_3px_10px_rgba(0,0,0,0.10)]',
         className,
       )}
     >
@@ -324,7 +329,12 @@ function useBeatIds() {
   const selection = useTabEditorStore((s) => s.selection)
 
   if (!ast || !selection) return null
-  const cursor = selection.kind === 'caret' ? selection.cursor : selection.kind === 'range' ? selection.anchor : null
+  const cursor =
+    selection.kind === 'caret' || selection.kind === 'note'
+      ? selection.cursor
+      : selection.kind === 'range'
+        ? selection.anchor
+        : null
   if (!cursor) return null
   const track = ast.tracks[cursor.trackIndex]
   if (!track) return null
@@ -381,7 +391,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
   const [panelAnchor, setPanelAnchor] = useState<{ left: number } | null>(null)
   const [tempoValue, setTempoValue] = useState(120)
   const [trillFret, setTrillFret] = useState(0)
-  const slurCounter = useRef(1)
 
   const shortcuts = useKeyboardShortcutsPanel()
   const ids = useBeatIds()
@@ -501,14 +510,110 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     setDuration({ value: currentDuration.value, dots: nextDots })
   }
 
+  // toggleTriplet — Sibelius/GP-style triplet on a group of 3 consecutive beats.
+  //
+  // ON:  require 3 consecutive beats in the same voice sharing (value, dots) and
+  //      carrying no tuplet. Apply {3,2} to all three and pad the freed slot with
+  //      one rest of the same base value (since 3×2/3 = 2, one base-unit frees up).
+  //
+  // OFF: locate the triplet group that contains the current beat (up to 3 adjacent
+  //      beats sharing (value, dots) + tuplet {3,2}). Remove the ratio from all,
+  //      and delete one trailing pad rest of matching base duration if present.
+  //      Falls back to single-beat clear when the group was broken by other edits.
   const toggleTriplet = () => {
-    if (!beatLoc || !ids) return
-    const hasTriplet = ids.beat.duration.tuplet?.numerator === 3
-    applyCommand(new SetTuplet(
-      beatLoc,
-      hasTriplet ? undefined : { numerator: 3, denominator: 2 },
-      ids.beat.duration.tuplet,
-    ))
+    if (!beatLoc || !ids || !ast) return
+    const voice = ids.bar.voices[ids.cursor.voiceIndex]
+    if (!voice) return
+    const beats = voice.beats
+    const cIdx = ids.cursor.beatIndex
+    const cur = beats[cIdx]
+    if (!cur) return
+
+    const isTripletRatio = (t?: { numerator: number; denominator: number }) =>
+      !!t && t.numerator === 3 && t.denominator === 2
+
+    const hasTriplet = isTripletRatio(cur.duration.tuplet)
+
+    // Find a 3-beat window around cIdx where all beats match on (value, dots) and
+    // tuplet (present/absent matches `wantTriplet`). Returns the window start
+    // index, or null if no such contiguous 3-beat group exists.
+    const findGroup = (wantTriplet: boolean): number | null => {
+      const matches = (b: BeatNode | undefined) => {
+        if (!b) return false
+        const tupletOk = wantTriplet
+          ? isTripletRatio(b.duration.tuplet)
+          : !b.duration.tuplet
+        return (
+          tupletOk &&
+          b.duration.value === cur.duration.value &&
+          b.duration.dots === cur.duration.dots
+        )
+      }
+      if (!matches(cur)) return null
+      for (let s = Math.max(0, cIdx - 2); s <= cIdx; s++) {
+        if (s + 3 > beats.length) continue
+        if (matches(beats[s]) && matches(beats[s + 1]) && matches(beats[s + 2])) {
+          return s
+        }
+      }
+      return null
+    }
+
+    const cmds: Command[] = []
+    const voiceLoc = { trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId }
+
+    if (!hasTriplet) {
+      const start = findGroup(false)
+      if (start == null) {
+        toast('Triplet needs three consecutive beats of the same duration.', 'error')
+        return
+      }
+      for (let i = start; i < start + 3; i++) {
+        const b = beats[i]
+        cmds.push(new SetTuplet(
+          makeBeatLoc(ids.trackId, ids.barId, ids.voiceId, b.id),
+          { numerator: 3, denominator: 2 },
+          b.duration.tuplet,
+        ))
+      }
+      // Pad: insert a rest of the same base value after the group so bar total
+      // stays constant (3×base×2/3 = 2×base; one base-unit is freed).
+      const padBeat: BeatNode = {
+        id: nanoid(),
+        duration: { value: cur.duration.value, dots: 0 },
+        notes: [],
+        rest: true,
+      }
+      cmds.push(new InsertBeat(voiceLoc, padBeat, start + 3))
+    } else {
+      const start = findGroup(true)
+      if (start != null) {
+        for (let i = start; i < start + 3; i++) {
+          const b = beats[i]
+          cmds.push(new SetTuplet(
+            makeBeatLoc(ids.trackId, ids.barId, ids.voiceId, b.id),
+            undefined,
+            b.duration.tuplet,
+          ))
+        }
+        // Best-effort pad removal: drop the first rest immediately after the
+        // group that matches the base duration (most likely our own pad).
+        const pad = beats[start + 3]
+        if (
+          pad &&
+          pad.rest &&
+          !pad.duration.tuplet &&
+          pad.duration.value === cur.duration.value &&
+          pad.duration.dots === 0
+        ) {
+          cmds.push(new DeleteBeat(voiceLoc, pad.id))
+        }
+      } else {
+        cmds.push(new SetTuplet(beatLoc, undefined, cur.duration.tuplet))
+      }
+    }
+
+    applyCommand(cmds.length === 1 ? cmds[0] : new CompositeCommand(cmds, 'Toggle triplet'))
   }
 
   // Voice switch — mirrors the Alt+1/Alt+2 keyboard shortcut.
@@ -518,6 +623,121 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
   const switchVoiceFromToolbar = (targetVoiceIndex: 0 | 1) => {
     if (!switchToVoice) return
     switchToVoice(targetVoiceIndex)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tie — Sibelius-style: select note A, press tie → tie extends into the NEXT
+  // same-pitch note in the same voice (may cross a bar line). We encode tie on
+  // the *destination* note (AST semantic: note.tie = "tied to previous").
+  // Hard constraints (guitar_notation_rules): same (string, fret); next must
+  // not be a rest. Resolution logic lives in `@/editor/ast/tieResolver` so the
+  // keyboard shortcut shares it.
+  // ---------------------------------------------------------------------------
+  const { toast } = useToast()
+
+  // True when the next beat's same-pitch note has tie=true — i.e., this note
+  // has an *outgoing* tie. Memoized against `ids`/`ast` so it doesn't re-walk
+  // on unrelated re-renders.
+  const isTieActive = useMemo(() => {
+    if (!ids?.note || !ast) return false
+    const res = resolveTieTarget(
+      ast,
+      ids.cursor.trackIndex,
+      ids.barIndex,
+      ids.cursor.voiceIndex,
+      ids.cursor.beatIndex,
+      ids.note.string,
+    )
+    return res.ok && res.target.dest.tie === true
+  }, [ast, ids])
+
+  const handleTie = () => {
+    if (!ids?.note || !ast) {
+      toast('Select a note first.', 'error')
+      return
+    }
+
+    const res = resolveTieTarget(
+      ast,
+      ids.cursor.trackIndex,
+      ids.barIndex,
+      ids.cursor.voiceIndex,
+      ids.cursor.beatIndex,
+      ids.note.string,
+    )
+
+    if (!res.ok) {
+      toast(res.message, 'error')
+      return
+    }
+
+    const { destLoc, dest } = res.target
+    // Toggle the tie flag on the destination note. Undo inverts atomically.
+    applyCommand(new SetTie(destLoc, dest.tie ? undefined : true, dest.tie))
+  }
+
+  // ---------------------------------------------------------------------------
+  // Legato connectors — H/P, legato slide, shift slide.
+  // These techniques draw an arc/line from the CURRENT note into the next note
+  // on the same string; the flag lives on the SOURCE note (unlike tie, which
+  // writes to the destination). The resolver only validates "does a valid
+  // landing target exist?" before we toggle the source flag.
+  //
+  // Self-contained decorative slides (intoFromBelow, outDown) are note-local
+  // and do NOT run through the resolver — they never fail.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Run the legato resolver for the current selection; toast the failure
+   * reason and return null. Returns true on success (caller proceeds).
+   */
+  const guardLegatoTarget = (): boolean => {
+    if (!ids?.note || !ast) {
+      toast('Select a note first.', 'error')
+      return false
+    }
+    const res = resolveLegatoTarget(
+      ast,
+      ids.cursor.trackIndex,
+      ids.barIndex,
+      ids.cursor.voiceIndex,
+      ids.cursor.beatIndex,
+      ids.note.string,
+    )
+    if (!res.ok) {
+      toast(res.message, 'error')
+      return false
+    }
+    return true
+  }
+
+  const handleHammerOrPull = () => {
+    if (!noteLoc || !ids?.note) {
+      toast('Select a note first.', 'error')
+      return
+    }
+    const prev = ids.note.hammerOrPull
+    // Allow toggling OFF without needing a valid next note.
+    if (prev) {
+      applyCommand(new SetHammerOn(noteLoc, undefined, prev))
+      return
+    }
+    if (!guardLegatoTarget()) return
+    applyCommand(new SetHammerOn(noteLoc, true, prev))
+  }
+
+  const handleConnectingSlide = (kind: 'legato' | 'shift') => {
+    if (!noteLoc || !ids?.note) {
+      toast('Select a note first.', 'error')
+      return
+    }
+    // Allow toggling OFF without needing a valid next note.
+    if (ids.note.slide === kind) {
+      applyCommand(new SetSlide(noteLoc, undefined, kind))
+      return
+    }
+    if (!guardLegatoTarget()) return
+    applyCommand(new SetSlide(noteLoc, kind, ids.note.slide))
   }
 
   // Export
@@ -530,67 +750,6 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
     if (!bridge) return
     const { exportMidi } = await import('@/io/midi-export')
     await exportMidi(bridge, ast?.meta.title)
-  }
-
-  // Slur: create pair with next note, or extend if on end, or clear if on start
-  const handleSlur = () => {
-    if (!noteLoc || !ids?.note || !ast) return
-    const currentSlurId = ids.note.slur
-    const voice = ids.bar.voices[ids.cursor.voiceIndex]
-    if (!voice) return
-
-    if (currentSlurId === undefined) {
-      // No slur → create new pair: current note + next note
-      const nextBeat = voice.beats[ids.cursor.beatIndex + 1]
-      const nextNote = nextBeat?.notes[0]
-      if (!nextBeat || !nextNote) return
-      const newId = slurCounter.current++
-      applyCommand(new CompositeCommand([
-        new SetSlur(noteLoc, newId, undefined),
-        new SetSlur({ trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: nextBeat.id, noteId: nextNote.id }, newId, nextNote.slur),
-      ], 'Add slur'))
-      return
-    }
-
-    // Find partner note (same slur ID, different note)
-    let partnerBeatId = ''
-    let partnerNoteId = ''
-    let partnerBeatIdx = -1
-    for (let bi = 0; bi < voice.beats.length; bi++) {
-      const beat = voice.beats[bi]
-      for (const note of beat.notes) {
-        if (note.id !== ids.note.id && note.slur === currentSlurId) {
-          partnerBeatId = beat.id
-          partnerNoteId = note.id
-          partnerBeatIdx = bi
-          break
-        }
-      }
-      if (partnerBeatId) break
-    }
-
-    const isStart = partnerBeatIdx === -1 || partnerBeatIdx > ids.cursor.beatIndex
-
-    const clearBoth = () => {
-      const cmds: SetSlur[] = [new SetSlur(noteLoc, undefined, currentSlurId)]
-      if (partnerBeatId && partnerNoteId) {
-        cmds.push(new SetSlur({ trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: partnerBeatId, noteId: partnerNoteId }, undefined, currentSlurId))
-      }
-      applyCommand(cmds.length > 1 ? new CompositeCommand(cmds, 'Remove slur') : cmds[0])
-    }
-
-    if (isStart) {
-      clearBoth()
-    } else {
-      // Current note is the END → extend to next note
-      const nextBeat = voice.beats[ids.cursor.beatIndex + 1]
-      const nextNote = nextBeat?.notes[0]
-      if (!nextBeat || !nextNote) { clearBoth(); return }
-      applyCommand(new CompositeCommand([
-        new SetSlur(noteLoc, undefined, currentSlurId),
-        new SetSlur({ trackId: ids.trackId, barId: ids.barId, voiceId: ids.voiceId, beatId: nextBeat.id, noteId: nextNote.id }, currentSlurId, nextNote.slur),
-      ], 'Extend slur'))
-    }
   }
 
   // Bend presets
@@ -685,17 +844,29 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
         {/* Technique panel — guitar-specific note-level techniques */}
         <FloatingPanel open={openPanel === 'technique'} anchor={panelAnchor} onClose={() => setOpenPanel(null)} width="w-96">
           <div className="space-y-3">
-            <PanelSection title="Connectivity">
+            <PanelSection title="Legato (different pitch)">
               <div className="flex flex-wrap gap-1.5">
-                <ToolbarBtn active={ids?.note?.hammerOrPull === true} onClick={() => { if (!noteLoc || !ids?.note) return; applyCommand(new SetHammerOn(noteLoc, !ids.note.hammerOrPull, ids.note.hammerOrPull)) }} title="Hammer-on / Pull-off (h)">H/P</ToolbarBtn>
-                <ToolbarBtn active={ids?.note?.slur !== undefined} onClick={handleSlur} title="Slur — select start note, click to draw arc to next; click end note to extend">slur</ToolbarBtn>
-                <ToolbarBtn active={ids?.note?.tie === true} onClick={() => { if (!noteLoc || !ids?.note) return; applyCommand(new SetTie(noteLoc, !ids.note.tie, ids.note.tie)) }} title="Tie — same pitch, extends duration (i)">tie</ToolbarBtn>
-                <ToolbarBtn active={ids?.note?.slide === 'legato'} onClick={() => { if (!noteLoc || !ids?.note) return; applyCommand(new SetSlide(noteLoc, ids.note.slide === 'legato' ? undefined : 'legato', ids.note.slide)) }} title="Legato slide">/sl</ToolbarBtn>
-                <ToolbarBtn active={ids?.note?.slide === 'shift'} onClick={() => { if (!noteLoc || !ids?.note) return; applyCommand(new SetSlide(noteLoc, ids.note.slide === 'shift' ? undefined : 'shift', ids.note.slide)) }} title="Shift slide">\sd</ToolbarBtn>
+                <ToolbarBtn active={ids?.note?.hammerOrPull === true} onClick={handleHammerOrPull} title="Hammer-on / Pull-off — slur between different pitches (h)">H/P</ToolbarBtn>
+                <ToolbarBtn active={ids?.note?.slide === 'legato'} onClick={() => handleConnectingSlide('legato')} title="Legato slide — connects into next note on same string">/sl</ToolbarBtn>
+                <ToolbarBtn active={ids?.note?.slide === 'shift'} onClick={() => handleConnectingSlide('shift')} title="Shift slide — connects into next note on same string">\sd</ToolbarBtn>
                 <ToolbarBtn active={ids?.note?.slide === 'intoFromBelow'} onClick={() => { if (!noteLoc || !ids?.note) return; applyCommand(new SetSlide(noteLoc, ids.note.slide === 'intoFromBelow' ? undefined : 'intoFromBelow', ids.note.slide)) }} title="Slide in from below">↗sl</ToolbarBtn>
                 <ToolbarBtn active={ids?.note?.slide === 'outDown'} onClick={() => { if (!noteLoc || !ids?.note) return; applyCommand(new SetSlide(noteLoc, ids.note.slide === 'outDown' ? undefined : 'outDown', ids.note.slide)) }} title="Slide out down">sl↘</ToolbarBtn>
               </div>
             </PanelSection>
+
+            <div className="border-t border-border pt-3">
+              <PanelSection title="Sustain (same pitch)">
+                <div className="flex flex-wrap gap-1.5">
+                  <ToolbarBtn
+                    active={isTieActive}
+                    onClick={handleTie}
+                    title="Tie — extends current note into next same-pitch note (i)"
+                  >
+                    tie
+                  </ToolbarBtn>
+                </div>
+              </PanelSection>
+            </div>
 
             <div className="border-t border-border pt-3">
               <PanelSection title="Bend">
@@ -1080,13 +1251,13 @@ export function TabEditorToolbar({ className, bridgeRef, onOpenFile, isInsertMod
         </FloatingPanel>
 
         {/* Main pill */}
-        <div className="pointer-events-auto rounded-full bg-surface-0 p-2 shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
-          <div className="flex items-center gap-3">
+        <div className="pointer-events-auto rounded-full bg-surface-0 p-1.5 shadow-[0_6px_28px_rgba(0,0,0,0.10)]">
+          <div className="flex items-center gap-2">
             {/* Input mode indicator */}
             {isInsertMode && (
-              <div className="flex h-8 items-center gap-1.5 rounded-full bg-[rgba(255,138,0,0.15)] px-2.5">
+              <div className="flex h-6 items-center gap-1.5 rounded-full bg-[rgba(255,138,0,0.15)] px-2">
                 <span className="size-1.5 animate-pulse rounded-full bg-[rgba(255,138,0,0.9)]" />
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-[rgba(255,138,0,0.9)]">Input</span>
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-[rgba(255,138,0,0.9)]">Input</span>
               </div>
             )}
 

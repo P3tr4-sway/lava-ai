@@ -947,3 +947,68 @@ export class SetFermata implements Command {
 
   affectedBarIds(): string[] { return [this.loc.barId] }
 }
+
+// ---------------------------------------------------------------------------
+// SetWhammy (beat-level) — whammy-bar control points, shares BendPoint shape
+// ---------------------------------------------------------------------------
+
+export class SetWhammy implements Command {
+  readonly type = 'SetWhammy'
+  readonly label = 'Set whammy bar'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: BendPoint[] | undefined,
+    private readonly oldValue: BendPoint[] | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'whammy', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetWhammy(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return {
+      type: this.type,
+      ...this.loc,
+      value: (this.value as unknown as Json) ?? null,
+      oldValue: (this.oldValue as unknown as Json) ?? null,
+    }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
+
+// ---------------------------------------------------------------------------
+// SetChord (beat-level) — chord annotation name, e.g. "Cm7"
+// ---------------------------------------------------------------------------
+
+export class SetChord implements Command {
+  readonly type = 'SetChord'
+  readonly label = 'Set chord name'
+
+  constructor(
+    private readonly loc: BeatOnlyLocation,
+    private readonly value: string | undefined,
+    private readonly oldValue: string | undefined,
+  ) {}
+
+  execute(ctx: CommandContext): CommandResult {
+    const score = updateBeatField(ctx, this.loc, 'chord', this.value)
+    return { score, affectedBarIds: [this.loc.barId] }
+  }
+
+  invert(_ctx: CommandContext): Command {
+    return new SetChord(this.loc, this.oldValue, this.value)
+  }
+
+  serialize(): Json {
+    return { type: this.type, ...this.loc, value: this.value ?? null, oldValue: this.oldValue ?? null }
+  }
+
+  affectedBarIds(): string[] { return [this.loc.barId] }
+}
